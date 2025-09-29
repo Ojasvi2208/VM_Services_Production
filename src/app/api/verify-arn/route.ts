@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Mock data for testing - this ensures the feature works even if AMFI API is unavailable
 // This mock data will only be used as last resort fallback if API fails completely
-const mockData: Record<string, any> = {
+const mockData: Record<string, any[]> = {
   // Intentionally commenting out 317605 to force using real API
   /* '317605': [
     {
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
       console.log('AMFI API Response Preview:', responseText);
       
       // Remove any wrapper tags from response (AMFI sometimes wraps JSON in HTML tags)
-      let cleanedResponse = responseText;
+          const cleanedResponse = response.replace(/[\x00-\x1F\x7F]/g, '');
       
       // Check if the response contains HTML content
       if (responseText.includes('<!DOCTYPE html>') || responseText.includes('<html>')) {
