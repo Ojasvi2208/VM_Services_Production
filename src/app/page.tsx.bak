@@ -1,0 +1,223 @@
+import Image from "next/image";
+import Link from "next/link";
+import ComplianceNotice from "@/components/ComplianceNotice";
+import Section from "@/components/Section";
+import ResponsiveContainer from "@/components/ResponsiveContainer";
+import AnimatedElement from "@/components/ui/AnimatedElement";
+
+export default function Home() {
+  return (
+    <>
+      {/* Hero Section */}
+      <Section background="offwhite" padding="large" animate animationVariant="fadeUp">
+        <div className="max-w-3xl mx-auto text-center md:text-left md:mx-0">
+          <h1 className="text-4xl md:text-5xl font-bold text-charcoal mb-4">
+            Invest with trust. Grow with discipline.
+          </h1>
+          <p className="text-lg md:text-xl text-charcoal/80 mb-6">
+            AMFI-registered Mutual Fund Distributor helping families plan and invest with clarity.
+          </p>
+          <div className="flex flex-wrap gap-3 justify-center md:justify-start mb-8">
+            <div className="bg-teal/10 text-teal-deep px-3 py-1 rounded-full text-sm font-medium">
+              ARN-317605
+            </div>
+            <div className="bg-teal/10 text-teal-deep px-3 py-1 rounded-full text-sm font-medium">
+              AMFI Registered
+            </div>
+            <div className="bg-teal/10 text-teal-deep px-3 py-1 rounded-full text-sm font-medium">
+              NISM Certified
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
+            <Link href="/partners" className="btn-primary">
+              Start Investing
+            </Link>
+            <Link href="/goal-planning" className="btn-secondary">
+              Plan a Goal
+            </Link>
+          </div>
+        </div>
+      </Section>
+
+      {/* Partners Strip */}
+      <Section background="white" padding="medium" animate animationVariant="fadeIn" animationDelay={0.2}>
+        <ResponsiveContainer>
+          <AnimatedElement variant="fadeUp" delay={0.3}>
+            <div className="text-center mb-8">
+            <h2 className="text-2xl font-semibold text-charcoal mb-2">Our Trusted Partners</h2>
+            <p className="text-charcoal/70">
+              Transactions are executed on partner platforms. We do not collect or store your payment details.
+            </p>
+            </div>
+          </AnimatedElement>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+            {/* SBI Mutual Fund */}
+            <AnimatedElement variant="scale" delay={0.4}>
+              <div className="card flex flex-col items-center justify-center p-6 text-center">
+              <div className="w-16 h-16 bg-mist rounded-full flex items-center justify-center mb-4">
+                <span className="text-xl font-bold text-teal-deep">SBI</span>
+              </div>
+              <h3 className="font-semibold mb-1">SBI Mutual Fund</h3>
+              <p className="text-sm text-charcoal/70">Wide range of funds across categories</p>
+            </div>
+
+            {/* NJ Wealth */}
+            <AnimatedElement variant="scale" delay={0.6}>
+              <div className="card flex flex-col items-center justify-center p-6 text-center">
+              <div className="w-16 h-16 bg-mist rounded-full flex items-center justify-center mb-4">
+                <span className="text-xl font-bold text-teal-deep">NJ</span>
+              </div>
+              <h3 className="font-semibold mb-1">NJ Wealth</h3>
+              <p className="text-sm text-charcoal/70">Comprehensive investment solutions</p>
+              </div>
+            </AnimatedElement>
+
+            {/* Canara Robeco */}
+            <AnimatedElement variant="scale" delay={0.8}>
+              <div className="card flex flex-col items-center justify-center p-6 text-center">
+              <div className="w-16 h-16 bg-mist rounded-full flex items-center justify-center mb-4">
+                <span className="text-xl font-bold text-teal-deep">CR</span>
+              </div>
+              <h3 className="font-semibold mb-1">Canara Robeco</h3>
+              <p className="text-sm text-charcoal/70">Focused fund strategies for diverse needs</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* What We Do */}
+      <Section background="offwhite" padding="large" animate animationVariant="fadeUp">
+        <ResponsiveContainer>
+          <AnimatedElement variant="fadeUp">
+            <h2 className="text-3xl font-semibold text-charcoal mb-12 text-center">What We Do</h2>
+          </AnimatedElement>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {/* Mutual Funds */}
+            <AnimatedElement variant="fadeUp" delay={0.1}>
+              <div className="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+              <div className="h-12 w-12 bg-teal/10 rounded-full flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-teal" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Mutual Funds</h3>
+              <p className="text-charcoal/70 text-sm">
+                Equity, Hybrid, Index & ELSS funds tailored to your investment objectives and risk profile.
+              </p>
+              </div>
+            </AnimatedElement>
+
+            {/* ETFs */}
+            <AnimatedElement variant="fadeUp" delay={0.2}>
+              <div className="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+              <div className="h-12 w-12 bg-teal/10 rounded-full flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-teal" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 0l-2 2a1 1 0 101.414 1.414L8 10.414l1.293 1.293a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold mb-2">ETFs</h3>
+              <p className="text-charcoal/70 text-sm">
+                Core market exposure through low-cost index trackers with liquidity subject to market conditions.
+              </p>
+              </div>
+            </AnimatedElement>
+
+            {/* Debt Funds */}
+            <AnimatedElement variant="fadeUp" delay={0.3}>
+              <div className="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+              <div className="h-12 w-12 bg-teal/10 rounded-full flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-teal" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Debt Funds</h3>
+              <p className="text-charcoal/70 text-sm">
+                Emergency funds and predictable cash-flows with short, medium, and long-duration options.
+              </p>
+              </div>
+            </AnimatedElement>
+
+            {/* Goal Planning */}
+            <AnimatedElement variant="fadeUp" delay={0.4}>
+              <div className="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+              <div className="h-12 w-12 bg-teal/10 rounded-full flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-teal" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Goal Planning</h3>
+              <p className="text-charcoal/70 text-sm">
+                Education, retirement, and housing plans that align with your personal milestones and timeline.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Trust Numbers */}
+      <Section background="teal" padding="large" animate animationVariant="fadeIn">
+        <ResponsiveContainer>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+            <AnimatedElement variant="fadeUp" delay={0.2}>
+              <div>
+                <div className="text-4xl font-bold mb-2">200+</div>
+                <p className="text-white/250">Families Guided</p>
+              </div>
+            </AnimatedElement>
+            <AnimatedElement variant="fadeUp" delay={0.4}>
+              <div>
+                <div className="text-4xl font-bold mb-2">1200+</div>
+                <p className="text-white/90">SIP Set-ups</p>
+              </div>
+            </AnimatedElement>
+            <AnimatedElement variant="fadeUp" delay={0.6}>
+              <div>
+                <div className="text-4xl font-bold mb-2">15+</div>
+                <p className="text-white/90">Cities Served</p>
+              </div>
+            </AnimatedElement>
+          </div>
+        </ResponsiveContainer>
+      </Section>
+
+      {/* Compliance Block */}
+      <Section background="offwhite" padding="medium" animate animationVariant="fadeUp">
+        <ResponsiveContainer>
+          <AnimatedElement variant="fadeUp" delay={0.2}>
+            <div className="bg-white p-6 md:p-8 rounded-lg border border-mist">
+              <h2 className="text-xl font-semibold mb-4 text-charcoal">Disclosure</h2>
+              <p className="text-charcoal/70 mb-4">
+                We act as a Mutual Fund Distributor (MFD). We may receive trail commissions from AMCs. We do not offer fee-based investment advice. Investors should read all scheme-related documents carefully and may consult a SEBI-registered Investment Adviser and tax professional as needed.
+              </p>
+              <ComplianceNotice type="prominent" className="mt-4" />
+            </div>
+          </AnimatedElement>
+        </ResponsiveContainer>
+      </Section>
+
+      {/* Mini CTA */}
+      <Section background="white" padding="medium" animate animationVariant="fadeUp">
+        <ResponsiveContainer>
+          <div className="text-center">
+            <AnimatedElement variant="fadeUp" delay={0.2}>
+              <h2 className="text-2xl font-semibold mb-4">Questions?</h2>
+              <p className="mb-6 text-charcoal/70">WhatsApp us at 9417334348 — Chandigarh</p>
+              <div className="inline-block mb-6">
+                <Link 
+                  href="mailto:ojasvi_vijaymalik@outlook.com" 
+                  className="text-teal font-medium hover:underline"
+                >
+                  Email: ojasvi_vijaymalik@outlook.com
+                </Link>
+              </div>
+            </AnimatedElement>
+            <div className="max-w-lg mx-auto">
+              <ComplianceNotice type="minimal" className="text-center" />
+            </div>
+          </div>
+        </ResponsiveContainer>
+      </Section>
+    </>
+  );
+}

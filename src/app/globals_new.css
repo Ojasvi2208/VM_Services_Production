@@ -1,0 +1,164 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* TailwindCSS directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Premium Brand Colors */
+  --color-brand-navy: #1B365D;
+  --color-brand-royal: #2E5984;
+  --color-brand-gold: #C5A572;
+  --color-brand-pearl: #F8F9FA;
+  --color-brand-cloud: #6C757D;
+  --color-brand-platinum: #E9ECEF;
+  --color-brand-soft-blue: #8B9DC3;
+  
+  /* Legacy Brand Colors (for gradual migration) */
+  --color-olive: #1B365D;
+  --color-olive-50: #F8F9FA;
+  --color-olive-100: #E9ECEF;
+  --color-olive-200: #D1E7DD;
+  --color-olive-300: #B3D9C7;
+  --color-olive-400: #8FBC8F;
+  --color-olive-500: #2E5984;
+  --color-olive-600: #1B365D;
+  --color-olive-700: #0F2A4C;
+  --color-olive-800: #0A1F3B;
+  --color-olive-900: #051A2A;
+  
+  /* Secondary Colors */
+  --color-navy: #1B365D;
+  --color-navy-900: #0F1419;
+  
+  /* UI Colors */
+  --color-white: #FFFFFF;
+  --color-offwhite: #F8F9FA;
+  
+  /* Font Family */
+  --font-family-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-family-display: 'Inter', system-ui, -apple-system, sans-serif;
+  
+  /* Premium Gradients */
+  --gradient-premium: linear-gradient(135deg, #1B365D 0%, #2E5984 100%);
+  --gradient-gold: linear-gradient(135deg, #C5A572 0%, #D4AF37 100%);
+  --gradient-hero: linear-gradient(135deg, rgba(27,54,93,0.9) 0%, rgba(46,89,132,0.8) 100%);
+  --gradient-royal-navy: linear-gradient(to bottom right, #1B365D, #2E5984);
+  --gradient-white-pearl: linear-gradient(to bottom, #FFFFFF, #F8F9FA);
+  --gradient-dark-overlay: linear-gradient(to right, rgba(27,54,93,0.8), rgba(46,89,132,0.7));
+  
+  /* Typography */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+}
+
+/* Component Styling */
+@layer components {
+  /* Navigation Links */
+  .nav-link {
+    @apply text-base md:text-lg font-bold transition-colors text-brand-navy hover:text-brand-gold;
+  }
+  .nav-link.active {
+    @apply text-brand-gold font-bold;
+  }
+  
+  /* Buttons */
+  .btn-primary {
+    @apply px-6 py-2.5 rounded-full bg-brand-navy text-white font-semibold shadow-md hover:bg-brand-royal hover:shadow-lg transition-all duration-300 border border-brand-royal;
+  }
+  
+  .btn-secondary {
+    @apply px-6 py-2.5 rounded-full bg-white/90 border-2 border-brand-navy text-brand-navy font-semibold hover:bg-brand-pearl hover:border-brand-royal transition-all duration-300;
+  }
+  
+  /* Premium Gold Button */
+  .btn-gold {
+    @apply px-6 py-2.5 rounded-full bg-brand-gold text-brand-navy font-bold shadow-md hover:shadow-lg transition-all duration-300;
+  }
+  
+  /* Cards */
+  .card-light {
+    @apply bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow border border-brand-platinum;
+  }
+  
+  .card-gradient {
+    @apply rounded-2xl shadow-lg text-white;
+    background: var(--gradient-premium);
+  }
+  
+  .card-gold {
+    @apply rounded-2xl shadow-lg text-brand-navy;
+    background: var(--gradient-gold);
+  }
+  
+  /* Container with padding */
+  .container-padding {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+  
+  /* Text styling */
+  .text-heading {
+    @apply text-brand-navy;
+  }
+  
+  .text-heading-light {
+    @apply text-white;
+  }
+  
+  /* Accent elements */
+  .heading-with-accent {
+    @apply relative pb-3 mb-4;
+  }
+  
+  .heading-with-accent::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background: var(--gradient-gold);
+    border-radius: 2px;
+  }
+  
+  /* Responsive container */
+  .responsive-container {
+    @apply px-4 sm:px-6 md:px-8 mx-auto max-w-7xl;
+  }
+  
+  /* Focus styles */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-brand-gold focus:ring-offset-2;
+  }
+}
+
+/* Custom utilities */
+@layer utilities {
+  .text-shadow-sm {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+  
+  .text-shadow-md {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+  
+  .text-shadow-lg {
+    text-shadow: 0 3px 6px rgba(0, 0, 0, 0.7);
+  }
+  
+  .bg-gradient-premium {
+    background: var(--gradient-premium);
+  }
+  
+  .bg-gradient-gold {
+    background: var(--gradient-gold);
+  }
+  
+  .bg-gradient-hero {
+    background: var(--gradient-hero);
+  }
+}
