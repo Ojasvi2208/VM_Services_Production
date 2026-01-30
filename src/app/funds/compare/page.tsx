@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Section from '@/components/Section';
 import ResponsiveContainer from '@/components/ResponsiveContainer';
@@ -25,7 +25,7 @@ interface FundData {
   };
 }
 
-export default function FundComparePage() {
+function FundCompareContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [funds, setFunds] = useState<FundData[]>([]);
@@ -351,5 +351,22 @@ export default function FundComparePage() {
         </ResponsiveContainer>
       </Section>
     </>
+  );
+}
+
+export default function FundComparePage() {
+  return (
+    <Suspense fallback={
+      <Section className="py-12">
+        <ResponsiveContainer>
+          <div className="text-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-gold mx-auto mb-4"></div>
+            <p className="text-brand-cloud">Loading comparison...</p>
+          </div>
+        </ResponsiveContainer>
+      </Section>
+    }>
+      <FundCompareContent />
+    </Suspense>
   );
 }
