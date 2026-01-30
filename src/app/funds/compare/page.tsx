@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Section from '@/components/Section';
 import ResponsiveContainer from '@/components/ResponsiveContainer';
 
+// Force dynamic rendering to avoid static generation issues with useSearchParams
+export const dynamic = 'force-dynamic';
+
 interface FundData {
   schemeCode: string;
   schemeName: string;
