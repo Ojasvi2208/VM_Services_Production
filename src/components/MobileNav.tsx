@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -11,10 +11,14 @@ type MobileNavProps = {
 
 export default function MobileNav({ isOpen, onClose }: MobileNavProps) {
   const pathname = usePathname();
+  const previousPathname = useRef(pathname);
   
-  // Close menu when navigation occurs (only when pathname changes, not when menu opens)
+  // Close menu ONLY when pathname actually changes (navigation occurs)
   useEffect(() => {
-    onClose();
+    if (previousPathname.current !== pathname) {
+      onClose();
+      previousPathname.current = pathname;
+    }
   }, [pathname, onClose]);
   
   // Prevent scrolling when menu is open
