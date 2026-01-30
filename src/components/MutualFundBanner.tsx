@@ -17,19 +17,9 @@ interface MutualFundData {
 
 const MutualFundBanner = () => {
   const [mutualFundData, setMutualFundData] = useState<MutualFundData[]>([]);
-  const [isDataFresh, setIsDataFresh] = useState(true);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<string>('');
-
-  // Check if NAV data is fresh (NAVs are updated after market close, usually by 9 PM IST)
-  const checkDataFreshness = () => {
-    const now = new Date();
-    const istTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-    const hour = istTime.getHours();
-    
-    // NAV data is freshest after 9 PM IST when all funds have updated their NAVs
-    return hour >= 21 || hour <= 6; // Fresh data available from 9 PM to 6 AM next day
-  };
+  const [dataSource, setDataSource] = useState<string>('Loading...');
 
   // Mock mutual fund data with top performers from different categories
   const getMockMutualFundData = (): MutualFundData[] => {
@@ -173,27 +163,35 @@ const MutualFundBanner = () => {
     try {
       setLoading(true);
       
-      // Try to fetch from our API endpoint
+      // Fetch from our updated API endpoint that uses real AMFI data
       const response = await fetch('/api/mutual-fund-data');
       
       if (response.ok) {
         const data = await response.json();
-        setMutualFundData(data.funds || getMockMutualFundData());
+        if (data.success && data.funds) {
+          console.log(`Loaded ${data.funds.length} funds from ${data.source}`);
+          setMutualFundData(data.funds);
+          setDataSource(data.source);
+        } else {
+          // Fallback to mock data
+          setMutualFundData(getMockMutualFundData());
+          setDataSource('Mock');
+        }
       } else {
         // Fallback to mock data
         setMutualFundData(getMockMutualFundData());
+        setDataSource('Mock');
       }
       
-      setIsDataFresh(checkDataFreshness());
       setLastUpdated(new Date().toLocaleTimeString('en-IN', { 
         timeZone: 'Asia/Kolkata',
         hour12: true 
       }));
       
-    } catch {
-      console.log('Using mock mutual fund data');
+    } catch (error) {
+      console.log('Error fetching mutual fund data, using mock data:', error);
       setMutualFundData(getMockMutualFundData());
-      setIsDataFresh(checkDataFreshness());
+      setDataSource('Mock');
       setLastUpdated(new Date().toLocaleTimeString('en-IN', { 
         timeZone: 'Asia/Kolkata',
         hour12: true 
@@ -234,9 +232,13 @@ const MutualFundBanner = () => {
       <div className="flex items-center h-full animate-scroll hover:pause whitespace-nowrap">
         {/* Data freshness indicator */}
         <div className="flex items-center px-4 bg-gray-50/90 h-full flex-shrink-0 border-r border-gray-200/60">
-          <div className={`w-2 h-2 rounded-full mr-2 shadow-sm ${isDataFresh ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></div>
+          <div className={`w-2 h-2 rounded-full mr-2 shadow-sm ${
+            dataSource === 'AMFI' ? 'bg-emerald-500 animate-pulse' : 
+            dataSource === 'Fallback' ? 'bg-blue-500' : 'bg-amber-500'
+          }`}></div>
           <span className="text-xs font-semibold text-gray-700 tracking-wide">
-            {isDataFresh ? 'FRESH NAV' : 'LATEST NAV'} • {lastUpdated} IST
+            {dataSource === 'AMFI' ? 'LIVE AMFI NAV' : 
+             dataSource === 'Fallback' ? 'DEMO NAV' : 'LATEST NAV'} • {lastUpdated} IST
           </span>
         </div>
 

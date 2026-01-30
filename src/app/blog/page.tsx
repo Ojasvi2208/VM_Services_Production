@@ -233,25 +233,29 @@ export default function BlogPage() {
               <button className="w-12 h-12 rounded-full flex items-center justify-center bg-white text-brand-navy hover:bg-brand-pearl border-2 border-brand-royal/20 hover:border-brand-gold/50 shadow-sm transform hover:scale-110 transition-all duration-200">
                 3
               </button>
-              <button className="w-10 h-10 rounded-full flex items-center justify-center bg-sage text-navy hover:bg-sage/70 border border-sage-300 shadow-sm transition-all">
+              <button className="w-12 h-12 rounded-full flex items-center justify-center bg-white text-brand-navy hover:bg-brand-pearl border-2 border-brand-royal/20 hover:border-brand-gold/50 shadow-sm transform hover:scale-110 transition-all duration-200">
                 &rsaquo;
               </button>
             </div>
           </div>
           
           {/* Newsletter signup */}
-          <div className="mt-12 md:mt-16 bg-sage/20 p-4 sm:p-8 rounded-lg text-center border border-sage-300 shadow-md">
-            <h3 className="text-xl font-semibold text-olive mb-3 heading-with-accent">Stay Informed with Market Updates</h3>
-            <p className="text-navy mb-4 md:mb-6 max-w-2xl mx-auto">
-              Subscribe to our newsletter for educational content on investing, market insights, and financial planning tips. No spam, unsubscribe anytime.
+          <div className="mt-12 md:mt-16 bg-gradient-to-br from-brand-pearl to-blue-50/30 p-6 sm:p-8 rounded-lg text-center border-2 border-brand-royal/10 shadow-lg animate-fadeInUp animation-delay-1200">
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-3 h-3 bg-brand-gold rounded-full animate-pulse mr-3"></div>
+              <h3 className="text-xl font-semibold text-brand-navy heading-with-accent">Stay Informed with Market Updates</h3>
+              <div className="w-3 h-3 bg-brand-gold rounded-full animate-pulse ml-3"></div>
+            </div>
+            <p className="text-brand-navy/80 mb-6 max-w-2xl mx-auto leading-relaxed">
+              Subscribe to our newsletter for educational content on <span className="text-brand-gold font-semibold">investing</span>, market insights, and <span className="text-brand-royal font-semibold">financial planning</span> tips. No spam, unsubscribe anytime.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
               <input
                 type="email"
                 placeholder="Your email address"
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-olive"
+                className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50"
               />
-              <button className="bg-olive text-sage-50 px-4 py-3 rounded-lg font-semibold shadow-md border border-olive-600 transition-all hover:bg-olive-700 whitespace-nowrap">
+              <button className="bg-gradient-to-r from-brand-royal to-brand-navy text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-brand-navy hover:to-brand-royal transform hover:scale-105 transition-all duration-200 whitespace-nowrap">
                 Subscribe
               </button>
             </div>

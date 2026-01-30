@@ -25,10 +25,10 @@ const ContactForm = () => {
     }));
   };
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // In a real app, you'd send this data to a server
-    console.log('Form submitted:', formData);
+    // TODO: Implement API call to /api/customer-inquiry
     setFormSubmitted(true);
   };
   
@@ -80,8 +80,8 @@ const ContactForm = () => {
             />
           </div>
           
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-navy mb-1">
+          <div className="transform hover:scale-[1.02] transition-all duration-200">
+            <label htmlFor="email" className="block text-sm font-medium text-brand-navy mb-1">
               Email Address <span className="text-brand-gold">*</span>
             </label>
             <input
@@ -91,12 +91,12 @@ const ContactForm = () => {
               required
               value={formData.email}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-olive"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50"
             />
           </div>
           
-          <div>
-            <label htmlFor="phone" className="block text-sm font-medium text-navy mb-1">
+          <div className="transform hover:scale-[1.02] transition-all duration-200">
+            <label htmlFor="phone" className="block text-sm font-medium text-brand-navy mb-1">
               Phone Number <span className="text-brand-gold">*</span>
             </label>
             <input
@@ -106,12 +106,12 @@ const ContactForm = () => {
               required
               value={formData.phone}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-olive"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50"
             />
           </div>
           
-          <div>
-            <label htmlFor="subject" className="block text-sm font-medium text-navy mb-1">
+          <div className="transform hover:scale-[1.02] transition-all duration-200">
+            <label htmlFor="subject" className="block text-sm font-medium text-brand-navy mb-1">
               Subject
             </label>
             <select
@@ -119,7 +119,7 @@ const ContactForm = () => {
               name="subject"
               value={formData.subject}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-olive"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50"
             >
               <option value="general">General Inquiry</option>
               <option value="investment">Investment Related</option>
@@ -129,9 +129,9 @@ const ContactForm = () => {
             </select>
           </div>
           
-          <div>
-            <label htmlFor="message" className="block text-sm font-medium text-navy mb-1">
-              Your Message*
+          <div className="transform hover:scale-[1.02] transition-all duration-200">
+            <label htmlFor="message" className="block text-sm font-medium text-brand-navy mb-1">
+              Your Message <span className="text-brand-gold">*</span>
             </label>
             <textarea
               id="message"
@@ -140,7 +140,7 @@ const ContactForm = () => {
               required
               value={formData.message}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-olive"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50 resize-none"
             />
           </div>
         </div>
@@ -152,7 +152,7 @@ const ContactForm = () => {
           Send Message
         </button>
         
-        <p className="text-xs text-center text-navy/70 mt-4">
+        <p className="text-xs text-center text-brand-navy/70 mt-4">
           We typically respond to all inquiries within 1-2 business days.
         </p>
       </form>
@@ -175,18 +175,18 @@ const ContactInfo = ({
   linkText?: string;
 }) => {
   return (
-    <div className="card-light p-4 sm:p-6 rounded-lg flex flex-col h-full">
-      <div className="h-12 w-12 rounded-full bg-olive/10 flex items-center justify-center text-olive mb-4">
+    <div className="card-light p-4 sm:p-6 rounded-lg flex flex-col h-full hover:shadow-lg transition-shadow duration-300">
+      <div className="h-12 w-12 rounded-full bg-brand-royal/10 flex items-center justify-center text-brand-royal mb-4 group-hover:bg-brand-gold/20 group-hover:text-brand-gold transition-all duration-300">
         {icon}
       </div>
       
-      <h3 className="text-lg font-semibold text-olive mb-2">{title}</h3>
-      <p className="text-navy mb-4">{details}</p>
+      <h3 className="text-lg font-semibold text-brand-navy mb-2">{title}</h3>
+      <p className="text-brand-navy/80 mb-4">{details}</p>
       
       {link && linkText && (
         <a 
           href={link} 
-          className="text-olive font-medium hover:underline mt-auto"
+          className="text-brand-royal font-medium hover:text-brand-gold hover:underline mt-auto transition-colors duration-200"
           target={link.startsWith('http') ? '_blank' : undefined}
           rel={link.startsWith('http') ? 'noopener noreferrer' : undefined}
         >
@@ -277,20 +277,27 @@ export default function ContactPage() {
           </div>
           
           {/* Map placeholder */}
-          <div className="mt-10 md:mt-12 bg-sage/30 h-60 sm:h-80 rounded-lg flex items-center justify-center">
-            <div className="text-navy/50">
+          <div className="mt-10 md:mt-12 bg-brand-pearl h-48 sm:h-60 md:h-80 rounded-lg flex items-center justify-center border-2 border-brand-royal/10">
+            <div className="text-brand-navy/50 text-center px-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-2 text-brand-royal/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
               Map Placeholder - In a real application, this would be an embedded Google Map
             </div>
           </div>
           
           {/* Business hours */}
           <div className="mt-6 md:mt-8 card-light p-4 sm:p-6 rounded-lg">
-            <h2 className="text-xl font-semibold text-olive mb-4 heading-with-accent">Business Hours</h2>
+            <h2 className="text-xl font-semibold text-brand-navy mb-4 heading-with-accent">Business Hours</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <h3 className="font-medium text-olive mb-2">Office Hours</h3>
-                <table className="w-full text-navy">
+                <h3 className="font-medium text-brand-royal mb-3 flex items-center">
+                  <span className="w-2 h-2 bg-brand-gold rounded-full mr-2 animate-pulse"></span>
+                  Office Hours
+                </h3>
+                <table className="w-full text-brand-navy/80">
                   <tbody>
                     <tr>
                       <td className="py-1 pr-4">Monday - Friday</td>
@@ -309,8 +316,11 @@ export default function ContactPage() {
               </div>
               
               <div>
-                <h3 className="font-medium text-olive mb-2">Phone Support</h3>
-                <table className="w-full text-navy">
+                <h3 className="font-medium text-brand-royal mb-3 flex items-center">
+                  <span className="w-2 h-2 bg-brand-gold rounded-full mr-2 animate-pulse"></span>
+                  Phone Support
+                </h3>
+                <table className="w-full text-brand-navy/80">
                   <tbody>
                     <tr>
                       <td className="py-1 pr-4">Monday - Friday</td>

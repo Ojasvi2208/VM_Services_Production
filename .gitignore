@@ -42,3 +42,45 @@ next-env.d.ts
 
 # Local Netlify folder
 .netlify
+
+# Documentation and unnecessary files
+/docs/
+/Architecture/
+/logs/
+/migrations/
+*.log
+*.md
+!README.md
+
+# AWS and deployment files
+/aws/
+*.pkg
+*.zip
+AWSCLIV2.pkg
+awscliv2.zip
+docker-compose.yml
+cron-setup.sh
+env-local-template.txt
+requirements.txt
+vercel.json
+
+# Cache and temporary files
+.cache/
+*.pyc
+__pycache__/
+
+# Scripts and setup files
+scripts/load_historical_data.py
+scripts/setup-*.ts
+scripts/setup-*.sh
+test-*.js
+test-*.sh
+
+# Backup files
+*_backup.*
+*.bak
+
+# Public assets (keep only necessary)
+public/Funds_Schema.json
+public/VM_Logo1.png
+public/analysis.jpg

@@ -299,6 +299,16 @@
   .bg-gradient-hero {
     background: var(--gradient-hero);
   }
+  
+  /* Hide scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Mutual Fund Banner Animations */

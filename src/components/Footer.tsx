@@ -13,13 +13,13 @@ export default function Footer() {
           {/* Column 1: Logo and About */}
           <div className="space-y-4">
             {/* Logo image */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 inline-block">
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 inline-block border-2 border-white/20">
               <Image 
-                src="/VM_Logo.png" 
+                src="/images/VM_Logo.jpg" 
                 alt="Vijay Malik Financial Services Logo" 
-                width={180} 
-                height={45} 
-                className="h-10 w-auto" 
+                width={220} 
+                height={55} 
+                className="h-12 w-auto" 
                 priority
               />
             </div>

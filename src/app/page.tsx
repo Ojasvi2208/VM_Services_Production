@@ -3,9 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import ComplianceNotice from "@/components/ComplianceNotice";
-import Section from "@/components/Section";
-import ResponsiveContainer from "@/components/ResponsiveContainer";
-import AnimatedElement from "@/components/ui/AnimatedElement";
+import Section from '@/components/Section';
+import ResponsiveContainer from '@/components/ResponsiveContainer';
 import AnimatedBackground from "@/components/AnimatedBackground";
 
 export default function Home() {
@@ -19,60 +18,62 @@ export default function Home() {
       >
         <div className="flex items-center min-h-screen">
           <ResponsiveContainer>
-            <div className="max-w-3xl mx-auto text-center md:text-left md:mx-0 text-white pt-20">
-                <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 heading-with-accent relative">
+            <div className="max-w-5xl mx-auto text-center md:text-left md:mx-0 text-white py-32">
+                <h1 className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-8 heading-with-accent relative leading-tight">
                   <span className="inline-block">Invest with </span>
                   <span className="relative inline-block">
                     <span className="bg-gradient-to-r from-brand-gold via-yellow-300 to-brand-gold bg-clip-text text-transparent animate-pulse">trust</span>
-                    <span className="absolute -inset-1 bg-brand-gold/20 blur-sm rounded-lg opacity-50 animate-pulse"></span>
+                    <span className="absolute -inset-2 bg-brand-gold/20 blur-lg rounded-xl opacity-60 animate-pulse"></span>
                   </span>.{' '}
+                  <br className="hidden md:block" />
                   <span className="inline-block">Grow with </span>
                   <span className="relative inline-block">
                     <span className="bg-gradient-to-r from-brand-gold via-yellow-300 to-brand-gold bg-clip-text text-transparent animate-pulse animation-delay-1000">discipline</span>
-                    <span className="absolute -inset-1 bg-brand-gold/20 blur-sm rounded-lg opacity-50 animate-pulse animation-delay-1000"></span>
+                    <span className="absolute -inset-2 bg-brand-gold/20 blur-lg rounded-xl opacity-60 animate-pulse animation-delay-1000"></span>
                   </span>.
                 </h1>
                           
-                <p className="text-lg md:text-xl text-white/90 mb-6">
-                  <span className="text-brand-gold font-semibold">AMFI-registered</span>{' '}Mutual Fund Distributor helping families plan and invest with clarity
-                  
+                <p className="text-xl md:text-2xl lg:text-3xl text-white/90 mb-10 leading-relaxed max-w-4xl">
+                  <span className="text-brand-gold font-semibold text-2xl md:text-3xl">AMFI-registered</span>{' '}
+                  <br className="md:hidden" />
+                  Mutual Fund Distributor helping families plan and invest with clarity
                 </p>
                           
-                <div className="flex flex-wrap gap-3 justify-center md:justify-start mb-8">
-                  <div className="group bg-white/20 hover:bg-brand-gold/20 text-white px-4 py-2 rounded-full text-sm font-bold border border-white/30 hover:border-brand-gold/50 backdrop-blur-sm shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-                    <span className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-brand-gold rounded-full animate-pulse"></span>
+                <div className="flex flex-wrap gap-4 justify-center md:justify-start mb-12">
+                  <div className="group bg-white/20 hover:bg-brand-gold/20 text-white px-6 py-3 rounded-full text-base md:text-lg font-bold border border-white/30 hover:border-brand-gold/50 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                    <span className="flex items-center gap-3">
+                      <span className="w-3 h-3 bg-brand-gold rounded-full animate-pulse"></span>
                       ARN-317605
                     </span>
                   </div>
-                  <div className="group bg-white/20 hover:bg-brand-gold/20 text-white px-4 py-2 rounded-full text-sm font-bold border border-white/30 hover:border-brand-gold/50 backdrop-blur-sm shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-                    <span className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse animation-delay-500"></span>
+                  <div className="group bg-white/20 hover:bg-brand-gold/20 text-white px-6 py-3 rounded-full text-base md:text-lg font-bold border border-white/30 hover:border-brand-gold/50 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                    <span className="flex items-center gap-3">
+                      <span className="w-3 h-3 bg-green-400 rounded-full animate-pulse animation-delay-500"></span>
                       3+ Years
                     </span>
                   </div>
-                  <div className="group bg-white/20 hover:bg-brand-gold/20 text-white px-4 py-2 rounded-full text-sm font-bold border border-white/30 hover:border-brand-gold/50 backdrop-blur-sm shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-                    <span className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse animation-delay-1000"></span>
+                  <div className="group bg-white/20 hover:bg-brand-gold/20 text-white px-6 py-3 rounded-full text-base md:text-lg font-bold border border-white/30 hover:border-brand-gold/50 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                    <span className="flex items-center gap-3">
+                      <span className="w-3 h-3 bg-blue-400 rounded-full animate-pulse animation-delay-1000"></span>
                       NISM Certified
                     </span>
                   </div>
                 </div>
                           
-                <div className="flex flex-wrap gap-4 justify-center md:justify-start mb-8">
-                  <Link href="/partners" className="group relative btn-gold overflow-hidden">
-                    <span className="relative z-10 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-white rounded-full group-hover:animate-bounce"></span>
+                <div className="flex flex-wrap gap-6 justify-center md:justify-start mb-12">
+                  <Link href="/partners" className="group relative btn-gold overflow-hidden text-lg md:text-xl px-8 py-4">
+                    <span className="relative z-10 flex items-center gap-3">
+                      <span className="w-3 h-3 bg-white rounded-full group-hover:animate-bounce"></span>
                       Start Investing
-                      <span className="transform group-hover:translate-x-1 transition-transform duration-300">→</span>
+                      <span className="transform group-hover:translate-x-1 transition-transform duration-300 text-xl">→</span>
                     </span>
                     <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-brand-gold transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
                   </Link>
-                  <Link href="/goal-planning" className="group relative btn-secondary overflow-hidden">
-                    <span className="relative z-10 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-brand-gold rounded-full group-hover:animate-spin"></span>
+                  <Link href="/goal-planning" className="group relative btn-secondary overflow-hidden text-lg md:text-xl px-8 py-4">
+                    <span className="relative z-10 flex items-center gap-3">
+                      <span className="w-3 h-3 bg-brand-gold rounded-full group-hover:animate-spin"></span>
                       Plan a Goal
-                      <span className="transform group-hover:translate-x-1 transition-transform duration-300">→</span>
+                      <span className="transform group-hover:translate-x-1 transition-transform duration-300 text-xl">→</span>
                     </span>
                     <div className="absolute inset-0 bg-gradient-to-r from-brand-royal to-brand-navy transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
                   </Link>
@@ -126,6 +127,105 @@ export default function Home() {
               </div>
               <h3 className="font-semibold mb-1 text-brand-navy">Canara Robeco</h3>
               <p className="text-sm text-brand-cloud">Focused fund strategies for diverse needs</p>
+            </div>
+          </div>
+        </ResponsiveContainer>
+      </Section>
+
+      {/* Quick Access Tools */}
+      <Section className="bg-white py-16">
+        <ResponsiveContainer>
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold text-brand-navy mb-4">
+              Explore <span className="text-brand-gold">14,083+ Mutual Funds</span>
+            </h2>
+            <p className="text-lg text-brand-navy/70 max-w-2xl mx-auto">
+              Search, compare, and track your investments with our comprehensive tools
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {/* Search Funds */}
+            <Link href="/funds/search" className="group card-light p-8 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 border-transparent hover:border-brand-royal">
+              <div className="w-16 h-16 bg-gradient-to-br from-brand-royal to-brand-navy rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-brand-navy mb-3 group-hover:text-brand-royal transition-colors">
+                Search Funds
+              </h3>
+              <p className="text-brand-navy/70 mb-4">
+                Advanced search with filters by AMC, category, and plan type. Find the perfect fund in seconds.
+              </p>
+              <div className="flex items-center text-brand-royal font-semibold group-hover:gap-3 gap-2 transition-all">
+                Start Searching
+                <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </Link>
+
+            {/* Compare Funds */}
+            <Link href="/funds/compare" className="group card-light p-8 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 border-transparent hover:border-brand-gold">
+              <div className="w-16 h-16 bg-gradient-to-br from-brand-gold to-yellow-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-brand-navy mb-3 group-hover:text-brand-gold transition-colors">
+                Compare Funds
+              </h3>
+              <p className="text-brand-navy/70 mb-4">
+                Compare up to 5 funds side-by-side. Analyze returns, CAGR, and identify best performers.
+              </p>
+              <div className="flex items-center text-brand-gold font-semibold group-hover:gap-3 gap-2 transition-all">
+                Start Comparing
+                <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </Link>
+
+            {/* Track Portfolio */}
+            <Link href="/portfolio" className="group card-light p-8 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 border-transparent hover:border-green-600">
+              <div className="w-16 h-16 bg-gradient-to-br from-green-600 to-green-700 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-brand-navy mb-3 group-hover:text-green-600 transition-colors">
+                Track Portfolio
+              </h3>
+              <p className="text-brand-navy/70 mb-4">
+                Monitor your investments in real-time. Track returns, NAV updates, and portfolio performance.
+              </p>
+              <div className="flex items-center text-green-600 font-semibold group-hover:gap-3 gap-2 transition-all">
+                Start Tracking
+                <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </Link>
+          </div>
+
+          {/* Stats Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-gradient-to-r from-brand-navy to-brand-royal rounded-2xl">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-brand-gold mb-1">14,083+</div>
+              <div className="text-white/80 text-sm">Mutual Funds</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-brand-gold mb-1">20.4M</div>
+              <div className="text-white/80 text-sm">NAV Records</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-brand-gold mb-1">19+</div>
+              <div className="text-white/80 text-sm">Years History</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-brand-gold mb-1">100%</div>
+              <div className="text-white/80 text-sm">Data Accuracy</div>
             </div>
           </div>
         </ResponsiveContainer>
@@ -230,18 +330,18 @@ export default function Home() {
         <ResponsiveContainer>
           <div className="text-center">
             <h2 className="text-2xl font-semibold mb-4 text-brand-navy heading-with-accent">Questions?</h2>
-            <p className="mb-6 text-brand-cloud flex items-center justify-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-brand-gold" viewBox="0 0 24 24" fill="currentColor">
+            <p className="mb-6 text-brand-cloud flex items-center justify-center gap-2 text-xl font-semibold">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-brand-gold" viewBox="0 0 24 24" fill="currentColor">
                 <path fillRule="evenodd" d="M12.036 5.339c-3.635 0-6.591 2.956-6.593 6.589-.001 1.483.434 2.594 1.164 3.756l-.666 2.432 2.494-.654c1.117.663 2.184 1.061 3.595 1.061 3.632 0 6.591-2.956 6.592-6.59.003-3.641-2.942-6.593-6.586-6.594zm3.876 9.423c-.165.463-.957.885-1.337.942-.341.051-.773.078-1.377-.079-1.214-.32-2.688-1.426-3.646-2.77-.574-.747-.969-1.657-1.115-2.576-.168-1.051.408-1.571.7-1.796.346-.257.691-.183.915-.011l.563.387c.17.115.272.283.302.495.068.48.148 1.188-.018 1.421-.196.273-.163.223.053.48.304.36.661.877 1.132 1.422.722.836 1.28 1.134 1.942 1.588.14.092.28.098.406.005.241-.17.658-.601.932-.802.252-.183.532-.07.726.065l.999.642c.131.094.276.18.347.33.042.088.078.235-.019.446z" clipRule="evenodd" />
               </svg>
               9417334348 — Chandigarh
             </p>
             <div className="inline-block mb-6">
               <Link 
-                href="mailto:ojasvi.malik@vmfinancialservices.com" 
-                className="text-brand-navy font-medium hover:text-brand-gold hover:underline transition-colors"
+                href="mailto:info@vmfinancialservices.com" 
+                className="text-brand-navy text-lg font-semibold hover:text-brand-gold hover:underline transition-colors"
               >
-                Email: ojasvi.malik@vmfinancialservices.com
+                Email: info@vmfinancialservices.com
               </Link>
             </div>
             <div className="max-w-lg mx-auto">

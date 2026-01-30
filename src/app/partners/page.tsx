@@ -136,7 +136,7 @@ export default function PartnersPage() {
       name: 'NJ Wealth',
       logo: '/nj-logo.svg',
       description: 'A comprehensive platform offering mutual funds, stocks, bonds, and insurance products with detailed research.',
-      redirectUrl: '/api/redirect?url=https://www.njindiaonline.com/etada/partintiate.fin?cmdAction=showMenu&njBrcode=14688',
+      redirectUrl: 'https://www.njindiaonline.in/',
       partnerCode: '',
       features: [
         'Basket of recommended funds',

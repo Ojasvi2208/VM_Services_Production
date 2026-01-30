@@ -25,7 +25,6 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="min-h-screen flex flex-col bg-brand-pearl">
-        <MutualFundBanner />
         <Header />
         <main className="flex-grow">{children}</main>
         <Footer />

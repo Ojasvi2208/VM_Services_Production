@@ -38,36 +38,37 @@ export default function Header() {
   
   const navLinks = [
     { href: '/', label: 'Home' },
-    { href: '/products', label: 'Products' },
-    { href: '/goal-planning', label: 'Goal Planning' },
+    { href: '/funds/search', label: 'Search Funds' },
+    { href: '/funds/compare', label: 'Compare' },
+    { href: '/portfolio', label: 'Portfolio' },
+    { href: '/calculators/sip', label: 'Calculators' },
     { href: '/partners', label: 'Partners' },
-    { href: '/blog', label: 'Blog' },
     { href: '/about', label: 'About' },
-    { href: '/verify-arn', label: 'Verify ARN' },
     { href: '/contact', label: 'Contact' }
   ];
 
   return (
     <header 
       className={`absolute left-0 right-0 z-40 transition-all duration-300 ${
-        scrolled ? 'bg-white/95 backdrop-blur-md shadow-xl border-b border-brand-platinum/30 top-0' : 'bg-transparent top-12'
+        scrolled ? 'bg-white/95 backdrop-blur-md shadow-xl border-b border-brand-platinum/30 top-0' : 'bg-transparent top-0'
       }`}
-      style={{ top: scrolled ? '0' : '48px' }}
     >
       <div className="container-padding py-4">
         <div className="flex items-center justify-between h-16 md:h-20 px-4">
           {/* Logo */}
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center focus-ring" aria-label="Vijay Malik Financial - Home">
-              {/* Logo image */}
-              <Image 
-                src="/VM_Logo.png" 
-                alt="Vijay Malik Financial Services Logo" 
-                width={220} 
-                height={55} 
-                className="h-16 w-auto" 
-                priority
-              />
+              {/* Logo image - bordered on homepage, borderless on other pages */}
+              <div className={`bg-white px-3 py-2 ${pathname === '/' ? 'rounded-lg shadow-md border-2 border-gray-200' : ''}`}>
+                <Image 
+                  src="/images/VM_Logo.jpg" 
+                  alt="Vijay Malik Financial Services Logo" 
+                  width={320} 
+                  height={80} 
+                  className="h-20 w-auto" 
+                  priority
+                />
+              </div>
             </Link>
           </div>
           
