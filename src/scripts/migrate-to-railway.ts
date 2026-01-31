@@ -21,6 +21,14 @@ interface MFApiResponse {
   data: Array<{ date: string; nav: string; }>;
 }
 
+// Convert MFApi date format (DD-MM-YYYY) to PostgreSQL format (YYYY-MM-DD)
+function convertDateFormat(dateStr: string): string {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const [day, month, year] = parts;
+  return `${year}-${month}-${day}`;
+}
+
 async function migrateToRailway() {
   console.log('🚀 Starting complete migration to Railway...\n');
 
@@ -83,7 +91,7 @@ async function migrateToRailway() {
               navBatch.forEach((nav: any, idx: number) => {
                 const baseIdx = idx * 3;
                 placeholders.push(`($${baseIdx + 1}, $${baseIdx + 2}, $${baseIdx + 3})`);
-                values.push(fund.scheme_code, nav.date, parseFloat(nav.nav));
+                values.push(fund.scheme_code, convertDateFormat(nav.date), parseFloat(nav.nav));
               });
 
               await railwayPool.query(
@@ -96,8 +104,8 @@ async function migrateToRailway() {
 
             // Update fund's latest NAV
             await railwayPool.query(
-              `UPDATE funds SET nav = $1, nav_date = $2 WHERE scheme_code = $3`,
-              [parseFloat(latestNav.nav), latestNav.date, fund.scheme_code]
+              `UPDATE funds SET nav = $1, nav_date = $2, latest_nav = $1, latest_nav_date = $2 WHERE scheme_code = $3`,
+              [parseFloat(latestNav.nav), convertDateFormat(latestNav.date), fund.scheme_code]
             );
 
             successCount++;
