@@ -1,11 +1,14 @@
 import { Pool } from 'pg';
 import axios from 'axios';
 
-const RAILWAY_DB_URL = 'postgresql://postgres:aIFocuQebgyiiibLSlbFpiGrPPavDhtD@gondola.proxy.rlwy.net:45690/railway';
+const RAILWAY_DB_URL = process.env.RAILWAY_DATABASE_URL || 'postgresql://postgres:zZGzhpULOgKqXvnnutWEjCengioSheMD@turntable.proxy.rlwy.net:19665/railway';
 
 const pool = new Pool({
   connectionString: RAILWAY_DB_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000
 });
 
 // Check database space usage and stop if > 90% full
@@ -47,6 +50,12 @@ async function checkDatabaseSpace(): Promise<boolean> {
 function parseDate(dateStr: string): Date {
   const [day, month, year] = dateStr.split('-');
   return new Date(`${year}-${month}-${day}`);
+}
+
+// Convert MFApi date format (DD-MM-YYYY) to PostgreSQL format (YYYY-MM-DD)
+function convertDateToPostgres(dateStr: string): string {
+  const [day, month, year] = dateStr.split('-');
+  return `${year}-${month}-${day}`;
 }
 
 // Calculate return percentage
@@ -256,7 +265,12 @@ async function processAllFunds() {
                 inception_date = $3,
                 updated_at = CURRENT_TIMESTAMP
               WHERE scheme_code = $4
-            `, [metrics.latest_nav, metrics.latest_nav_date, metrics.inception_date, metrics.scheme_code]);
+            `, [
+              metrics.latest_nav, 
+              convertDateToPostgres(metrics.latest_nav_date), 
+              convertDateToPostgres(metrics.inception_date), 
+              metrics.scheme_code
+            ]);
 
             // Update fund_returns table
             await pool.query(`
