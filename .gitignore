@@ -51,6 +51,7 @@ next-env.d.ts
 *.log
 *.md
 !README.md
+!DEPLOYMENT-GUIDE.md
 
 # AWS and deployment files
 /aws/
