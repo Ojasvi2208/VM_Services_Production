@@ -57,29 +57,13 @@ export async function GET(
         return_3m as "return3m",
         return_6m as "return6m",
         return_1y as "return1y",
-        return_2y as "return2y",
         return_3y as "return3y",
         return_5y as "return5y",
-        return_7y as "return7y",
-        return_10y as "return10y",
-        return_since_inception as "returnInception",
         cagr_1y as "cagr1y",
-        cagr_2y as "cagr2y",
         cagr_3y as "cagr3y",
-        cagr_5y as "cagr5y",
-        cagr_7y as "cagr7y",
-        cagr_10y as "cagr10y",
-        cagr_since_inception as "cagrInception",
-        volatility_1y as "volatility1y",
-        volatility_3y as "volatility3y",
-        volatility_5y as "volatility5y",
-        sharpe_1y as "sharpe1y",
-        sharpe_3y as "sharpe3y",
-        sharpe_5y as "sharpe5y"
+        cagr_5y as "cagr5y"
       FROM fund_returns
-      WHERE scheme_code = $1
-      ORDER BY calculated_date DESC
-      LIMIT 1`,
+      WHERE scheme_code = $1`,
       [schemeCode]
     );
 
@@ -92,42 +76,17 @@ export async function GET(
         nav_value as "nav"
       FROM nav_history
       WHERE scheme_code = $1
-      ORDER BY nav_date ASC
+      ORDER BY nav_date DESC
       LIMIT 30`,
       [schemeCode]
     );
 
     const navHistory = navHistoryResult.rows;
 
-    // Get fund managers
-    const managersResult = await client.query(
-      `SELECT 
-        manager_name as "name",
-        start_date as "startDate",
-        end_date as "endDate",
-        is_current as "isCurrent",
-        tenure_years as "tenure"
-      FROM fund_managers
-      WHERE scheme_code = $1
-      ORDER BY is_current DESC, start_date DESC`,
-      [schemeCode]
-    );
-
-    const managers = managersResult.rows;
-
-    // Get expense ratio history
-    const expenseHistoryResult = await client.query(
-      `SELECT 
-        effective_date as "date",
-        expense_ratio as "ratio"
-      FROM expense_ratio_history
-      WHERE scheme_code = $1
-      ORDER BY effective_date DESC
-      LIMIT 12`,
-      [schemeCode]
-    );
-
-    const expenseHistory = expenseHistoryResult.rows;
+    // Fund managers and expense history tables don't exist yet
+    // Return empty arrays for now
+    const managers: any[] = [];
+    const expenseHistory: any[] = [];
 
     return NextResponse.json({
       success: true,
