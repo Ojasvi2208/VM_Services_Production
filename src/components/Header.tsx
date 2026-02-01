@@ -59,7 +59,7 @@ export default function Header() {
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center focus-ring" aria-label="Vijay Malik Financial - Home">
               {/* Logo image - white background on homepage, matches page background on other pages */}
-              <div className={`px-3 py-2 ${pathname === '/' ? 'bg-white rounded-lg shadow-md border-2 border-gray-200' : 'bg-offwhite'}`}>
+              <div className={`px-3 py-2 ${pathname === '/' ? 'bg-white rounded-lg shadow-md border-2 border-gray-200' : 'bg-brand-pearl'}`}>
                 <Image 
                   src="/images/VM_Logo.jpg" 
                   alt="Vijay Malik Financial Services Logo" 
