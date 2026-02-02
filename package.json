@@ -7,7 +7,8 @@
     "dev:turbo": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "update-nav": "npx tsx src/scripts/daily-nav-update.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.932.0",
