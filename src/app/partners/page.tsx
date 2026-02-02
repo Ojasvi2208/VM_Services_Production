@@ -161,37 +161,6 @@ export default function PartnersPage() {
       ],
       category: 'primary'
     },
-    {
-      id: 'utimf',
-      name: 'Kotak Mutual Fund',
-      logo: '/uti-logo.svg',
-      description: 'One of India\'s oldest and most trusted fund houses with decades of experience in fund management.',
-      redirectUrl: 'https://www.utimf.com',
-      partnerCode: 'VMFS004',
-      features: [
-        'Pioneer in Indian mutual funds',
-        'Strong debt fund offerings',
-        'Retirement and children\'s future plans',
-        'Dividend yield and value funds'
-      ],
-      category: 'secondary'
-    },
-    {
-      id: 'icici',
-      name: 'ICICI Prudential',
-      logo: '/icici-logo.svg',
-      description: 'A leading fund house with innovative products and strong risk management practices.',
-      redirectUrl: 'https://www.icicipruamc.com',
-      partnerCode: 'VMFS005',
-      features: [
-        'Well-diversified fund offerings',
-        'Multi-cap and focused equity funds',
-        'Smart beta and factor-based funds',
-        'Easy SIP modification options'
-      ],
-      category: 'secondary'
-    }
-    
   ];
   
   // Filter partners based on active filter
