@@ -13,14 +13,15 @@ type VerificationResult = {
   details?: {
     name: string;
     arnNumber: string;
-    validUpto: string; // Changed from validUntil to validUpto to match API response
+    validFrom: string;
+    validUpto: string;
     address: string;
     city: string;
     pin: string;
-    state: string;
     phone: string;
     email: string;
     euin: string;
+    kydCompliant: string;
   };
 };
 
@@ -128,57 +129,75 @@ export default function VerifyARNPage() {
                     <div className="mt-6 border-t border-green-200 pt-6">
                       <h3 className="text-xl font-bold text-green-800 mb-4">Distributor Details</h3>
                       <div className="bg-white rounded-lg shadow-md p-6 border border-green-100">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {/* Distributor Name */}
-                          <div className="bg-green-50 p-4 rounded-md">
-                            <p className="text-sm uppercase tracking-wide font-medium text-green-800 mb-1">Distributor Name</p>
-                            <p className="text-xl font-bold text-charcoal">{result.details.name}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Distributor Name - Full Width */}
+                          <div className="md:col-span-2 bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-md border-l-4 border-green-500">
+                            <p className="text-sm uppercase tracking-wide font-medium text-green-800 mb-1">Registered Name</p>
+                            <p className="text-xl font-bold text-brand-navy">{result.details.name}</p>
                           </div>
                           
                           {/* ARN Number */}
                           <div className="bg-green-50 p-4 rounded-md">
                             <p className="text-sm uppercase tracking-wide font-medium text-green-800 mb-1">ARN Number</p>
-                            <p className="text-xl font-bold text-charcoal">{result.details.arnNumber}</p>
-                          </div>
-                          
-                          {/* Valid Until */}
-                          <div className="bg-green-50 p-4 rounded-md">
-                            <p className="text-sm uppercase tracking-wide font-medium text-green-800 mb-1">Valid Until</p>
-                            <p className="text-xl font-bold text-charcoal">{result.details.validUpto}</p>
+                            <p className="text-xl font-bold text-brand-navy">ARN-{result.details.arnNumber}</p>
                           </div>
                           
                           {/* EUIN */}
                           <div className="bg-green-50 p-4 rounded-md">
                             <p className="text-sm uppercase tracking-wide font-medium text-green-800 mb-1">EUIN</p>
-                            <p className="text-xl font-bold text-charcoal">{result.details.euin || 'Not Available'}</p>
+                            <p className="text-xl font-bold text-brand-navy">{result.details.euin || 'N/A'}</p>
+                          </div>
+                          
+                          {/* Valid From */}
+                          <div className="bg-green-50 p-4 rounded-md">
+                            <p className="text-sm uppercase tracking-wide font-medium text-green-800 mb-1">Valid From</p>
+                            <p className="text-lg font-bold text-brand-navy">{result.details.validFrom}</p>
+                          </div>
+                          
+                          {/* Valid Until */}
+                          <div className="bg-green-50 p-4 rounded-md">
+                            <p className="text-sm uppercase tracking-wide font-medium text-green-800 mb-1">Valid Until</p>
+                            <p className="text-lg font-bold text-brand-navy">{result.details.validUpto}</p>
+                          </div>
+                          
+                          {/* KYD Compliant */}
+                          <div className="bg-green-50 p-4 rounded-md">
+                            <p className="text-sm uppercase tracking-wide font-medium text-green-800 mb-1">KYD Compliant</p>
+                            <p className={`text-lg font-bold ${result.details.kydCompliant === 'Yes' ? 'text-green-600' : 'text-red-600'}`}>
+                              {result.details.kydCompliant}
+                            </p>
+                          </div>
+                          
+                          {/* City */}
+                          <div className="bg-green-50 p-4 rounded-md">
+                            <p className="text-sm uppercase tracking-wide font-medium text-green-800 mb-1">City</p>
+                            <p className="text-lg font-bold text-brand-navy">{result.details.city} - {result.details.pin}</p>
                           </div>
                           
                           {/* Registered Address - Full Width */}
                           <div className="md:col-span-2 bg-green-50 p-4 rounded-md">
                             <p className="text-sm uppercase tracking-wide font-medium text-green-800 mb-1">Registered Address</p>
-                            <p className="text-lg font-bold text-charcoal">
-                              {result.details.address}, {result.details.city}, {result.details.state} - {result.details.pin}
-                            </p>
+                            <p className="text-base font-medium text-brand-navy">{result.details.address}</p>
                           </div>
                           
                           {/* Contact Information */}
                           <div className="bg-green-50 p-4 rounded-md">
                             <p className="text-sm uppercase tracking-wide font-medium text-green-800 mb-1">Phone</p>
-                            <p className="text-lg font-bold text-charcoal">{result.details.phone}</p>
+                            <p className="text-lg font-bold text-brand-navy">{result.details.phone}</p>
                           </div>
                           
                           <div className="bg-green-50 p-4 rounded-md">
                             <p className="text-sm uppercase tracking-wide font-medium text-green-800 mb-1">Email</p>
-                            <p className="text-lg font-bold text-charcoal break-words">{result.details.email}</p>
+                            <p className="text-sm font-bold text-brand-navy break-words">{result.details.email}</p>
                           </div>
                         </div>
                         
                         <div className="mt-6 pt-4 border-t border-green-100">
                           <div className="flex items-center">
-                            <svg className="h-5 w-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <svg className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
-                            <p className="font-medium text-green-800">This distributor is registered with AMFI and authorized to sell mutual fund products</p>
+                            <p className="font-medium text-green-800">This distributor is registered with AMFI and authorized to distribute mutual fund products</p>
                           </div>
                         </div>
                       </div>

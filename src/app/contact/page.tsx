@@ -16,6 +16,8 @@ const ContactForm = () => {
   });
   
   const [formSubmitted, setFormSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -27,9 +29,31 @@ const ContactForm = () => {
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, you'd send this data to a server
-    // TODO: Implement API call to /api/customer-inquiry
-    setFormSubmitted(true);
+    setIsSubmitting(true);
+    setSubmitError('');
+    
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setFormSubmitted(true);
+      } else {
+        setSubmitError(data.error || 'Failed to submit. Please try again.');
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      setSubmitError('Network error. Please check your connection and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   if (formSubmitted) {
@@ -145,11 +169,25 @@ const ContactForm = () => {
           </div>
         </div>
         
+        {submitError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {submitError}
+          </div>
+        )}
+        
         <button
           type="submit"
-          className="btn-primary w-full"
+          disabled={isSubmitting}
+          className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          Send Message
+          {isSubmitting ? (
+            <>
+              <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+              Sending...
+            </>
+          ) : (
+            'Send Message'
+          )}
         </button>
         
         <p className="text-xs text-center text-brand-navy/70 mt-4">

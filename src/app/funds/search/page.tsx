@@ -1,9 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Section from '@/components/Section';
 import ResponsiveContainer from '@/components/ResponsiveContainer';
+
+interface AutocompleteSuggestion {
+  schemeCode: string;
+  schemeName: string;
+  amcCode?: string;
+}
 
 interface FundSearchResult {
   schemeCode: string;
@@ -41,6 +47,14 @@ export default function EnhancedFundSearchPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
+  
+  // Autocomplete state
+  const [suggestions, setSuggestions] = useState<AutocompleteSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Popular AMCs
   const popularAMCs = [
@@ -52,6 +66,75 @@ export default function EnhancedFundSearchPage() {
   const categories = [
     'Equity', 'Debt', 'Hybrid', 'Solution Oriented', 'Index', 'ETF', 'FoF'
   ];
+
+  // Fetch autocomplete suggestions
+  const fetchSuggestions = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setLoadingSuggestions(true);
+    try {
+      const response = await fetch(`/api/funds/autocomplete?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      
+      if (data.success && data.suggestions.length > 0) {
+        setSuggestions(data.suggestions);
+        setShowSuggestions(true);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    } catch (error) {
+      console.error('Autocomplete error:', error);
+      setSuggestions([]);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }, []);
+
+  // Handle input change with debounce
+  const handleInputChange = (value: string) => {
+    setFilters({ ...filters, query: value });
+    
+    // Clear previous timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // Set new debounced fetch
+    debounceTimerRef.current = setTimeout(() => {
+      fetchSuggestions(value);
+    }, 200);
+  };
+
+  // Handle suggestion click
+  const handleSuggestionClick = (suggestion: AutocompleteSuggestion) => {
+    setFilters({ ...filters, query: suggestion.schemeName });
+    setShowSuggestions(false);
+    setSuggestions([]);
+    // Navigate directly to fund details
+    router.push(`/funds/${suggestion.schemeCode}`);
+  };
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        suggestionsRef.current && 
+        !suggestionsRef.current.contains(event.target as Node) &&
+        searchInputRef.current &&
+        !searchInputRef.current.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Search function with pagination
   const handleSearch = async (page: number = 1) => {
@@ -160,16 +243,67 @@ export default function EnhancedFundSearchPage() {
               <div className="flex flex-col md:flex-row gap-3 md:gap-4 mb-4">
                 <div className="flex-1 relative">
                   <input
+                    ref={searchInputRef}
                     type="text"
                     placeholder="Search fund name or code..."
                     value={filters.query}
-                    onChange={(e) => setFilters({ ...filters, query: e.target.value })}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSearch(1)}
+                    onChange={(e) => handleInputChange(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        setShowSuggestions(false);
+                        handleSearch(1);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (suggestions.length > 0) setShowSuggestions(true);
+                    }}
                     className="w-full px-4 py-3 md:py-4 pl-10 md:pl-12 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal text-base md:text-lg"
                   />
                   <svg className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-brand-navy/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
+                  
+                  {/* Autocomplete Suggestions Dropdown */}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div 
+                      ref={suggestionsRef}
+                      className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border-2 border-gray-200 rounded-lg shadow-xl max-h-80 overflow-y-auto"
+                    >
+                      {loadingSuggestions && (
+                        <div className="px-4 py-3 text-sm text-brand-navy/60 flex items-center gap-2">
+                          <div className="animate-spin w-4 h-4 border-2 border-brand-royal border-t-transparent rounded-full"></div>
+                          Loading...
+                        </div>
+                      )}
+                      {suggestions.map((suggestion, index) => (
+                        <button
+                          key={suggestion.schemeCode}
+                          onClick={() => handleSuggestionClick(suggestion)}
+                          className={`w-full text-left px-4 py-3 hover:bg-brand-royal/10 transition-colors border-b border-gray-100 last:border-b-0 ${
+                            index === 0 ? 'rounded-t-lg' : ''
+                          } ${index === suggestions.length - 1 ? 'rounded-b-lg' : ''}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm md:text-base font-medium text-brand-navy truncate">
+                                {suggestion.schemeName}
+                              </p>
+                              <p className="text-xs text-brand-navy/60 mt-0.5">
+                                Code: {suggestion.schemeCode}
+                                {suggestion.amcCode && ` • ${suggestion.amcCode.replace(' Mutual Fund', '')}`}
+                              </p>
+                            </div>
+                            <svg className="w-4 h-4 text-brand-royal flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        </button>
+                      ))}
+                      <div className="px-4 py-2 bg-gray-50 text-xs text-brand-navy/50 rounded-b-lg">
+                        Click to view fund details or press Enter to search
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2 md:gap-4">
                   <button
