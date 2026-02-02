@@ -3,12 +3,24 @@ import axios from 'axios';
 
 const RAILWAY_DB_URL = process.env.RAILWAY_DATABASE_URL || 'postgresql://postgres:zZGzhpULOgKqXvnnutWEjCengioSheMD@turntable.proxy.rlwy.net:19665/railway';
 
+// Configuration for optimal performance without crashing MFApi
+const CONFIG = {
+  CONCURRENCY: 3,           // 3 concurrent requests (safe for MFApi)
+  DELAY_BETWEEN_BATCHES: 1000, // 1 second between batches
+  REQUEST_TIMEOUT: 20000,   // 20 second timeout per request
+  MAX_RETRIES: 5,           // 5 retry attempts
+  RETRY_BASE_DELAY: 2000,   // 2 second base delay for retries
+  BATCH_SIZE: 100,          // Log progress every 100 funds
+  ERROR_PAUSE_THRESHOLD: 10, // Pause after 10 consecutive errors
+  ERROR_PAUSE_DURATION: 30000, // 30 second pause on too many errors
+};
+
 const pool = new Pool({
   connectionString: RAILWAY_DB_URL,
   ssl: { rejectUnauthorized: false },
-  max: 2,
+  max: 5,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000
+  connectionTimeoutMillis: 15000
 });
 
 function parseDate(dateStr: string): Date {
@@ -74,23 +86,58 @@ async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function fetchWithRetry(schemeCode: string, maxRetries = 3): Promise<any> {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+async function fetchWithRetry(schemeCode: string): Promise<any> {
+  for (let attempt = 1; attempt <= CONFIG.MAX_RETRIES; attempt++) {
     try {
       const response = await axios.get(
         `https://api.mfapi.in/mf/${schemeCode}`,
         { 
-          timeout: 15000,
+          timeout: CONFIG.REQUEST_TIMEOUT,
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json',
+            'Connection': 'keep-alive'
           }
         }
       );
       return response.data;
     } catch (error: any) {
+      // 404 means fund doesn't exist - don't retry
       if (error.response?.status === 404) return null;
-      if (attempt === maxRetries) return null;
-      await sleep(attempt * 2000);
+      
+      // 429 Too Many Requests - wait longer
+      if (error.response?.status === 429) {
+        console.log(`   ⚠️ Rate limited on ${schemeCode}, waiting 10s...`);
+        await sleep(10000);
+        continue;
+      }
+      
+      // 500/502/503 Server errors - retry with backoff
+      if (error.response?.status >= 500) {
+        const delay = CONFIG.RETRY_BASE_DELAY * attempt;
+        if (attempt < CONFIG.MAX_RETRIES) {
+          console.log(`   ⚠️ Server error ${error.response?.status} on ${schemeCode}, retry ${attempt}/${CONFIG.MAX_RETRIES} in ${delay/1000}s`);
+          await sleep(delay);
+          continue;
+        }
+      }
+      
+      // Network errors - retry with backoff
+      if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+        const delay = CONFIG.RETRY_BASE_DELAY * attempt;
+        if (attempt < CONFIG.MAX_RETRIES) {
+          console.log(`   ⚠️ Network error on ${schemeCode}, retry ${attempt}/${CONFIG.MAX_RETRIES} in ${delay/1000}s`);
+          await sleep(delay);
+          continue;
+        }
+      }
+      
+      // Last attempt failed
+      if (attempt === CONFIG.MAX_RETRIES) {
+        return null;
+      }
+      
+      await sleep(CONFIG.RETRY_BASE_DELAY * attempt);
     }
   }
   return null;
@@ -169,45 +216,123 @@ async function updateFundMetrics(schemeCode: string) {
   return true;
 }
 
-async function runDailyUpdate() {
-  console.log('🔄 DAILY NAV UPDATE - Started at', new Date().toISOString());
+// Process funds in batches with controlled concurrency
+async function processBatch(funds: { scheme_code: string }[], startIdx: number): Promise<{ updated: number; errors: number }> {
+  const batch = funds.slice(startIdx, startIdx + CONFIG.CONCURRENCY);
+  const results = await Promise.allSettled(
+    batch.map(fund => updateFundMetrics(fund.scheme_code))
+  );
   
-  // Get funds that need updating (NAV older than today)
+  let updated = 0;
+  let errors = 0;
+  
+  results.forEach(result => {
+    if (result.status === 'fulfilled' && result.value === true) {
+      updated++;
+    } else {
+      errors++;
+    }
+  });
+  
+  return { updated, errors };
+}
+
+async function runDailyUpdate() {
+  const startTime = Date.now();
+  console.log('🔄 DAILY NAV UPDATE - ROBUST VERSION');
+  console.log(`⏱️  Started at: ${new Date().toISOString()}`);
+  console.log(`⚙️  Config: ${CONFIG.CONCURRENCY} concurrent requests, ${CONFIG.DELAY_BETWEEN_BATCHES}ms delay between batches`);
+  console.log('');
+  
+  // Get ALL funds to update
   const result = await pool.query(`
     SELECT scheme_code FROM funds 
     WHERE latest_nav IS NOT NULL
-    ORDER BY RANDOM()
-    LIMIT 5000
+    ORDER BY scheme_code
   `);
 
   const funds = result.rows;
-  console.log(`📊 Updating ${funds.length} funds...`);
+  console.log(`📊 Total funds to update: ${funds.length}`);
+  console.log(`📦 Batch size: ${CONFIG.CONCURRENCY} | Estimated batches: ${Math.ceil(funds.length / CONFIG.CONCURRENCY)}`);
+  console.log('');
 
-  let updated = 0;
-  let errors = 0;
+  let totalUpdated = 0;
+  let totalErrors = 0;
+  let consecutiveErrors = 0;
 
-  for (let i = 0; i < funds.length; i++) {
+  for (let i = 0; i < funds.length; i += CONFIG.CONCURRENCY) {
     try {
-      const success = await updateFundMetrics(funds[i].scheme_code);
-      if (success) updated++;
-      else errors++;
-
-      if ((i + 1) % 100 === 0) {
-        console.log(`   Progress: ${i + 1}/${funds.length} (${updated} updated, ${errors} errors)`);
+      const { updated, errors } = await processBatch(funds, i);
+      totalUpdated += updated;
+      totalErrors += errors;
+      
+      // Track consecutive errors
+      if (errors === CONFIG.CONCURRENCY) {
+        consecutiveErrors += CONFIG.CONCURRENCY;
+      } else {
+        consecutiveErrors = 0;
+      }
+      
+      // Pause if too many consecutive errors (MFApi might be overloaded)
+      if (consecutiveErrors >= CONFIG.ERROR_PAUSE_THRESHOLD) {
+        console.log(`   ⏸️  ${consecutiveErrors} consecutive errors - pausing ${CONFIG.ERROR_PAUSE_DURATION/1000}s to let MFApi recover...`);
+        await sleep(CONFIG.ERROR_PAUSE_DURATION);
+        consecutiveErrors = 0;
       }
 
-      await sleep(500); // 2 requests per second
-    } catch (error) {
-      errors++;
+      // Progress logging
+      const processed = Math.min(i + CONFIG.CONCURRENCY, funds.length);
+      if (processed % CONFIG.BATCH_SIZE === 0 || processed === funds.length) {
+        const elapsed = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
+        const rate = totalUpdated / (Date.now() - startTime) * 1000 * 60;
+        const remaining = rate > 0 ? ((funds.length - processed) / rate).toFixed(1) : '?';
+        const percent = ((processed / funds.length) * 100).toFixed(1);
+        
+        console.log(`   ✅ ${processed}/${funds.length} (${percent}%) | ${totalUpdated} updated, ${totalErrors} errors | ${elapsed}min elapsed, ~${remaining}min remaining`);
+      }
+
+      // Delay between batches to avoid overwhelming MFApi
+      await sleep(CONFIG.DELAY_BETWEEN_BATCHES);
+      
+    } catch (error: any) {
+      console.error(`   ❌ Batch error at index ${i}:`, error.message);
+      totalErrors += CONFIG.CONCURRENCY;
+      await sleep(CONFIG.ERROR_PAUSE_DURATION);
     }
   }
 
-  console.log('✅ DAILY UPDATE COMPLETE');
-  console.log(`   Updated: ${updated} funds`);
-  console.log(`   Errors: ${errors} funds`);
-  console.log(`   Finished at: ${new Date().toISOString()}`);
+  const totalTime = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
+  const successRate = ((totalUpdated / funds.length) * 100).toFixed(1);
+  
+  console.log('');
+  console.log('═'.repeat(60));
+  console.log('✨ DAILY NAV UPDATE COMPLETE');
+  console.log('═'.repeat(60));
+  console.log(`   ⏱️  Total time: ${totalTime} minutes`);
+  console.log(`   ✅ Successfully updated: ${totalUpdated} funds (${successRate}%)`);
+  console.log(`   ❌ Errors/Skipped: ${totalErrors} funds`);
+  console.log(`   📊 Rate: ${(totalUpdated / parseFloat(totalTime)).toFixed(1)} funds/minute`);
+  console.log(`   🏁 Finished at: ${new Date().toISOString()}`);
+  console.log('═'.repeat(60));
 
   await pool.end();
 }
 
-runDailyUpdate().catch(console.error);
+// Handle graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\n⚠️  Received SIGINT, closing database connection...');
+  await pool.end();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('\n⚠️  Received SIGTERM, closing database connection...');
+  await pool.end();
+  process.exit(0);
+});
+
+runDailyUpdate().catch(async (error) => {
+  console.error('❌ Fatal error:', error);
+  await pool.end();
+  process.exit(1);
+});
