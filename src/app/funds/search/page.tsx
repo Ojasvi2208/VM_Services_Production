@@ -231,7 +231,7 @@ export default function EnhancedFundSearchPage() {
             {/* Header */}
             <div className="text-center mb-6 md:mb-8 px-2">
               <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-brand-navy mb-3 md:mb-4">
-                Search <span className="text-brand-gold">14,083+ Mutual Funds</span>
+                Search <span className="text-brand-gold">37,000+ Mutual Funds</span>
               </h1>
               <p className="text-sm md:text-lg text-brand-navy/70 max-w-2xl mx-auto">
                 Advanced search with filters, sorting, and real-time results

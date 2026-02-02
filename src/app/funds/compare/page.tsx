@@ -8,24 +8,26 @@ import ResponsiveContainer from '@/components/ResponsiveContainer';
 // Force dynamic rendering to avoid static generation issues with useSearchParams
 export const dynamic = 'force-dynamic';
 
+interface FundReturns {
+  return1w?: number;
+  return1m?: number;
+  return3m?: number;
+  return6m?: number;
+  return1y?: number;
+  return3y?: number;
+  return5y?: number;
+  cagr1y?: number;
+  cagr3y?: number;
+  cagr5y?: number;
+}
+
 interface FundData {
   schemeCode: string;
   schemeName: string;
   latestNav: number;
   latestNavDate: string;
   amcCode: string;
-  returns: {
-    return_1w?: number;
-    return_1m?: number;
-    return_3m?: number;
-    return_6m?: number;
-    return_1y?: number;
-    return_3y?: number;
-    return_5y?: number;
-    cagr_1y?: number;
-    cagr_3y?: number;
-    cagr_5y?: number;
-  };
+  returns: FundReturns;
 }
 
 function FundCompareContent() {
@@ -54,7 +56,19 @@ function FundCompareContent() {
         fetch(`/api/funds/${code}`).then(res => res.json())
       );
       const results = await Promise.all(fundPromises);
-      const validFunds = results.filter(r => r.success).map(r => r.data);
+      
+      // Transform API response to match our FundData interface
+      const validFunds = results
+        .filter(r => r.success && r.data?.fund)
+        .map(r => ({
+          schemeCode: r.data.fund.schemeCode,
+          schemeName: r.data.fund.schemeName,
+          latestNav: r.data.fund.latestNav || 0,
+          latestNavDate: r.data.fund.latestNavDate || '',
+          amcCode: r.data.fund.amcCode || '',
+          returns: r.data.returns || {}
+        }));
+      
       setFunds(validFunds);
     } catch (error) {
       console.error('Error loading funds:', error);
@@ -113,13 +127,15 @@ function FundCompareContent() {
   };
 
   // Find best performer for each metric
-  const getBestPerformer = (metric: keyof FundData['returns']) => {
+  const getBestPerformer = (metric: keyof FundReturns) => {
     if (funds.length === 0) return null;
-    return funds.reduce((best, fund) => {
+    const fundsWithValue = funds.filter(f => f.returns && f.returns[metric] !== undefined && f.returns[metric] !== null);
+    if (fundsWithValue.length === 0) return null;
+    return fundsWithValue.reduce((best, fund) => {
       const value = fund.returns[metric];
       const bestValue = best.returns[metric];
-      if (value === undefined) return best;
-      if (bestValue === undefined) return fund;
+      if (value === undefined || value === null) return best;
+      if (bestValue === undefined || bestValue === null) return fund;
       return value > bestValue ? fund : best;
     });
   };
@@ -200,7 +216,7 @@ function FundCompareContent() {
                         <th key={fund.schemeCode} className="text-left py-4 px-4 min-w-[200px]">
                           <div className="space-y-2">
                             <div className="font-semibold text-brand-navy text-sm">
-                              {fund.schemeName.substring(0, 40)}...
+                              {fund.schemeName ? (fund.schemeName.length > 40 ? fund.schemeName.substring(0, 40) + '...' : fund.schemeName) : 'Unknown Fund'}
                             </div>
                             <div className="text-xs text-brand-navy/70">
                               Code: {fund.schemeCode}
@@ -223,10 +239,10 @@ function FundCompareContent() {
                       {funds.map((fund) => (
                         <td key={fund.schemeCode} className="py-4 px-4">
                           <div className="font-semibold text-brand-navy">
-                            ₹{fund.latestNav.toFixed(4)}
+                            ₹{fund.latestNav ? fund.latestNav.toFixed(4) : 'N/A'}
                           </div>
                           <div className="text-xs text-brand-navy/70">
-                            {new Date(fund.latestNavDate).toLocaleDateString('en-IN')}
+                            {fund.latestNavDate ? new Date(fund.latestNavDate).toLocaleDateString('en-IN') : 'N/A'}
                           </div>
                         </td>
                       ))}
@@ -250,20 +266,20 @@ function FundCompareContent() {
                     </tr>
 
                     {[
-                      { key: 'return_1w', label: '1 Week' },
-                      { key: 'return_1m', label: '1 Month' },
-                      { key: 'return_3m', label: '3 Months' },
-                      { key: 'return_6m', label: '6 Months' },
-                      { key: 'return_1y', label: '1 Year' },
-                      { key: 'return_3y', label: '3 Years' },
-                      { key: 'return_5y', label: '5 Years' },
+                      { key: 'return1w', label: '1 Week' },
+                      { key: 'return1m', label: '1 Month' },
+                      { key: 'return3m', label: '3 Months' },
+                      { key: 'return6m', label: '6 Months' },
+                      { key: 'return1y', label: '1 Year' },
+                      { key: 'return3y', label: '3 Years' },
+                      { key: 'return5y', label: '5 Years' },
                     ].map((metric, idx) => {
-                      const best = getBestPerformer(metric.key as keyof FundData['returns']);
+                      const best = getBestPerformer(metric.key as keyof FundReturns);
                       return (
                         <tr key={metric.key} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                           <td className="py-3 px-4 font-medium text-brand-navy">{metric.label}</td>
                           {funds.map((fund) => {
-                            const value = fund.returns[metric.key as keyof FundData['returns']];
+                            const value = fund.returns?.[metric.key as keyof FundReturns];
                             const isBest = best?.schemeCode === fund.schemeCode && value !== undefined;
                             return (
                               <td key={fund.schemeCode} className="py-3 px-4">
@@ -286,16 +302,16 @@ function FundCompareContent() {
                     </tr>
 
                     {[
-                      { key: 'cagr_1y', label: '1 Year CAGR' },
-                      { key: 'cagr_3y', label: '3 Year CAGR' },
-                      { key: 'cagr_5y', label: '5 Year CAGR' },
+                      { key: 'cagr1y', label: '1 Year CAGR' },
+                      { key: 'cagr3y', label: '3 Year CAGR' },
+                      { key: 'cagr5y', label: '5 Year CAGR' },
                     ].map((metric, idx) => {
-                      const best = getBestPerformer(metric.key as keyof FundData['returns']);
+                      const best = getBestPerformer(metric.key as keyof FundReturns);
                       return (
                         <tr key={metric.key} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                           <td className="py-3 px-4 font-medium text-brand-navy">{metric.label}</td>
                           {funds.map((fund) => {
-                            const value = fund.returns[metric.key as keyof FundData['returns']];
+                            const value = fund.returns?.[metric.key as keyof FundReturns];
                             const isBest = best?.schemeCode === fund.schemeCode && value !== undefined;
                             return (
                               <td key={fund.schemeCode} className="py-3 px-4">
