@@ -86,8 +86,8 @@ export async function POST(request: NextRequest) {
     console.log('Verifying ARN:', formattedARN);
     
     try {
-      // Use the AMFI distributor-agent API
-      const url = `https://www.amfiindia.com/api/distributor-agent?strOpt=ALL&search=${formattedARN}&page=1&pageSize=10`;
+      // Use the AMFI distributor-agent API (simpler URL without strOpt)
+      const url = `https://www.amfiindia.com/api/distributor-agent?search=${formattedARN}&page=1&pageSize=10`;
       
       const response = await fetch(url, {
         method: 'GET',
