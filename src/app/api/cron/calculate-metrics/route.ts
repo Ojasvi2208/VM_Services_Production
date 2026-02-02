@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
 
 // Verify cron secret to prevent unauthorized access
-const CRON_SECRET = process.env.CRON_SECRET || 'vmfs-cron-secret-2024';
+const CRON_SECRET = process.env.CRON_SECRET || 'vmfs2024';
 
 // Rate limit: 1.5 seconds between requests (very gentle on MFApi)
 const RATE_LIMIT_MS = 1500;
