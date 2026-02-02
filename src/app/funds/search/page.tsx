@@ -68,6 +68,7 @@ export default function EnhancedFundSearchPage() {
       if (filters.query) params.append('q', filters.query);
       if (filters.amc) params.append('amc', filters.amc);
       if (filters.category) params.append('category', filters.category);
+      if (filters.planType !== 'All') params.append('planType', filters.planType);
       params.append('page', page.toString());
       params.append('pageSize', PAGE_SIZE.toString());
 
@@ -76,13 +77,6 @@ export default function EnhancedFundSearchPage() {
 
       if (data.success) {
         let results = data.funds;
-
-        // Apply plan type filter (client-side for now)
-        if (filters.planType !== 'All') {
-          results = results.filter((fund: FundSearchResult) =>
-            fund.schemeName.toLowerCase().includes(filters.planType.toLowerCase())
-          );
-        }
 
         // Apply sorting (client-side)
         if (filters.sortBy === 'nav') {
@@ -152,47 +146,49 @@ export default function EnhancedFundSearchPage() {
         <ResponsiveContainer maxWidth="xl">
           <div className="space-y-6">
             {/* Header */}
-            <div className="text-center mb-8">
-              <h1 className="text-4xl md:text-5xl font-bold text-brand-navy mb-4">
+            <div className="text-center mb-6 md:mb-8 px-2">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-brand-navy mb-3 md:mb-4">
                 Search <span className="text-brand-gold">14,083+ Mutual Funds</span>
               </h1>
-              <p className="text-lg text-brand-navy/70 max-w-2xl mx-auto">
-                Advanced search with filters, sorting, and real-time results from our comprehensive database
+              <p className="text-sm md:text-lg text-brand-navy/70 max-w-2xl mx-auto">
+                Advanced search with filters, sorting, and real-time results
               </p>
             </div>
 
             {/* Search Bar */}
-            <div className="card-light p-6 max-w-4xl mx-auto">
-              <div className="flex gap-4 mb-4">
+            <div className="card-light p-4 md:p-6 max-w-4xl mx-auto">
+              <div className="flex flex-col md:flex-row gap-3 md:gap-4 mb-4">
                 <div className="flex-1 relative">
                   <input
                     type="text"
-                    placeholder="Search by fund name, scheme code, or keyword..."
+                    placeholder="Search fund name or code..."
                     value={filters.query}
                     onChange={(e) => setFilters({ ...filters, query: e.target.value })}
                     onKeyPress={(e) => e.key === 'Enter' && handleSearch(1)}
-                    className="w-full px-4 py-4 pl-12 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal text-lg"
+                    className="w-full px-4 py-3 md:py-4 pl-10 md:pl-12 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal text-base md:text-lg"
                   />
-                  <svg className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-brand-navy/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-brand-navy/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                 </div>
-                <button
-                  onClick={() => handleSearch(1)}
-                  disabled={loading}
-                  className="bg-brand-royal text-white px-8 py-4 rounded-lg font-semibold hover:bg-brand-navy transition-all disabled:opacity-50 whitespace-nowrap"
-                >
-                  {loading ? 'Searching...' : 'Search'}
-                </button>
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="bg-white border-2 border-brand-royal text-brand-royal px-6 py-4 rounded-lg font-semibold hover:bg-brand-royal hover:text-white transition-all whitespace-nowrap"
-                >
-                  <svg className="w-5 h-5 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                  </svg>
-                  Filters
-                </button>
+                <div className="flex gap-2 md:gap-4">
+                  <button
+                    onClick={() => handleSearch(1)}
+                    disabled={loading}
+                    className="flex-1 md:flex-none bg-brand-royal text-white px-4 md:px-8 py-3 md:py-4 rounded-lg font-semibold hover:bg-brand-navy transition-all disabled:opacity-50 whitespace-nowrap text-sm md:text-base"
+                  >
+                    {loading ? 'Searching...' : 'Search'}
+                  </button>
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="bg-white border-2 border-brand-royal text-brand-royal px-3 md:px-6 py-3 md:py-4 rounded-lg font-semibold hover:bg-brand-royal hover:text-white transition-all whitespace-nowrap"
+                  >
+                    <svg className="w-5 h-5 inline md:mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    </svg>
+                    <span className="hidden md:inline">Filters</span>
+                  </button>
+                </div>
               </div>
 
               {/* Advanced Filters */}
@@ -315,14 +311,14 @@ export default function EnhancedFundSearchPage() {
               <div className="max-w-4xl mx-auto">
                 {searchResults.length > 0 ? (
                   <>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-xl font-semibold text-brand-navy">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-2">
+                      <h3 className="text-lg md:text-xl font-semibold text-brand-navy">
                         Found {totalFunds} fund{totalFunds !== 1 ? 's' : ''} 
-                        <span className="text-brand-navy/60 text-base font-normal ml-2">
+                        <span className="text-brand-navy/60 text-sm md:text-base font-normal ml-1 md:ml-2 block md:inline">
                           (Showing {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, totalFunds)} of {totalFunds})
                         </span>
                       </h3>
-                      <div className="text-sm text-brand-navy/70">
+                      <div className="text-xs md:text-sm text-brand-navy/70">
                         {filters.amc && <span className="mr-2">AMC: {filters.amc}</span>}
                         {filters.category && <span className="mr-2">Category: {filters.category}</span>}
                         {filters.planType !== 'All' && <span>Plan: {filters.planType}</span>}
@@ -332,30 +328,25 @@ export default function EnhancedFundSearchPage() {
                       {searchResults.map((fund) => (
                         <div
                           key={fund.schemeCode}
-                          className="card-light p-6 hover:shadow-lg transition-all cursor-pointer group"
+                          className="card-light p-4 md:p-6 hover:shadow-lg transition-all cursor-pointer group"
                           onClick={() => viewFundDetails(fund.schemeCode)}
                         >
-                          <div className="flex items-start justify-between">
+                          <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                             <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2 flex-wrap">
-                                <span className="px-3 py-1 bg-brand-royal/10 text-brand-royal text-sm font-medium rounded-full">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <span className="px-2 py-0.5 md:px-3 md:py-1 bg-brand-royal/10 text-brand-royal text-xs md:text-sm font-medium rounded-full">
                                   {fund.schemeCode}
                                 </span>
-                                {fund.amcCode && (
-                                  <span className="px-3 py-1 bg-brand-gold/10 text-brand-gold text-sm font-medium rounded-full">
-                                    {fund.amcCode}
-                                  </span>
-                                )}
                                 {fund.schemeName.toLowerCase().includes('direct') && (
-                                  <span className="px-3 py-1 bg-green-100 text-green-700 text-sm font-medium rounded-full">
-                                    Direct Plan
+                                  <span className="px-2 py-0.5 md:px-3 md:py-1 bg-green-100 text-green-700 text-xs md:text-sm font-medium rounded-full">
+                                    Direct
                                   </span>
                                 )}
                               </div>
-                              <h4 className="text-lg font-semibold text-brand-navy mb-2 group-hover:text-brand-royal transition-colors">
+                              <h4 className="text-base md:text-lg font-semibold text-brand-navy mb-2 group-hover:text-brand-royal transition-colors leading-tight">
                                 {fund.schemeName}
                               </h4>
-                              <div className="flex items-center gap-4 text-sm text-brand-navy/70">
+                              <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm text-brand-navy/70">
                                 {fund.latestNav && (
                                   <span className="font-semibold text-brand-navy">
                                     NAV: ₹{fund.latestNav.toFixed(4)}
@@ -363,12 +354,12 @@ export default function EnhancedFundSearchPage() {
                                 )}
                                 {fund.latestNavDate && (
                                   <span>
-                                    Updated: {new Date(fund.latestNavDate).toLocaleDateString('en-IN')}
+                                    {new Date(fund.latestNavDate).toLocaleDateString('en-IN')}
                                   </span>
                                 )}
                               </div>
                             </div>
-                            <button className="bg-brand-royal text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-navy transition-all opacity-0 group-hover:opacity-100">
+                            <button className="w-full md:w-auto bg-brand-royal text-white px-4 md:px-6 py-2 rounded-lg font-medium hover:bg-brand-navy transition-all md:opacity-0 md:group-hover:opacity-100 text-sm">
                               View Details →
                             </button>
                           </div>
@@ -378,18 +369,18 @@ export default function EnhancedFundSearchPage() {
 
                     {/* Pagination Controls */}
                     {totalPages > 1 && (
-                      <div className="flex items-center justify-center gap-2 mt-8">
+                      <div className="flex flex-wrap items-center justify-center gap-2 mt-6 md:mt-8">
                         {/* Previous Button */}
                         <button
                           onClick={() => goToPage(currentPage - 1)}
                           disabled={currentPage === 1}
-                          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                          className={`px-3 md:px-4 py-2 rounded-lg font-medium transition-all text-sm md:text-base ${
                             currentPage === 1
                               ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                               : 'bg-white border-2 border-brand-royal text-brand-royal hover:bg-brand-royal hover:text-white'
                           }`}
                         >
-                          ← Previous
+                          <span className="hidden md:inline">←</span> Prev
                         </button>
 
                         {/* Page Numbers */}
@@ -426,7 +417,7 @@ export default function EnhancedFundSearchPage() {
                               <button
                                 key={pageNum}
                                 onClick={() => goToPage(pageNum)}
-                                className={`w-10 h-10 rounded-lg font-medium transition-all ${
+                                className={`w-8 h-8 md:w-10 md:h-10 rounded-lg font-medium transition-all text-sm md:text-base ${
                                   currentPage === pageNum
                                     ? 'bg-brand-royal text-white'
                                     : 'bg-white border border-gray-200 text-brand-navy hover:bg-brand-royal hover:text-white'
@@ -455,13 +446,13 @@ export default function EnhancedFundSearchPage() {
                         <button
                           onClick={() => goToPage(currentPage + 1)}
                           disabled={currentPage === totalPages}
-                          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                          className={`px-3 md:px-4 py-2 rounded-lg font-medium transition-all text-sm md:text-base ${
                             currentPage === totalPages
                               ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                               : 'bg-white border-2 border-brand-royal text-brand-royal hover:bg-brand-royal hover:text-white'
                           }`}
                         >
-                          Next →
+                          Next <span className="hidden md:inline">→</span>
                         </button>
                       </div>
                     )}

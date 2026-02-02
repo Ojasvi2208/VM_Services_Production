@@ -219,12 +219,12 @@ export default function AdvancedFundSearchPage() {
         <ResponsiveContainer maxWidth="xl">
           <div className="space-y-6">
             {/* Header */}
-            <div className="text-center mb-8">
-              <h1 className="text-4xl md:text-5xl font-bold text-brand-navy mb-4">
+            <div className="text-center mb-6 md:mb-8 px-2">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-brand-navy mb-3 md:mb-4">
                 Advanced <span className="text-brand-gold">Fund Search</span>
               </h1>
-              <p className="text-lg text-brand-navy/70 max-w-2xl mx-auto mb-6">
-                Search funds by AMC, Category, and Sub-category as per SEBI guidelines
+              <p className="text-sm md:text-lg text-brand-navy/70 max-w-2xl mx-auto mb-4 md:mb-6">
+                Search by AMC, Category, and Sub-category
               </p>
               
               {/* Plan Type Toggle */}
@@ -234,19 +234,19 @@ export default function AdvancedFundSearchPage() {
             </div>
 
             {/* Filters */}
-            <div className="card-light p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div className="card-light p-4 md:p-6">
+              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 mb-4">
                 {/* AMC Filter */}
                 <div>
-                  <label className="block text-sm font-semibold text-brand-navy mb-2">
-                    1. Select AMC
+                  <label className="block text-xs md:text-sm font-semibold text-brand-navy mb-1 md:mb-2">
+                    1. AMC
                   </label>
                   <select
                     value={selectedAMC}
                     onChange={(e) => setSelectedAMC(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal"
+                    className="w-full px-2 md:px-4 py-2 md:py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal text-sm md:text-base"
                   >
-                    <option value="">All AMCs ({availableAMCs.length})</option>
+                    <option value="">All AMCs</option>
                     {availableAMCs.map(amc => (
                       <option key={amc} value={amc}>{amc.replace(' Mutual Fund', '')}</option>
                     ))}
@@ -255,8 +255,8 @@ export default function AdvancedFundSearchPage() {
 
                 {/* Main Category Filter */}
                 <div>
-                  <label className="block text-sm font-semibold text-brand-navy mb-2">
-                    2. Select Category
+                  <label className="block text-xs md:text-sm font-semibold text-brand-navy mb-1 md:mb-2">
+                    2. Category
                   </label>
                   <select
                     value={selectedMainCategory}
@@ -264,7 +264,7 @@ export default function AdvancedFundSearchPage() {
                       setSelectedMainCategory(e.target.value);
                       setSelectedSubCategory('');
                     }}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal"
+                    className="w-full px-2 md:px-4 py-2 md:py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal text-sm md:text-base"
                   >
                     <option value="">All Categories</option>
                     {Object.keys(FUND_CATEGORIES).map(cat => (
@@ -275,14 +275,14 @@ export default function AdvancedFundSearchPage() {
 
                 {/* Sub-Category Filter */}
                 <div>
-                  <label className="block text-sm font-semibold text-brand-navy mb-2">
-                    3. Select Sub-category
+                  <label className="block text-xs md:text-sm font-semibold text-brand-navy mb-1 md:mb-2">
+                    3. Sub-cat
                   </label>
                   <select
                     value={selectedSubCategory}
                     onChange={(e) => setSelectedSubCategory(e.target.value)}
                     disabled={!selectedMainCategory}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full px-2 md:px-4 py-2 md:py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                   >
                     <option value="">All Sub-categories</option>
                     {getSubCategories().map(subCat => (
@@ -293,32 +293,32 @@ export default function AdvancedFundSearchPage() {
 
                 {/* Search Box */}
                 <div>
-                  <label className="block text-sm font-semibold text-brand-navy mb-2">
-                    4. Search by Name/Code
+                  <label className="block text-xs md:text-sm font-semibold text-brand-navy mb-1 md:mb-2">
+                    4. Search
                   </label>
                   <input
                     type="text"
-                    placeholder="Fund name or code"
+                    placeholder="Name or code"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal"
+                    className="w-full px-2 md:px-4 py-2 md:py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal text-sm md:text-base"
                   />
                 </div>
               </div>
 
               {/* Filter Actions */}
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-brand-navy/70">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2">
+                <div className="text-xs md:text-sm text-brand-navy/70">
                   {totalResults > 0 ? (
                     <>
-                      Showing <span className="font-semibold text-brand-royal">{((currentPage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, totalResults)}</span> of <span className="font-semibold text-brand-royal">{totalResults}</span> results
-                      {totalResults > ITEMS_PER_PAGE && <span className="ml-1">• Page {currentPage} of {totalPages}</span>}
+                      <span className="font-semibold text-brand-royal">{((currentPage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, totalResults)}</span> of <span className="font-semibold text-brand-royal">{totalResults}</span>
+                      {totalResults > ITEMS_PER_PAGE && <span className="ml-1">• Pg {currentPage}/{totalPages}</span>}
                     </>
                   ) : (
                     <>
-                      <span className="font-semibold">{totalFunds.toLocaleString()}</span> funds in database
+                      <span className="font-semibold">{totalFunds.toLocaleString()}</span> funds
                       {!selectedAMC && !selectedMainCategory && !searchQuery && (
-                        <span className="ml-1">• Apply filters to search</span>
+                        <span className="ml-1 hidden md:inline">• Apply filters</span>
                       )}
                     </>
                   )}

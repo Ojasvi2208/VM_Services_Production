@@ -5,6 +5,7 @@ import "./globals.css";
 import MutualFundBanner from "@/components/MutualFundBanner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import SessionManager from "@/components/SessionManager";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -25,6 +26,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="min-h-screen flex flex-col bg-brand-pearl">
+        <SessionManager />
         <Header />
         <main className="flex-grow">{children}</main>
         <Footer />

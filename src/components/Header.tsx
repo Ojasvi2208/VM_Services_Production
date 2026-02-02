@@ -54,18 +54,18 @@ export default function Header() {
       }`}
     >
       <div className="container-padding py-4">
-        <div className="flex items-center justify-between h-16 md:h-20 px-4">
+        <div className="flex items-center justify-between h-14 md:h-16 lg:h-20 px-2 md:px-4">
           {/* Logo */}
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center focus-ring" aria-label="Vijay Malik Financial - Home">
               {/* Logo image - white background on homepage, matches page background on other pages */}
-              <div className={`px-3 py-2 ${pathname === '/' ? 'bg-white rounded-lg shadow-md border-2 border-gray-200' : 'bg-brand-pearl'}`}>
+              <div className={`px-2 py-1 md:px-3 md:py-2 ${pathname === '/' ? 'bg-white rounded-lg shadow-md border-2 border-gray-200' : 'bg-brand-pearl'}`}>
                 <Image 
                   src="/images/VM_Logo.jpg" 
                   alt="Vijay Malik Financial Services Logo" 
                   width={320} 
                   height={80} 
-                  className="h-20 w-auto" 
+                  className="h-12 md:h-16 lg:h-20 w-auto" 
                   priority
                 />
               </div>

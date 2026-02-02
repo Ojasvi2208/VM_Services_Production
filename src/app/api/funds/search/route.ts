@@ -13,10 +13,11 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('q') || '';
     const amc = searchParams.get('amc') || '';
     const category = searchParams.get('category') || '';
+    const planType = searchParams.get('planType') || '';
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '10');
 
-    console.log('🔍 Search request:', { query, amc, category, page, pageSize });
+    console.log('🔍 Search request:', { query, amc, category, planType, page, pageSize });
 
     // If no filters, return empty (don't load all funds)
     if (!query && !amc && !category) {
@@ -38,26 +39,37 @@ export async function GET(request: NextRequest) {
 
     try {
       // Build WHERE clause
-      let whereClause = '';
+      let whereClause = 'WHERE 1=1';
       const params: any[] = [];
       let paramCount = 1;
 
       if (query) {
-        whereClause = `WHERE (scheme_name ILIKE $${paramCount} OR scheme_code LIKE $${paramCount})`;
+        whereClause += ` AND (scheme_name ILIKE $${paramCount} OR scheme_code LIKE $${paramCount})`;
         params.push(`%${query}%`);
         paramCount++;
       }
 
       if (amc) {
-        whereClause += whereClause ? ` AND scheme_name ILIKE $${paramCount}` : `WHERE scheme_name ILIKE $${paramCount}`;
+        whereClause += ` AND (scheme_name ILIKE $${paramCount} OR amc_code ILIKE $${paramCount})`;
         params.push(`%${amc}%`);
         paramCount++;
       }
 
       if (category) {
-        whereClause += whereClause ? ` AND (scheme_name ILIKE $${paramCount} OR scheme_type ILIKE $${paramCount})` : `WHERE (scheme_name ILIKE $${paramCount} OR scheme_type ILIKE $${paramCount})`;
+        whereClause += ` AND (scheme_name ILIKE $${paramCount} OR scheme_type ILIKE $${paramCount})`;
         params.push(`%${category}%`);
         paramCount++;
+      }
+
+      // Plan type filter (embedded in scheme name)
+      if (planType === 'Direct') {
+        whereClause += ` AND scheme_name ILIKE $${paramCount}`;
+        params.push('%Direct%');
+        paramCount++;
+      } else if (planType === 'Regular') {
+        whereClause += ` AND scheme_name ILIKE $${paramCount} AND scheme_name NOT ILIKE $${paramCount + 1}`;
+        params.push('%Regular%', '%Direct%');
+        paramCount += 2;
       }
 
       // Get total count
