@@ -49,7 +49,7 @@ export async function GET(
 
     const fund = fundResult.rows[0];
 
-    // Get latest returns
+    // Get all returns and metrics
     const returnsResult = await client.query(
       `SELECT 
         return_1w as "return1w",
@@ -57,11 +57,21 @@ export async function GET(
         return_3m as "return3m",
         return_6m as "return6m",
         return_1y as "return1y",
+        return_2y as "return2y",
         return_3y as "return3y",
         return_5y as "return5y",
+        return_10y as "return10y",
         cagr_1y as "cagr1y",
+        cagr_2y as "cagr2y",
         cagr_3y as "cagr3y",
-        cagr_5y as "cagr5y"
+        cagr_5y as "cagr5y",
+        cagr_10y as "cagr10y",
+        volatility_1y as "volatility1y",
+        max_drawdown as "maxDrawdown",
+        sharpe_ratio_1y as "sharpeRatio1y",
+        sortino_ratio_1y as "sortinoRatio1y",
+        rolling_return_1y_avg as "rollingReturn1yAvg",
+        updated_at as "updatedAt"
       FROM fund_returns
       WHERE scheme_code = $1`,
       [schemeCode]
