@@ -1,0 +1,34 @@
+name: Daily NAV Update
+
+on:
+  schedule:
+    # Runs at 7:00 AM IST (1:30 AM UTC) every day
+    # NAV data is typically updated by 11 PM IST, so 7 AM gives buffer
+    - cron: '30 1 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-nav:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180 # 3 hours max
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run NAV Update Script
+        env:
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: npx tsx src/scripts/daily-nav-update.ts
+
+      - name: Log completion
+        run: echo "NAV update completed at $(date)"
