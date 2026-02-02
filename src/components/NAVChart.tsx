@@ -161,23 +161,23 @@ export default function NAVChart({ data, fundName }: NAVChartProps) {
         </svg>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-2 md:gap-4 mt-4 md:mt-6 pt-4 md:pt-6 border-t border-gray-200">
-          <div className="text-center">
-            <p className="text-xs md:text-sm text-brand-navy/60">Current NAV</p>
-            <p className="text-sm md:text-2xl font-bold text-brand-royal">
-              ₹{data[data.length - 1]?.nav ? parseFloat(data[data.length - 1].nav.toString()).toFixed(4) : 'N/A'}
+        <div className="grid grid-cols-3 gap-1 md:gap-4 mt-4 md:mt-6 pt-4 md:pt-6 border-t border-gray-200">
+          <div className="text-center px-1">
+            <p className="text-[10px] md:text-sm text-brand-navy/60 whitespace-nowrap">Current NAV</p>
+            <p className="text-xs md:text-2xl font-bold text-brand-royal truncate">
+              ₹{data[data.length - 1]?.nav ? parseFloat(data[data.length - 1].nav.toString()).toFixed(2) : 'N/A'}
             </p>
           </div>
-          <div className="text-center">
-            <p className="text-xs md:text-sm text-brand-navy/60">Highest</p>
-            <p className="text-sm md:text-2xl font-bold text-green-600">
-              ₹{maxNav ? parseFloat(maxNav.toString()).toFixed(4) : 'N/A'}
+          <div className="text-center px-1">
+            <p className="text-[10px] md:text-sm text-brand-navy/60">Highest</p>
+            <p className="text-xs md:text-2xl font-bold text-green-600 truncate">
+              ₹{maxNav ? parseFloat(maxNav.toString()).toFixed(2) : 'N/A'}
             </p>
           </div>
-          <div className="text-center">
-            <p className="text-xs md:text-sm text-brand-navy/60">Lowest</p>
-            <p className="text-sm md:text-2xl font-bold text-red-600">
-              ₹{minNav ? parseFloat(minNav.toString()).toFixed(4) : 'N/A'}
+          <div className="text-center px-1">
+            <p className="text-[10px] md:text-sm text-brand-navy/60">Lowest</p>
+            <p className="text-xs md:text-2xl font-bold text-red-600 truncate">
+              ₹{minNav ? parseFloat(minNav.toString()).toFixed(2) : 'N/A'}
             </p>
           </div>
         </div>

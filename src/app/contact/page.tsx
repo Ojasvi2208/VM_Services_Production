@@ -18,9 +18,49 @@ const ContactForm = () => {
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [validationErrors, setValidationErrors] = useState<{email?: string; phone?: string}>({});
+  
+  // Email validation regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  
+  // Phone validation - must be exactly 10 digits (after +91-)
+  const validatePhone = (phone: string): boolean => {
+    // Remove the +91- prefix and check if remaining is 10 digits
+    const digitsOnly = phone.replace(/^\+91-/, '');
+    return /^\d{10}$/.test(digitsOnly);
+  };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
+    // Special handling for phone - auto-add +91- prefix
+    if (name === 'phone') {
+      let phoneValue = value;
+      // If user is typing and doesn't have prefix, add it
+      if (!phoneValue.startsWith('+91-') && phoneValue.length > 0) {
+        // Remove any existing partial prefix attempts
+        phoneValue = phoneValue.replace(/^\+?91-?/, '');
+        // Only allow digits after prefix
+        phoneValue = '+91-' + phoneValue.replace(/\D/g, '').slice(0, 10);
+      } else if (phoneValue.startsWith('+91-')) {
+        // Keep prefix, only allow 10 digits after it
+        const afterPrefix = phoneValue.slice(4).replace(/\D/g, '').slice(0, 10);
+        phoneValue = '+91-' + afterPrefix;
+      }
+      setFormData((prev) => ({ ...prev, phone: phoneValue }));
+      
+      // Clear phone error if valid
+      if (validatePhone(phoneValue)) {
+        setValidationErrors(prev => ({ ...prev, phone: undefined }));
+      }
+      return;
+    }
+    
+    // Clear email error if valid
+    if (name === 'email' && emailRegex.test(value)) {
+      setValidationErrors(prev => ({ ...prev, email: undefined }));
+    }
+    
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -29,6 +69,24 @@ const ContactForm = () => {
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Frontend validation
+    const errors: {email?: string; phone?: string} = {};
+    
+    if (!emailRegex.test(formData.email)) {
+      errors.email = 'Please enter a valid email address (e.g., name@example.com)';
+    }
+    
+    if (!validatePhone(formData.phone)) {
+      errors.phone = 'Please enter a valid 10-digit phone number with +91- prefix';
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+    
+    setValidationErrors({});
     setIsSubmitting(true);
     setSubmitError('');
     
@@ -113,10 +171,21 @@ const ContactForm = () => {
               id="email"
               name="email"
               required
+              placeholder="name@example.com"
               value={formData.email}
               onChange={handleChange}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50"
+              className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50 ${
+                validationErrors.email ? 'border-red-400 bg-red-50' : 'border-gray-200'
+              }`}
             />
+            {validationErrors.email && (
+              <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                {validationErrors.email}
+              </p>
+            )}
           </div>
           
           <div className="transform hover:scale-[1.02] transition-all duration-200">
@@ -128,10 +197,22 @@ const ContactForm = () => {
               id="phone"
               name="phone"
               required
+              placeholder="+91-9876543210"
               value={formData.phone}
               onChange={handleChange}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50"
+              className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50 ${
+                validationErrors.phone ? 'border-red-400 bg-red-50' : 'border-gray-200'
+              }`}
             />
+            <p className="text-xs text-brand-navy/60 mt-1">Format: +91-XXXXXXXXXX (10 digits)</p>
+            {validationErrors.phone && (
+              <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                {validationErrors.phone}
+              </p>
+            )}
           </div>
           
           <div className="transform hover:scale-[1.02] transition-all duration-200">

@@ -67,19 +67,20 @@ export async function POST(request: NextRequest) {
     console.log('Message:', body.message);
     console.log('===================================');
 
-    // Try to send email using Resend (if API key is configured)
+    // Try to send emails using Resend (if API key is configured)
     const resendApiKey = process.env.RESEND_API_KEY;
     
     if (resendApiKey) {
       try {
-        const emailResponse = await fetch('https://api.resend.com/emails', {
+        // 1. Send notification email to VM Financial Services team
+        const teamEmailResponse = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${resendApiKey}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            from: 'VM Financial Services <noreply@vmfinancialservices.com>',
+            from: 'VM Financial Services <info@vmfinancialservices.com>',
             to: ['info@vmfinancialservices.com'],
             subject: `🔔 New Inquiry: ${subjectText} from ${body.name}`,
             html: `
@@ -138,18 +139,94 @@ export async function POST(request: NextRequest) {
           })
         });
 
-        if (emailResponse.ok) {
-          console.log('Email sent successfully via Resend');
+        if (teamEmailResponse.ok) {
+          console.log('Team notification email sent successfully');
         } else {
-          const errorData = await emailResponse.text();
-          console.error('Resend API error:', errorData);
+          const errorData = await teamEmailResponse.text();
+          console.error('Team email error:', errorData);
         }
+
+        // 2. Send confirmation email to the customer
+        const customerEmailResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: 'Vijay Malik Financial Services <info@vmfinancialservices.com>',
+            to: [body.email],
+            subject: `Thank you for contacting Vijay Malik Financial Services`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #1B365D, #2E5984); padding: 30px; text-align: center;">
+                  <h1 style="color: #C5A572; margin: 0; font-size: 24px;">Thank You for Reaching Out!</h1>
+                  <p style="color: white; margin: 10px 0 0 0; font-size: 14px;">Vijay Malik Financial Services</p>
+                </div>
+                
+                <div style="padding: 30px; background: #f8f9fa;">
+                  <p style="color: #1B365D; font-size: 18px; margin-bottom: 10px;">
+                    Dear <strong>${body.name}</strong>,
+                  </p>
+                  
+                  <p style="color: #333; font-size: 15px; line-height: 1.6;">
+                    Thank you for contacting Vijay Malik Financial Services. We have received your inquiry and our team will get back to you within <strong>24-48 hours</strong>.
+                  </p>
+                  
+                  <div style="margin: 25px 0; padding: 20px; background: white; border-radius: 8px; border-left: 4px solid #C5A572;">
+                    <p style="font-weight: bold; color: #1B365D; margin: 0 0 10px 0;">Your Inquiry Details:</p>
+                    <p style="color: #666; margin: 5px 0;"><strong>Subject:</strong> ${subjectText}</p>
+                    <p style="color: #666; margin: 5px 0;"><strong>Phone:</strong> ${body.phone}</p>
+                    <p style="color: #666; margin: 5px 0;"><strong>Message:</strong></p>
+                    <p style="color: #333; margin: 5px 0; white-space: pre-wrap; background: #f5f5f5; padding: 10px; border-radius: 4px;">${body.message}</p>
+                  </div>
+                  
+                  <p style="color: #333; font-size: 15px; line-height: 1.6;">
+                    In the meantime, feel free to explore our services at <a href="https://vmfinancialservices.com" style="color: #2E5984;">vmfinancialservices.com</a>
+                  </p>
+                  
+                  <div style="margin-top: 25px; padding: 20px; background: #e8f4fc; border-radius: 8px;">
+                    <p style="color: #1B365D; margin: 0 0 10px 0; font-weight: bold;">📞 Need Immediate Assistance?</p>
+                    <p style="color: #333; margin: 5px 0;">Call us: <a href="tel:+919417334348" style="color: #2E5984; font-weight: bold;">+91 94173 34348</a></p>
+                    <p style="color: #333; margin: 5px 0;">WhatsApp: <a href="https://wa.me/919417334348" style="color: #2E5984; font-weight: bold;">+91 94173 34348</a></p>
+                  </div>
+                </div>
+                
+                <div style="background: #1B365D; padding: 20px; text-align: center;">
+                  <p style="color: white; margin: 0 0 5px 0; font-size: 14px;">
+                    Vijay Malik Financial Services
+                  </p>
+                  <p style="color: #C5A572; margin: 0; font-size: 12px;">
+                    AMFI Registered Mutual Fund Distributor | ARN-317605
+                  </p>
+                  <p style="color: #999; margin: 10px 0 0 0; font-size: 11px;">
+                    Motia Royal City, Zirakpur, Punjab - 140603
+                  </p>
+                </div>
+                
+                <div style="padding: 15px; background: #f0f0f0; text-align: center;">
+                  <p style="color: #666; margin: 0; font-size: 10px;">
+                    Mutual Fund investments are subject to market risks. Read all scheme related documents carefully before investing.
+                  </p>
+                </div>
+              </div>
+            `
+          })
+        });
+
+        if (customerEmailResponse.ok) {
+          console.log('Customer confirmation email sent successfully to:', body.email);
+        } else {
+          const errorData = await customerEmailResponse.text();
+          console.error('Customer email error:', errorData);
+        }
+
       } catch (emailError) {
-        console.error('Failed to send email via Resend:', emailError);
+        console.error('Failed to send emails via Resend:', emailError);
         // Don't fail the request if email fails - we still logged the inquiry
       }
     } else {
-      console.log('RESEND_API_KEY not configured - email not sent, but inquiry logged');
+      console.log('RESEND_API_KEY not configured - emails not sent, but inquiry logged');
     }
 
     // Return success
