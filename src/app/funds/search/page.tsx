@@ -23,6 +23,8 @@ interface SearchFilters {
   planType: 'Direct' | 'Regular' | 'All';
 }
 
+const PAGE_SIZE = 10;
+
 export default function EnhancedFundSearchPage() {
   const router = useRouter();
   const [filters, setFilters] = useState<SearchFilters>({
@@ -37,6 +39,8 @@ export default function EnhancedFundSearchPage() {
   const [searched, setSearched] = useState(false);
   const [totalFunds, setTotalFunds] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
 
   // Popular AMCs
   const popularAMCs = [
@@ -49,8 +53,8 @@ export default function EnhancedFundSearchPage() {
     'Equity', 'Debt', 'Hybrid', 'Solution Oriented', 'Index', 'ETF', 'FoF'
   ];
 
-  // Search function
-  const handleSearch = async () => {
+  // Search function with pagination
+  const handleSearch = async (page: number = 1) => {
     if (!filters.query && !filters.amc && !filters.category) {
       alert('Please enter a search term or select a filter');
       return;
@@ -64,7 +68,8 @@ export default function EnhancedFundSearchPage() {
       if (filters.query) params.append('q', filters.query);
       if (filters.amc) params.append('amc', filters.amc);
       if (filters.category) params.append('category', filters.category);
-      params.append('limit', '100');
+      params.append('page', page.toString());
+      params.append('pageSize', PAGE_SIZE.toString());
 
       const response = await fetch(`/api/funds/search?${params.toString()}`);
       const data = await response.json();
@@ -72,14 +77,14 @@ export default function EnhancedFundSearchPage() {
       if (data.success) {
         let results = data.funds;
 
-        // Apply plan type filter
+        // Apply plan type filter (client-side for now)
         if (filters.planType !== 'All') {
           results = results.filter((fund: FundSearchResult) =>
             fund.schemeName.toLowerCase().includes(filters.planType.toLowerCase())
           );
         }
 
-        // Apply sorting
+        // Apply sorting (client-side)
         if (filters.sortBy === 'nav') {
           results.sort((a: FundSearchResult, b: FundSearchResult) =>
             (b.latestNav || 0) - (a.latestNav || 0)
@@ -94,6 +99,8 @@ export default function EnhancedFundSearchPage() {
 
         setSearchResults(results);
         setTotalFunds(data.total);
+        setCurrentPage(data.page);
+        setTotalPages(data.totalPages);
       } else {
         alert('Error searching funds: ' + data.error);
       }
@@ -102,6 +109,14 @@ export default function EnhancedFundSearchPage() {
       alert('Error searching funds');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle page change
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      handleSearch(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -125,8 +140,8 @@ export default function EnhancedFundSearchPage() {
 
   // Quick filter by AMC
   const quickFilterAMC = (amc: string) => {
-    setFilters({ ...filters, amc });
-    setTimeout(() => handleSearch(), 100);
+    setFilters({ ...filters, query: amc, amc: '' });
+    setTimeout(() => handleSearch(1), 100);
   };
 
   return (
@@ -155,7 +170,7 @@ export default function EnhancedFundSearchPage() {
                     placeholder="Search by fund name, scheme code, or keyword..."
                     value={filters.query}
                     onChange={(e) => setFilters({ ...filters, query: e.target.value })}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch(1)}
                     className="w-full px-4 py-4 pl-12 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal text-lg"
                   />
                   <svg className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-brand-navy/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -163,7 +178,7 @@ export default function EnhancedFundSearchPage() {
                   </svg>
                 </div>
                 <button
-                  onClick={handleSearch}
+                  onClick={() => handleSearch(1)}
                   disabled={loading}
                   className="bg-brand-royal text-white px-8 py-4 rounded-lg font-semibold hover:bg-brand-navy transition-all disabled:opacity-50 whitespace-nowrap"
                 >
@@ -302,7 +317,10 @@ export default function EnhancedFundSearchPage() {
                   <>
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-xl font-semibold text-brand-navy">
-                        Found {searchResults.length} fund{searchResults.length !== 1 ? 's' : ''}
+                        Found {totalFunds} fund{totalFunds !== 1 ? 's' : ''} 
+                        <span className="text-brand-navy/60 text-base font-normal ml-2">
+                          (Showing {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, totalFunds)} of {totalFunds})
+                        </span>
                       </h3>
                       <div className="text-sm text-brand-navy/70">
                         {filters.amc && <span className="mr-2">AMC: {filters.amc}</span>}
@@ -357,6 +375,103 @@ export default function EnhancedFundSearchPage() {
                         </div>
                       ))}
                     </div>
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-center gap-2 mt-8">
+                        {/* Previous Button */}
+                        <button
+                          onClick={() => goToPage(currentPage - 1)}
+                          disabled={currentPage === 1}
+                          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                            currentPage === 1
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-white border-2 border-brand-royal text-brand-royal hover:bg-brand-royal hover:text-white'
+                          }`}
+                        >
+                          ← Previous
+                        </button>
+
+                        {/* Page Numbers */}
+                        <div className="flex items-center gap-1">
+                          {/* First page */}
+                          {currentPage > 3 && (
+                            <>
+                              <button
+                                onClick={() => goToPage(1)}
+                                className="w-10 h-10 rounded-lg font-medium bg-white border border-gray-200 text-brand-navy hover:bg-brand-royal hover:text-white transition-all"
+                              >
+                                1
+                              </button>
+                              {currentPage > 4 && <span className="px-2 text-brand-navy/50">...</span>}
+                            </>
+                          )}
+
+                          {/* Pages around current */}
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum;
+                            if (totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1;
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i;
+                            } else {
+                              pageNum = currentPage - 2 + i;
+                            }
+                            
+                            if (pageNum < 1 || pageNum > totalPages) return null;
+                            
+                            return (
+                              <button
+                                key={pageNum}
+                                onClick={() => goToPage(pageNum)}
+                                className={`w-10 h-10 rounded-lg font-medium transition-all ${
+                                  currentPage === pageNum
+                                    ? 'bg-brand-royal text-white'
+                                    : 'bg-white border border-gray-200 text-brand-navy hover:bg-brand-royal hover:text-white'
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            );
+                          })}
+
+                          {/* Last page */}
+                          {currentPage < totalPages - 2 && totalPages > 5 && (
+                            <>
+                              {currentPage < totalPages - 3 && <span className="px-2 text-brand-navy/50">...</span>}
+                              <button
+                                onClick={() => goToPage(totalPages)}
+                                className="w-10 h-10 rounded-lg font-medium bg-white border border-gray-200 text-brand-navy hover:bg-brand-royal hover:text-white transition-all"
+                              >
+                                {totalPages}
+                              </button>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Next Button */}
+                        <button
+                          onClick={() => goToPage(currentPage + 1)}
+                          disabled={currentPage === totalPages}
+                          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                            currentPage === totalPages
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-white border-2 border-brand-royal text-brand-royal hover:bg-brand-royal hover:text-white'
+                          }`}
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Page Info */}
+                    {totalPages > 1 && (
+                      <div className="text-center mt-4 text-sm text-brand-navy/60">
+                        Page {currentPage} of {totalPages} • {PAGE_SIZE} funds per page
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="card-light p-12 text-center">

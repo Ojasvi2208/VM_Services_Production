@@ -13,9 +13,10 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('q') || '';
     const amc = searchParams.get('amc') || '';
     const category = searchParams.get('category') || '';
-    const limit = parseInt(searchParams.get('limit') || '100');
+    const page = parseInt(searchParams.get('page') || '1');
+    const pageSize = parseInt(searchParams.get('pageSize') || '10');
 
-    console.log('🔍 Search request:', { query, amc, category, limit });
+    console.log('🔍 Search request:', { query, amc, category, page, pageSize });
 
     // If no filters, return empty (don't load all funds)
     if (!query && !amc && !category) {
@@ -24,43 +25,90 @@ export async function GET(request: NextRequest) {
         success: true,
         funds: [],
         total: stats.totalFunds,
+        page: 1,
+        pageSize,
+        totalPages: 0,
         message: 'Apply filters to search funds'
       });
     }
 
-    // Build search query
-    let searchQuery = '';
-    
-    if (query) {
-      searchQuery = query;
-    }
-    
-    if (amc) {
-      searchQuery = searchQuery ? `${searchQuery} ${amc}` : amc;
-    }
-    
-    if (category) {
-      searchQuery = searchQuery ? `${searchQuery} ${category}` : category;
-    }
+    // Use pool for paginated search
+    const pool = (await import('@/lib/postgres-db')).default;
+    const client = await pool.connect();
 
-    // Search in database
-    const funds = await searchFunds(searchQuery, limit);
+    try {
+      // Build WHERE clause
+      let whereClause = '';
+      const params: any[] = [];
+      let paramCount = 1;
 
-    console.log(`✅ Found ${funds.length} funds`);
+      if (query) {
+        whereClause = `WHERE (scheme_name ILIKE $${paramCount} OR scheme_code LIKE $${paramCount})`;
+        params.push(`%${query}%`);
+        paramCount++;
+      }
 
-    return NextResponse.json({
-      success: true,
-      funds: funds.map(fund => ({
-        schemeCode: fund.schemeCode,
-        schemeName: fund.schemeName,
-        latestNav: fund.nav,
-        latestNavDate: fund.date,
-        amcCode: fund.amcCode,
-        schemeType: fund.schemeType
-      })),
-      total: funds.length,
-      query: searchQuery
-    });
+      if (amc) {
+        whereClause += whereClause ? ` AND scheme_name ILIKE $${paramCount}` : `WHERE scheme_name ILIKE $${paramCount}`;
+        params.push(`%${amc}%`);
+        paramCount++;
+      }
+
+      if (category) {
+        whereClause += whereClause ? ` AND (scheme_name ILIKE $${paramCount} OR scheme_type ILIKE $${paramCount})` : `WHERE (scheme_name ILIKE $${paramCount} OR scheme_type ILIKE $${paramCount})`;
+        params.push(`%${category}%`);
+        paramCount++;
+      }
+
+      // Get total count
+      const countResult = await client.query(
+        `SELECT COUNT(*) as total FROM funds ${whereClause}`,
+        params
+      );
+      const totalCount = parseInt(countResult.rows[0].total);
+      const totalPages = Math.ceil(totalCount / pageSize);
+
+      // Get paginated results
+      const offset = (page - 1) * pageSize;
+      const paginatedParams = [...params, pageSize, offset];
+      
+      const result = await client.query(
+        `SELECT 
+          scheme_code as "schemeCode",
+          scheme_name as "schemeName",
+          latest_nav as nav,
+          latest_nav_date as date,
+          amc_code as "amcCode",
+          scheme_type as "schemeType"
+        FROM funds
+        ${whereClause}
+        ORDER BY scheme_name
+        LIMIT $${paramCount} OFFSET $${paramCount + 1}`,
+        paginatedParams
+      );
+
+      console.log(`✅ Found ${totalCount} total funds, returning page ${page} of ${totalPages}`);
+
+      return NextResponse.json({
+        success: true,
+        funds: result.rows.map(fund => ({
+          schemeCode: fund.schemeCode,
+          schemeName: fund.schemeName,
+          latestNav: fund.nav ? parseFloat(fund.nav) : null,
+          latestNavDate: fund.date,
+          amcCode: fund.amcCode,
+          schemeType: fund.schemeType
+        })),
+        total: totalCount,
+        page,
+        pageSize,
+        totalPages,
+        query: query || amc || category
+      });
+
+    } finally {
+      client.release();
+    }
 
   } catch (error: any) {
     console.error('❌ Search error:', error);
@@ -68,7 +116,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: false,
       error: error.message,
-      funds: []
+      funds: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+      totalPages: 0
     }, { status: 500 });
   }
 }
