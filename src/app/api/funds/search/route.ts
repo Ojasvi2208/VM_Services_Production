@@ -213,11 +213,17 @@ export async function POST(request: NextRequest) {
         paramCount++;
       }
 
-      // Filter by plan type
+      // Filter by plan type (embedded in scheme name since plan_type column is null)
       if (planType) {
-        sqlQuery += ` AND plan_type = $${paramCount}`;
-        params.push(planType);
-        paramCount++;
+        if (planType === 'Direct') {
+          sqlQuery += ` AND scheme_name ILIKE $${paramCount}`;
+          params.push('%Direct%');
+          paramCount++;
+        } else if (planType === 'Regular') {
+          sqlQuery += ` AND scheme_name ILIKE $${paramCount} AND scheme_name NOT ILIKE $${paramCount + 1}`;
+          params.push('%Regular%', '%Direct%');
+          paramCount += 2;
+        }
       }
 
       sqlQuery += ` ORDER BY scheme_name LIMIT $${paramCount}`;

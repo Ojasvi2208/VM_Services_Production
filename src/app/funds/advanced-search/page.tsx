@@ -123,9 +123,11 @@ export default function AdvancedFundSearchPage() {
   };
 
   const searchFunds = async (page: number = 1) => {
-    // Always search with at least plan type filter
-    // Don't require other filters if plan type is selected
-    if (!selectedAMC && !selectedMainCategory && !selectedSubCategory && !searchQuery && planType === 'All') {
+    // Show results if any filter is applied OR if a specific plan type is selected
+    // Only show "No Funds" if ALL filters are empty AND planType is 'All'
+    const hasAnyFilter = selectedAMC || selectedMainCategory || selectedSubCategory || searchQuery || planType !== 'All';
+    
+    if (!hasAnyFilter) {
       setFilteredFunds([]);
       setTotalResults(0);
       return;
