@@ -69,19 +69,26 @@ export async function GET(
 
     const returns = returnsResult.rows[0] || null;
 
-    // Get recent NAV history (last 30 days)
-    const navHistoryResult = await client.query(
-      `SELECT 
-        nav_date as "date",
-        nav_value as "nav"
-      FROM nav_history
-      WHERE scheme_code = $1
-      ORDER BY nav_date DESC
-      LIMIT 30`,
-      [schemeCode]
-    );
-
-    const navHistory = navHistoryResult.rows;
+    // NAV history is fetched from MFApi on-demand (not stored in DB to save space)
+    // We'll fetch it from the external API instead
+    let navHistory: any[] = [];
+    try {
+      const navResponse = await fetch(`https://api.mfapi.in/mf/${schemeCode}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        next: { revalidate: 3600 } // Cache for 1 hour
+      });
+      if (navResponse.ok) {
+        const navData = await navResponse.json();
+        if (navData?.data) {
+          navHistory = navData.data.slice(0, 30).map((item: any) => ({
+            date: item.date,
+            nav: parseFloat(item.nav)
+          }));
+        }
+      }
+    } catch (navError) {
+      console.warn('Could not fetch NAV history from MFApi:', navError);
+    }
 
     // Fund managers and expense history tables don't exist yet
     // Return empty arrays for now

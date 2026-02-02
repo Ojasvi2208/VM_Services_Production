@@ -1,11 +1,10 @@
 /**
  * NAV History API
  * GET /api/funds/[schemeCode]/nav-history
- * Returns historical NAV data with optional date range
+ * Returns historical NAV data fetched from MFApi (not stored in DB to save space)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/postgres-db';
 
 export async function GET(
   request: NextRequest,
@@ -18,41 +17,62 @@ export async function GET(
   const endDate = searchParams.get('endDate');
   const limit = parseInt(searchParams.get('limit') || '365');
 
-  const client = await pool.connect();
-
   try {
-    let query = `
-      SELECT 
-        nav_date as "date",
-        nav_value as "nav"
-      FROM nav_history
-      WHERE scheme_code = $1
-    `;
+    // Fetch NAV history from MFApi (we don't store it in DB to save space)
+    const response = await fetch(`https://api.mfapi.in/mf/${schemeCode}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      next: { revalidate: 3600 } // Cache for 1 hour
+    });
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { success: false, error: 'Fund not found' },
+        { status: 404 }
+      );
+    }
+
+    const data = await response.json();
     
-    const params: any[] = [schemeCode];
-    let paramCount = 2;
-
-    if (startDate) {
-      query += ` AND nav_date >= $${paramCount}`;
-      params.push(startDate);
-      paramCount++;
+    if (!data?.data || data.data.length === 0) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        count: 0
+      });
     }
 
-    if (endDate) {
-      query += ` AND nav_date <= $${paramCount}`;
-      params.push(endDate);
-      paramCount++;
+    let navData = data.data;
+
+    // Filter by date range if provided
+    if (startDate || endDate) {
+      navData = navData.filter((item: any) => {
+        const [day, month, year] = item.date.split('-');
+        const itemDate = new Date(`${year}-${month}-${day}`);
+        
+        if (startDate && endDate) {
+          return itemDate >= new Date(startDate) && itemDate <= new Date(endDate);
+        } else if (startDate) {
+          return itemDate >= new Date(startDate);
+        } else if (endDate) {
+          return itemDate <= new Date(endDate);
+        }
+        return true;
+      });
     }
 
-    query += ` ORDER BY nav_date DESC LIMIT $${paramCount}`;
-    params.push(limit);
+    // Apply limit
+    navData = navData.slice(0, limit);
 
-    const result = await client.query(query, params);
+    // Format response
+    const formattedData = navData.map((item: any) => ({
+      date: item.date,
+      nav: parseFloat(item.nav)
+    }));
 
     return NextResponse.json({
       success: true,
-      data: result.rows.reverse(), // Reverse to show oldest first
-      count: result.rows.length
+      data: formattedData.reverse(), // Reverse to show oldest first
+      count: formattedData.length
     });
 
   } catch (error: any) {
@@ -61,7 +81,5 @@ export async function GET(
       { success: false, error: error.message },
       { status: 500 }
     );
-  } finally {
-    client.release();
   }
 }

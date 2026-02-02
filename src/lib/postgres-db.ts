@@ -189,50 +189,54 @@ export async function getLatestNav(schemeCode: string): Promise<NAVRecord | null
 }
 
 /**
- * Get NAV history for a scheme
+ * Get NAV history for a scheme (fetched from MFApi, not stored in DB)
  */
 export async function getNavHistory(
   schemeCode: string,
   startDate?: string,
   endDate?: string
 ): Promise<NAVRecord[]> {
-  const client = await pool.connect();
-  
   try {
-    let query = `
-      SELECT scheme_code as "schemeCode", scheme_name as "schemeName",
-             nav, date, amc_code as "amcCode", scheme_type as "schemeType"
-      FROM nav_history
-      WHERE scheme_code = $1
-    `;
+    // Fetch from MFApi since we don't store NAV history in DB
+    const response = await fetch(`https://api.mfapi.in/mf/${schemeCode}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
     
-    const params: any[] = [schemeCode];
+    if (!response.ok) return [];
     
-    if (startDate && endDate) {
-      query += ` AND date BETWEEN $2 AND $3`;
-      params.push(startDate, endDate);
-    } else if (startDate) {
-      query += ` AND date >= $2`;
-      params.push(startDate);
-    } else if (endDate) {
-      query += ` AND date <= $2`;
-      params.push(endDate);
+    const data = await response.json();
+    if (!data?.data) return [];
+    
+    let navData = data.data;
+    
+    // Filter by date range if provided
+    if (startDate || endDate) {
+      navData = navData.filter((item: any) => {
+        const [day, month, year] = item.date.split('-');
+        const itemDate = new Date(`${year}-${month}-${day}`);
+        
+        if (startDate && endDate) {
+          return itemDate >= new Date(startDate) && itemDate <= new Date(endDate);
+        } else if (startDate) {
+          return itemDate >= new Date(startDate);
+        } else if (endDate) {
+          return itemDate <= new Date(endDate);
+        }
+        return true;
+      });
     }
     
-    query += ` ORDER BY date DESC`;
-    
-    const result = await client.query(query, params);
-    
-    return result.rows.map(row => ({
-      schemeCode: row.schemeCode,
-      schemeName: row.schemeName,
-      nav: parseFloat(row.nav),
-      date: row.date,
-      amcCode: row.amcCode,
-      schemeType: row.schemeType,
+    return navData.map((item: any) => ({
+      schemeCode,
+      schemeName: data.meta?.scheme_name || '',
+      nav: parseFloat(item.nav),
+      date: item.date,
+      amcCode: data.meta?.fund_house || '',
+      schemeType: data.meta?.scheme_type || '',
     }));
-  } finally {
-    client.release();
+  } catch (error) {
+    console.error('Error fetching NAV history from MFApi:', error);
+    return [];
   }
 }
 
@@ -278,12 +282,12 @@ export async function getDatabaseStats(): Promise<{
   
   try {
     const fundsResult = await client.query('SELECT COUNT(*) FROM funds');
-    const recordsResult = await client.query('SELECT COUNT(*) FROM nav_history');
-    const dateResult = await client.query('SELECT MAX(date) as latest_date FROM nav_history');
+    const returnsResult = await client.query('SELECT COUNT(*) FROM fund_returns');
+    const dateResult = await client.query('SELECT MAX(latest_nav_date) as latest_date FROM funds');
     
     return {
       totalFunds: parseInt(fundsResult.rows[0].count),
-      totalRecords: parseInt(recordsResult.rows[0].count),
+      totalRecords: parseInt(returnsResult.rows[0].count),
       latestDate: dateResult.rows[0].latest_date,
     };
   } finally {
