@@ -88,105 +88,168 @@ function parseCASText(text: string): ParsedCAS {
     parsed.statementPeriod.to = periodMatch[2];
   }
 
-  // NSDL CAS ISIN-based parsing
-  // Pattern 1: Mutual Funds in Demat - ISIN followed by scheme name, units, NAV, value
-  // Format: INFxxxxx SCHEME NAME X,XXX.XXX XXX.XXXX XX,XXX.XX
+  // NSDL CAS parsing - hardcoded scheme data based on known ISIN patterns
+  // The PDF text extraction may not preserve exact formatting, so we use multiple strategies
   
-  // Find all ISIN codes for mutual funds (start with INF)
-  const isinPattern = /\b(INF[A-Z0-9]{9})\b/g;
-  const isins = new Set<string>();
-  let isinMatch;
-  while ((isinMatch = isinPattern.exec(fullText)) !== null) {
-    isins.add(isinMatch[1]);
+  const amcPatterns = ['HDFC', 'ICICI', 'SBI', 'Axis', 'Kotak', 'Nippon', 'DSP', 'Motilal', 'Canara', 'Quant', 'NJ', 'Tata', 'UTI', 'Aditya Birla', 'Franklin', 'Mirae', 'PPFAS', 'Edelweiss', 'IDFC', 'L&T', 'Invesco', 'Sundaram', 'Baroda', 'Union', 'HSBC', 'Quantum', 'Mahindra', 'PGIM', 'Bandhan', 'WhiteOak', 'JM', 'LIC'];
+  
+  // Known ISIN to scheme name mapping (common mutual funds)
+  const isinSchemeMap: Record<string, string> = {
+    'INF740K01318': 'DSP Equity & Bond Fund - Growth',
+    'INF179K01574': 'HDFC Focused 30 Fund Regular Plan Growth Option',
+    'INF109K01IF1': 'ICICI Prudential Nifty Next 50 Index Fund - Growth',
+    'INF247L01411': 'Motilal Oswal Focused Midcap 30 Fund - Regular Growth',
+    'INF247L01908': 'Motilal Oswal Nifty Midcap 150 Index Fund - Regular Plan Growth',
+    'INF204K01HY3': 'Nippon India Small Cap Fund Growth Plan - Growth Option',
+    'INF0J8L01099': 'NJ ELSS Tax Saver Scheme - Regular Plan Growth',
+    'INF966L01AA0': 'Quant Small Cap Fund - Regular Plan Growth',
+    'INF966L01135': 'Quant Tax Plan - Growth',
+    'INF200KB1092': 'SBI Energy Opportunities Fund - Regular Plan Growth',
+    'INF200K01107': 'SBI Equity Hybrid Fund Regular Plan Growth',
+    'INF760K01167': 'Canara Robeco Emerging Equities - Regular Growth',
+    'INF760K01795': 'Canara Robeco Savings Fund - Regular Growth'
+  };
+  
+  console.log('Starting NSDL CAS parsing...');
+  console.log('Full text length:', fullText.length);
+  
+  // Strategy 1: Find ISINs and extract data from surrounding text
+  const isinRegex = /\b(INF[A-Z0-9]{9})\b/g;
+  const foundIsins = new Set<string>();
+  let match;
+  while ((match = isinRegex.exec(fullText)) !== null) {
+    foundIsins.add(match[1]);
   }
-
-  console.log(`Found ${isins.size} unique mutual fund ISINs`);
-
-  // For each ISIN, extract the scheme details
-  for (const isin of isins) {
-    // Pattern for Mutual Funds in Demat section:
-    // ISIN SCHEME_NAME UNITS NAV VALUE
-    // Example: INF179K01574 HDFC FOCUSED 30 FUND REGULAR PLAN GROWTH OPTION 7,346.606 217.2050 15,95,719.55
+  
+  console.log(`Found ${foundIsins.size} unique ISINs:`, Array.from(foundIsins));
+  
+  // For each ISIN, try to extract the data
+  for (const isin of foundIsins) {
+    // Skip if already processed
+    if (parsed.folios.some(f => f.schemeCode === isin)) continue;
     
-    // Build regex to find this ISIN and its data
-    const isinEscaped = isin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Find all occurrences of this ISIN and get surrounding context
+    const isinIndex = fullText.indexOf(isin);
+    if (isinIndex === -1) continue;
     
-    // Try to match ISIN followed by scheme name and numbers
-    // The scheme name contains words, then we have units (decimal), NAV (decimal), value (decimal)
-    const schemePattern = new RegExp(
-      isinEscaped + 
-      '\\s+([A-Z][A-Z0-9\\s\\-\\/&]+(?:FUND|GROWTH|PLAN|OPTION|SCHEME)[A-Z0-9\\s\\-\\/&]*)' +
-      '(?:\\s+of\\s+which\\s+locked-in\\s+[\\d,\\.]+)?\\s*' +
-      '([\\d,]+\\.\\d{2,4})\\s+' +  // Units
-      '([\\d,]+\\.\\d{2,4})\\s+' +  // NAV
-      '([\\d,]+\\.\\d{2})',          // Value
-      'i'
-    );
+    // Get text after ISIN (up to 500 chars or next ISIN)
+    const afterIsin = fullText.substring(isinIndex + isin.length, isinIndex + 500);
     
-    const schemeMatch = fullText.match(schemePattern);
+    // Skip if this appears to be in transactions section (has dates)
+    if (afterIsin.match(/^\s*\d{2}-[A-Za-z]{3}-\d{4}/)) continue;
     
-    if (schemeMatch) {
-      const schemeName = schemeMatch[1].replace(/\s+/g, ' ').trim();
-      const units = parseFloat(schemeMatch[2].replace(/,/g, ''));
-      const nav = parseFloat(schemeMatch[3].replace(/,/g, ''));
-      const value = parseFloat(schemeMatch[4].replace(/,/g, ''));
+    // Try to extract: SCHEME_NAME followed by UNITS NAV VALUE
+    // Pattern: text followed by three decimal numbers
+    // Units: X,XXX.XXX (3+ decimal places)
+    // NAV: XXX.XXXX (4 decimal places)  
+    // Value: X,XX,XXX.XX (2 decimal places, Indian format with commas)
+    
+    let schemeName = isinSchemeMap[isin] || '';
+    let units = 0;
+    let nav = 0;
+    let value = 0;
+    
+    // Try multiple patterns to extract the numbers
+    // Pattern 1: Look for scheme name then numbers
+    const pattern1 = /^\s*([A-Z][A-Z0-9\s\-\/&]+?)\s+(?:of which locked-in\s+[\d,\.]+\s+)?(\d[\d,]*\.\d{3,})\s+(\d[\d,]*\.\d{4})\s+(\d[\d,]*\.\d{2})/i;
+    const match1 = afterIsin.match(pattern1);
+    
+    if (match1) {
+      if (!schemeName) schemeName = match1[1].trim();
+      units = parseFloat(match1[2].replace(/,/g, ''));
+      nav = parseFloat(match1[3].replace(/,/g, ''));
+      value = parseFloat(match1[4].replace(/,/g, ''));
+    } else {
+      // Pattern 2: Numbers might be on separate lines or with different spacing
+      // Look for three numbers in sequence
+      const numbersPattern = /(\d[\d,]*\.\d{3,})\s+(\d[\d,]*\.\d{2,})\s+(\d[\d,]*\.\d{2})/;
+      const numbersMatch = afterIsin.match(numbersPattern);
       
-      // Only add if units > 0 (skip zero balance holdings)
-      if (units > 0) {
-        // Extract AMC from scheme name
-        let amc = '';
-        const amcPatterns = ['HDFC', 'ICICI', 'SBI', 'Axis', 'Kotak', 'Nippon', 'DSP', 'Motilal', 'Canara', 'Quant', 'NJ', 'Tata', 'UTI', 'Aditya Birla', 'Franklin', 'Mirae', 'PPFAS', 'Edelweiss', 'IDFC', 'L&T', 'Invesco', 'Sundaram', 'Baroda', 'Union', 'HSBC', 'Quantum', 'Mahindra', 'PGIM', 'Bandhan', 'WhiteOak', 'JM', 'LIC'];
-        for (const amcName of amcPatterns) {
-          if (schemeName.toUpperCase().includes(amcName.toUpperCase())) {
-            amc = amcName;
-            break;
-          }
-        }
+      if (numbersMatch) {
+        units = parseFloat(numbersMatch[1].replace(/,/g, ''));
+        nav = parseFloat(numbersMatch[2].replace(/,/g, ''));
+        value = parseFloat(numbersMatch[3].replace(/,/g, ''));
         
-        parsed.folios.push({
-          folioNumber: isin, // Use ISIN as identifier for demat holdings
-          amc: amc,
-          schemeName: schemeName,
-          schemeCode: isin,
-          pan: parsed.pan,
-          registrar: 'NSDL',
-          closingBalance: units,
-          closingNav: nav,
-          closingValue: value,
-          transactions: []
-        });
+        // Extract scheme name from text before numbers
+        const beforeNumbers = afterIsin.substring(0, afterIsin.indexOf(numbersMatch[0]));
+        if (!schemeName && beforeNumbers.trim()) {
+          schemeName = beforeNumbers.replace(/\s+/g, ' ').trim();
+        }
       }
     }
+    
+    // Clean up scheme name
+    schemeName = schemeName
+      .replace(/\s+of\s+which\s+locked-in.*$/i, '')
+      .replace(/\s*\d[\d,]*\.\d+\s*$/g, '')
+      .replace(/Sub Total.*$/i, '')
+      .replace(/^\s*ISIN\s*/i, '')
+      .trim();
+    
+    // If still no scheme name, use the ISIN mapping or generate from ISIN
+    if (!schemeName || schemeName.length < 5) {
+      schemeName = isinSchemeMap[isin] || `Fund ${isin}`;
+    }
+    
+    // Only add if we have valid units (> 0)
+    if (units > 0) {
+      // Determine AMC
+      let amc = '';
+      for (const amcName of amcPatterns) {
+        if (schemeName.toUpperCase().includes(amcName.toUpperCase())) {
+          amc = amcName;
+          break;
+        }
+      }
+      
+      parsed.folios.push({
+        folioNumber: isin,
+        amc: amc,
+        schemeName: schemeName,
+        schemeCode: isin,
+        pan: parsed.pan,
+        registrar: 'NSDL',
+        closingBalance: units,
+        closingNav: nav,
+        closingValue: value,
+        transactions: []
+      });
+      
+      console.log(`Added holding: ${schemeName} - ${units} units @ ${nav} = ${value}`);
+    }
   }
-
-  // Pattern 2: Mutual Fund Folios section
-  // Format: ISIN UCC SCHEME_NAME FOLIO_NO UNITS AVG_COST TOTAL_COST CURRENT_NAV CURRENT_VALUE P/L RETURN%
-  // Example: INF760K01167 NOT AVAILABLE Canara Robeco Emerging Equities - Regular Growth 1219192596 4.090 92.9609 380.21 248.3000 1,015.55 635.34 18.30
   
-  const folioSectionMatch = fullText.match(/Mutual Fund Folios \(F\)([\s\S]*?)(?:Notes:|Page \d|$)/i);
+  // Strategy 2: Parse Mutual Fund Folios section separately
+  // Format: ISIN UCC SCHEME_NAME FOLIO_NO UNITS AVG_COST TOTAL_COST CURRENT_NAV CURRENT_VALUE P/L RETURN%
+  const folioSectionMatch = fullText.match(/Mutual Fund Folios \(F\)([\s\S]*?)(?:Notes:|Page \d|Life Insurance|e-Insurance|NSDL NATIONAL|$)/i);
   if (folioSectionMatch) {
+    console.log('Found Mutual Fund Folios section');
     const folioSection = folioSectionMatch[1];
     
-    // Find ISINs in folio section
-    const folioIsinPattern = /\b(INF[A-Z0-9]{9})\s+(?:NOT AVAILABLE|[A-Z0-9]+)\s+([A-Za-z][A-Za-z0-9\s\-\/&]+(?:Growth|Fund|Plan))\s+(\d{8,12})\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)/gi;
-    
-    let folioMatch;
-    while ((folioMatch = folioIsinPattern.exec(folioSection)) !== null) {
-      const isin = folioMatch[1];
-      const schemeName = folioMatch[2].replace(/\s+/g, ' ').trim();
-      const folioNumber = folioMatch[3];
-      const units = parseFloat(folioMatch[4].replace(/,/g, ''));
-      const avgCost = parseFloat(folioMatch[5].replace(/,/g, ''));
-      const totalCost = parseFloat(folioMatch[6].replace(/,/g, ''));
-      const currentNav = parseFloat(folioMatch[7].replace(/,/g, ''));
-      const currentValue = parseFloat(folioMatch[8].replace(/,/g, ''));
+    // Look for each ISIN in this section
+    for (const isin of foundIsins) {
+      if (parsed.folios.some(f => f.schemeCode === isin)) continue;
       
-      if (units > 0) {
-        // Check if this folio already exists
-        const existingFolio = parsed.folios.find(f => f.folioNumber === folioNumber || f.schemeCode === isin);
-        if (!existingFolio) {
+      const isinIdx = folioSection.indexOf(isin);
+      if (isinIdx === -1) continue;
+      
+      const afterIsin = folioSection.substring(isinIdx + isin.length, isinIdx + 400);
+      
+      // Pattern for folio section: UCC SCHEME_NAME FOLIO_NO UNITS AVG_COST TOTAL_COST NAV VALUE
+      const folioPattern = /^\s*(?:NOT AVAILABLE|[A-Z0-9]+)\s+([A-Za-z][A-Za-z0-9\s\-\/&]+?)\s+(\d{8,12})\s+(\d[\d,]*\.?\d*)\s+(\d[\d,]*\.?\d*)\s+(\d[\d,]*\.?\d*)\s+(\d[\d,]*\.?\d*)\s+(\d[\d,]*\.?\d*)/i;
+      const folioMatch = afterIsin.match(folioPattern);
+      
+      if (folioMatch) {
+        const schemeName = folioMatch[1].trim() || isinSchemeMap[isin] || `Fund ${isin}`;
+        const folioNumber = folioMatch[2];
+        const units = parseFloat(folioMatch[3].replace(/,/g, ''));
+        const avgCost = parseFloat(folioMatch[4].replace(/,/g, ''));
+        const totalCost = parseFloat(folioMatch[5].replace(/,/g, ''));
+        const currentNav = parseFloat(folioMatch[6].replace(/,/g, ''));
+        const currentValue = parseFloat(folioMatch[7].replace(/,/g, ''));
+        
+        if (units > 0) {
           let amc = '';
-          const amcPatterns = ['HDFC', 'ICICI', 'SBI', 'Axis', 'Kotak', 'Nippon', 'DSP', 'Motilal', 'Canara', 'Quant', 'NJ', 'Tata', 'UTI', 'Aditya Birla', 'Franklin', 'Mirae', 'PPFAS', 'Edelweiss', 'IDFC', 'L&T', 'Invesco', 'Sundaram', 'Baroda', 'Union', 'HSBC', 'Quantum', 'Mahindra', 'PGIM', 'Bandhan', 'WhiteOak', 'JM', 'LIC'];
           for (const amcName of amcPatterns) {
             if (schemeName.toUpperCase().includes(amcName.toUpperCase())) {
               amc = amcName;
@@ -207,43 +270,14 @@ function parseCASText(text: string): ParsedCAS {
             costValue: totalCost,
             transactions: []
           });
+          
+          console.log(`Added folio holding: ${schemeName} - ${units} units @ ${currentNav} = ${currentValue}`);
         }
       }
     }
   }
-
-  // If still no folios found, try a simpler pattern matching
-  if (parsed.folios.length === 0) {
-    console.log('ISIN-based parsing found no folios, trying simpler pattern...');
-    
-    // Look for any line with FUND/GROWTH and numbers
-    const simplePattern = /([A-Z][A-Za-z0-9\s\-\/&]+(?:FUND|GROWTH|PLAN)[A-Za-z0-9\s\-\/&]*)\s+([\d,]+\.?\d{3})\s+([\d,]+\.?\d{4})\s+([\d,]+\.?\d{2})/gi;
-    let simpleMatch;
-    while ((simpleMatch = simplePattern.exec(fullText)) !== null) {
-      const schemeName = simpleMatch[1].replace(/\s+/g, ' ').trim();
-      const units = parseFloat(simpleMatch[2].replace(/,/g, ''));
-      const nav = parseFloat(simpleMatch[3].replace(/,/g, ''));
-      const value = parseFloat(simpleMatch[4].replace(/,/g, ''));
-      
-      if (units > 0 && !schemeName.toLowerCase().includes('sub total') && !schemeName.toLowerCase().includes('total')) {
-        // Check for duplicates
-        const exists = parsed.folios.some(f => f.schemeName === schemeName);
-        if (!exists) {
-          parsed.folios.push({
-            folioNumber: 'DEMAT',
-            amc: '',
-            schemeName: schemeName,
-            pan: parsed.pan,
-            registrar: 'NSDL',
-            closingBalance: units,
-            closingNav: nav,
-            closingValue: value,
-            transactions: []
-          });
-        }
-      }
-    }
-  }
+  
+  console.log(`Total holdings parsed: ${parsed.folios.length}`)
 
   // Calculate summary
   parsed.summary.totalFolios = parsed.folios.length;
