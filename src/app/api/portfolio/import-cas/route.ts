@@ -438,7 +438,8 @@ export async function POST(request: NextRequest) {
       message: `Successfully parsed ${parsedData.folios.length} mutual fund holdings`,
       debug: {
         textLength: textContent.length,
-        textPreview: textContent.substring(0, 500)
+        textPreview: textContent.substring(0, 2000),
+        lines: textContent.split('\n').slice(0, 50)
       }
     });
 
