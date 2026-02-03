@@ -41,7 +41,9 @@ interface ParsedCAS {
 }
 
 function parseCASText(text: string): ParsedCAS {
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  // Normalize text - handle various line endings and extra spaces
+  const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = normalizedText.split('\n').map(l => l.trim()).filter(l => l);
   
   const parsed: ParsedCAS = {
     investorName: '',
@@ -57,135 +59,269 @@ function parseCASText(text: string): ParsedCAS {
     }
   };
 
+  // Join all text for regex matching across lines
+  const fullText = lines.join(' ');
+  
+  // Extract PAN - multiple patterns
+  const panPatterns = [
+    /PAN\s*[:\-]?\s*([A-Z]{5}[0-9]{4}[A-Z])/i,
+    /\b([A-Z]{5}[0-9]{4}[A-Z])\b/
+  ];
+  for (const pattern of panPatterns) {
+    const match = fullText.match(pattern);
+    if (match && !parsed.pan) {
+      parsed.pan = match[1].toUpperCase();
+      break;
+    }
+  }
+
+  // Extract email
+  const emailMatch = fullText.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  if (emailMatch) {
+    parsed.email = emailMatch[1];
+  }
+
+  // Extract statement period - multiple formats
+  const periodPatterns = [
+    /(\d{2}[-\/][A-Za-z]{3}[-\/]\d{4})\s*(?:to|-)\s*(\d{2}[-\/][A-Za-z]{3}[-\/]\d{4})/i,
+    /Period\s*[:\-]?\s*(\d{2}[-\/]\d{2}[-\/]\d{4})\s*(?:to|-)\s*(\d{2}[-\/]\d{2}[-\/]\d{4})/i,
+    /from\s*(\d{2}[-\/][A-Za-z]{3}[-\/]\d{4})\s*to\s*(\d{2}[-\/][A-Za-z]{3}[-\/]\d{4})/i
+  ];
+  for (const pattern of periodPatterns) {
+    const match = fullText.match(pattern);
+    if (match) {
+      parsed.statementPeriod.from = match[1];
+      parsed.statementPeriod.to = match[2];
+      break;
+    }
+  }
+
+  // NSDL CAS Format parsing - look for mutual fund sections
+  // Pattern: AMC name followed by folio and scheme details
+  
+  // Common AMC names
+  const amcNames = [
+    'HDFC', 'ICICI', 'SBI', 'Axis', 'Kotak', 'Nippon', 'Aditya Birla', 'UTI', 'DSP', 
+    'Tata', 'Franklin', 'Mirae', 'PPFAS', 'Motilal', 'Edelweiss', 'IDFC', 'L&T', 
+    'Invesco', 'Sundaram', 'Canara', 'Baroda', 'Union', 'HSBC', 'Principal', 
+    'Quantum', 'Mahindra', 'PGIM', 'ITI', 'Navi', 'Groww', 'Bandhan', 'Quant',
+    'Parag Parikh', 'WhiteOak', 'JM Financial', 'LIC', 'IDBI', 'BOI AXA', 'Shriram'
+  ];
+
   let currentFolio: CASFolio | null = null;
-  let inTransactionSection = false;
+  let currentAMC = '';
+  let i = 0;
 
-  for (let i = 0; i < lines.length; i++) {
+  while (i < lines.length) {
     const line = lines[i];
-    const nextLine = lines[i + 1] || '';
-
-    // Extract investor name
-    if (line.includes('Name:') || line.match(/^[A-Z\s]+$/)) {
-      const nameMatch = line.match(/Name:\s*(.+)/i);
-      if (nameMatch) {
-        parsed.investorName = nameMatch[1].trim();
-      }
-    }
-
-    // Extract PAN
-    const panMatch = line.match(/PAN:\s*([A-Z]{5}[0-9]{4}[A-Z])/i) || line.match(/([A-Z]{5}[0-9]{4}[A-Z])/);
-    if (panMatch && !parsed.pan) {
-      parsed.pan = panMatch[1];
-    }
-
-    // Extract email
-    const emailMatch = line.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-    if (emailMatch && !parsed.email) {
-      parsed.email = emailMatch[1];
-    }
-
-    // Extract statement period
-    const periodMatch = line.match(/(\d{2}-[A-Za-z]{3}-\d{4})\s*to\s*(\d{2}-[A-Za-z]{3}-\d{4})/i);
-    if (periodMatch) {
-      parsed.statementPeriod.from = periodMatch[1];
-      parsed.statementPeriod.to = periodMatch[2];
-    }
-
-    // Detect folio start - look for AMC names or Folio No
-    const folioMatch = line.match(/Folio\s*No[.:]\s*(\d+[\d\/]*)/i);
-    if (folioMatch) {
-      if (currentFolio) {
-        parsed.folios.push(currentFolio);
-      }
-      currentFolio = {
-        folioNumber: folioMatch[1],
-        amc: '',
-        schemeName: '',
-        pan: parsed.pan,
-        registrar: '',
-        closingBalance: 0,
-        transactions: []
-      };
-      inTransactionSection = false;
-    }
-
-    // Detect AMC name
-    const amcPatterns = [
-      /^(HDFC|ICICI|SBI|Axis|Kotak|Nippon|Aditya Birla|UTI|DSP|Tata|Franklin|Mirae|PPFAS|Motilal|Edelweiss|IDFC|L&T|Invesco|Sundaram|Canara|Baroda|Union|HSBC|Principal|Quantum|Mahindra|PGIM|ITI|Navi|Groww|Zerodha)/i
-    ];
+    const lineLower = line.toLowerCase();
     
-    for (const pattern of amcPatterns) {
-      const amcMatch = line.match(pattern);
-      if (amcMatch && currentFolio && !currentFolio.amc) {
-        currentFolio.amc = line;
+    // Check for AMC name
+    for (const amc of amcNames) {
+      if (line.toUpperCase().includes(amc.toUpperCase()) && 
+          (lineLower.includes('mutual fund') || lineLower.includes('asset management') || 
+           lineLower.includes('amc') || line.match(new RegExp(amc, 'i')))) {
+        currentAMC = line;
         break;
       }
     }
 
-    // Detect scheme name (usually follows AMC or contains "Fund", "Scheme", "Plan")
-    if (currentFolio && !currentFolio.schemeName && 
-        (line.includes('Fund') || line.includes('Scheme') || line.includes('Plan') || line.includes('Growth') || line.includes('Dividend'))) {
-      if (!line.includes('Folio') && !line.includes('NAV') && line.length > 10) {
+    // Look for Folio patterns - NSDL format
+    const folioPatterns = [
+      /Folio\s*(?:No\.?|Number)?[:\s]*([A-Z0-9\/\-]+)/i,
+      /Folio[:\s]+([A-Z0-9\/\-]+)/i,
+      /([A-Z0-9]{8,}\/[A-Z0-9]+)/  // Format like 12345678/12
+    ];
+    
+    for (const pattern of folioPatterns) {
+      const folioMatch = line.match(pattern);
+      if (folioMatch) {
+        // Save previous folio
+        if (currentFolio && currentFolio.schemeName) {
+          parsed.folios.push(currentFolio);
+        }
+        
+        currentFolio = {
+          folioNumber: folioMatch[1],
+          amc: currentAMC,
+          schemeName: '',
+          pan: parsed.pan,
+          registrar: '',
+          closingBalance: 0,
+          transactions: []
+        };
+        break;
+      }
+    }
+
+    // Look for scheme name - contains Fund, Growth, Direct, Regular, etc.
+    if (currentFolio && !currentFolio.schemeName) {
+      const schemeIndicators = ['fund', 'growth', 'direct', 'regular', 'plan', 'dividend', 'idcw', 'flexi', 'equity', 'debt', 'hybrid', 'index', 'gilt', 'liquid'];
+      const hasSchemeIndicator = schemeIndicators.some(ind => lineLower.includes(ind));
+      
+      if (hasSchemeIndicator && line.length > 15 && !lineLower.includes('folio') && !lineLower.includes('nav')) {
         currentFolio.schemeName = line.replace(/\s+/g, ' ').trim();
       }
     }
 
-    // Detect registrar
-    if (line.includes('CAMS') || line.includes('KARVY') || line.includes('KFINTECH') || line.includes('FRANKLIN')) {
-      if (currentFolio) {
-        currentFolio.registrar = line.includes('CAMS') ? 'CAMS' : 
-                                 line.includes('KFINTECH') ? 'KFINTECH' : 
-                                 line.includes('KARVY') ? 'KARVY' : 'OTHER';
-      }
-    }
-
-    // Parse transactions - look for date patterns with amounts
-    const transactionMatch = line.match(/(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)/);
-    if (transactionMatch && currentFolio) {
-      const [, date, description, amount, units, nav, balance] = transactionMatch;
+    // Look for units/balance - NSDL format often has "Units: X.XXX" or just numbers
+    if (currentFolio) {
+      // Pattern: Closing Balance or Units followed by number
+      const unitsPatterns = [
+        /(?:Closing\s*)?(?:Unit\s*)?Balance[:\s]*([\d,]+\.?\d*)/i,
+        /Units[:\s]*([\d,]+\.?\d*)/i,
+        /Total\s*Units[:\s]*([\d,]+\.?\d*)/i,
+        /Available\s*Units[:\s]*([\d,]+\.?\d*)/i
+      ];
       
-      let type: CASTransaction['type'] = 'BUY';
-      const descLower = description.toLowerCase();
-      if (descLower.includes('redemption') || descLower.includes('redeem')) type = 'REDEMPTION';
-      else if (descLower.includes('sip') || descLower.includes('systematic')) type = 'SIP';
-      else if (descLower.includes('switch') && descLower.includes('in')) type = 'SWITCH_IN';
-      else if (descLower.includes('switch') && descLower.includes('out')) type = 'SWITCH_OUT';
-      else if (descLower.includes('dividend')) type = 'DIVIDEND';
-      else if (descLower.includes('swp')) type = 'SWP';
-      else if (parseFloat(units.replace(/,/g, '')) < 0) type = 'SELL';
+      for (const pattern of unitsPatterns) {
+        const unitsMatch = line.match(pattern);
+        if (unitsMatch) {
+          const units = parseFloat(unitsMatch[1].replace(/,/g, ''));
+          if (units > 0) {
+            currentFolio.closingBalance = units;
+          }
+          break;
+        }
+      }
 
-      currentFolio.transactions.push({
-        date,
-        description: description.trim(),
-        amount: parseFloat(amount.replace(/,/g, '')),
-        units: parseFloat(units.replace(/,/g, '')),
-        nav: parseFloat(nav.replace(/,/g, '')),
-        balance: parseFloat(balance.replace(/,/g, '')),
-        type
-      });
+      // Look for NAV
+      const navPatterns = [
+        /NAV[:\s]*(?:Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)/i,
+        /(?:Current|Latest)\s*NAV[:\s]*([\d,]+\.?\d*)/i
+      ];
+      
+      for (const pattern of navPatterns) {
+        const navMatch = line.match(pattern);
+        if (navMatch) {
+          currentFolio.closingNav = parseFloat(navMatch[1].replace(/,/g, ''));
+          break;
+        }
+      }
+
+      // Look for value
+      const valuePatterns = [
+        /(?:Market\s*)?Value[:\s]*(?:Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)/i,
+        /(?:Current|Total)\s*Value[:\s]*(?:Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)/i,
+        /Valuation[:\s]*(?:Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)/i
+      ];
+      
+      for (const pattern of valuePatterns) {
+        const valueMatch = line.match(pattern);
+        if (valueMatch) {
+          const value = parseFloat(valueMatch[1].replace(/,/g, ''));
+          if (value > 0) {
+            currentFolio.closingValue = value;
+          }
+          break;
+        }
+      }
+
+      // Parse transaction lines - date followed by description and numbers
+      // Format: DD-MMM-YYYY Description Amount Units NAV Balance
+      const txPatterns = [
+        /(\d{2}[-\/][A-Za-z]{3}[-\/]\d{4})\s+(.+?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)/,
+        /(\d{2}[-\/]\d{2}[-\/]\d{4})\s+(.+?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)/
+      ];
+      
+      for (const pattern of txPatterns) {
+        const txMatch = line.match(pattern);
+        if (txMatch) {
+          const [, date, description, ...numbers] = txMatch;
+          const amount = parseFloat(numbers[0]?.replace(/,/g, '') || '0');
+          const units = parseFloat(numbers[1]?.replace(/,/g, '') || '0');
+          const nav = parseFloat(numbers[2]?.replace(/,/g, '') || '0');
+          const balance = parseFloat(numbers[3]?.replace(/,/g, '') || '0');
+          
+          let type: CASTransaction['type'] = 'BUY';
+          const descLower = description.toLowerCase();
+          if (descLower.includes('redemption') || descLower.includes('redeem')) type = 'REDEMPTION';
+          else if (descLower.includes('sip') || descLower.includes('systematic')) type = 'SIP';
+          else if (descLower.includes('switch') && descLower.includes('in')) type = 'SWITCH_IN';
+          else if (descLower.includes('switch') && descLower.includes('out')) type = 'SWITCH_OUT';
+          else if (descLower.includes('dividend')) type = 'DIVIDEND';
+          else if (descLower.includes('swp')) type = 'SWP';
+          else if (units < 0) type = 'SELL';
+
+          currentFolio.transactions.push({
+            date,
+            description: description.trim(),
+            amount: Math.abs(amount),
+            units: Math.abs(units),
+            nav,
+            balance,
+            type
+          });
+          break;
+        }
+      }
+
+      // Detect registrar
+      if (lineLower.includes('cams')) currentFolio.registrar = 'CAMS';
+      else if (lineLower.includes('kfintech') || lineLower.includes('karvy')) currentFolio.registrar = 'KFINTECH';
     }
 
-    // Extract closing balance
-    const closingMatch = line.match(/Closing\s*(?:Unit)?\s*Balance[:\s]*([\d,]+\.?\d*)/i);
-    if (closingMatch && currentFolio) {
-      currentFolio.closingBalance = parseFloat(closingMatch[1].replace(/,/g, ''));
-    }
-
-    // Extract closing NAV and value
-    const navMatch = line.match(/NAV[:\s]*([\d,]+\.?\d*)/i);
-    if (navMatch && currentFolio) {
-      currentFolio.closingNav = parseFloat(navMatch[1].replace(/,/g, ''));
-    }
-
-    const valueMatch = line.match(/(?:Market\s*)?Value[:\s]*(?:Rs\.?|INR)?\s*([\d,]+\.?\d*)/i);
-    if (valueMatch && currentFolio) {
-      currentFolio.closingValue = parseFloat(valueMatch[1].replace(/,/g, ''));
-    }
+    i++;
   }
 
   // Add last folio
-  if (currentFolio) {
+  if (currentFolio && (currentFolio.schemeName || currentFolio.closingBalance > 0)) {
     parsed.folios.push(currentFolio);
+  }
+
+  // If no folios found with the above method, try alternative parsing
+  // Look for patterns like "Scheme Name" followed by units/value on subsequent lines
+  if (parsed.folios.length === 0) {
+    console.log('Primary parsing found no folios, trying alternative method...');
+    
+    // Try to find any scheme-like entries
+    for (let j = 0; j < lines.length; j++) {
+      const line = lines[j];
+      const lineLower = line.toLowerCase();
+      
+      // Look for lines that look like scheme names
+      if ((lineLower.includes('fund') || lineLower.includes('growth') || lineLower.includes('direct')) &&
+          line.length > 20 && !lineLower.includes('folio') && !lineLower.includes('statement')) {
+        
+        // Look ahead for units/value
+        let units = 0;
+        let nav = 0;
+        let value = 0;
+        
+        for (let k = j + 1; k < Math.min(j + 10, lines.length); k++) {
+          const nextLine = lines[k];
+          
+          const unitsMatch = nextLine.match(/([\d,]+\.\d{3,})/);
+          if (unitsMatch && units === 0) {
+            units = parseFloat(unitsMatch[1].replace(/,/g, ''));
+          }
+          
+          const navMatch = nextLine.match(/NAV[:\s]*([\d,]+\.?\d*)/i);
+          if (navMatch) {
+            nav = parseFloat(navMatch[1].replace(/,/g, ''));
+          }
+          
+          const valueMatch = nextLine.match(/(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)/i);
+          if (valueMatch && value === 0) {
+            value = parseFloat(valueMatch[1].replace(/,/g, ''));
+          }
+        }
+        
+        if (units > 0 || value > 0) {
+          parsed.folios.push({
+            folioNumber: 'Unknown',
+            amc: '',
+            schemeName: line.replace(/\s+/g, ' ').trim(),
+            pan: parsed.pan,
+            registrar: '',
+            closingBalance: units,
+            closingNav: nav,
+            closingValue: value,
+            transactions: []
+          });
+        }
+      }
+    }
   }
 
   // Calculate summary
@@ -195,7 +331,12 @@ function parseCASText(text: string): ParsedCAS {
   for (const folio of parsed.folios) {
     if (folio.closingValue) {
       parsed.summary.currentValue += folio.closingValue;
+    } else if (folio.closingBalance && folio.closingNav) {
+      const calculatedValue = folio.closingBalance * folio.closingNav;
+      folio.closingValue = calculatedValue;
+      parsed.summary.currentValue += calculatedValue;
     }
+    
     for (const tx of folio.transactions) {
       if (tx.type === 'BUY' || tx.type === 'SIP') {
         parsed.summary.totalInvested += Math.abs(tx.amount);
