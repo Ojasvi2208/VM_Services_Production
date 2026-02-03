@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { Pool } from 'pg';
+import { getCurrentUser } from '@/lib/auth';
+import pool from '@/lib/postgres-db';
 import PDFParser from 'pdf2json';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
 
 interface CASTransaction {
   date: string;
@@ -43,22 +38,6 @@ interface ParsedCAS {
     totalInvested: number;
     currentValue: number;
   };
-}
-
-async function getUserFromSession(): Promise<{ id: string; email: string } | null> {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  
-  if (!sessionToken) return null;
-  
-  const result = await pool.query(
-    `SELECT u.id, u.email FROM users u
-     JOIN user_sessions s ON u.id = s.user_id
-     WHERE s.token = $1 AND s.expires_at > NOW()`,
-    [sessionToken]
-  );
-  
-  return result.rows[0] || null;
 }
 
 function parseCASText(text: string): ParsedCAS {
@@ -248,7 +227,7 @@ async function matchSchemeCode(schemeName: string): Promise<string | null> {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUserFromSession();
+    const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -337,7 +316,7 @@ export async function POST(request: NextRequest) {
 // Save parsed holdings to database
 export async function PUT(request: NextRequest) {
   try {
-    const user = await getUserFromSession();
+    const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
