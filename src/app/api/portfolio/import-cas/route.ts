@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import pool from '@/lib/postgres-db';
 import { extractText, getDocumentProxy } from 'unpdf';
+import { deobfuscateFromTransport } from '@/lib/encryption';
 
 interface CASTransaction {
   date: string;
@@ -375,11 +376,14 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get('casFile') as File;
-    const password = formData.get('password') as string;
+    const obfuscatedPassword = formData.get('password') as string;
 
     if (!file) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
+
+    // Deobfuscate password if provided
+    const password = obfuscatedPassword ? deobfuscateFromTransport(obfuscatedPassword) : undefined;
 
     // Convert file to buffer for server-side PDF parsing
     const arrayBuffer = await file.arrayBuffer();

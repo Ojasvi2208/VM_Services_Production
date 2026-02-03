@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { obfuscateForTransport } from '@/lib/encryption';
 
 interface CASTransaction {
   date: string;
@@ -81,7 +82,8 @@ export default function CASUploader({ onImportComplete }: CASUploaderProps) {
       const formData = new FormData();
       formData.append('casFile', file);
       if (password) {
-        formData.append('password', password);
+        // Obfuscate password so it's not visible in plain text in DevTools
+        formData.append('password', obfuscateForTransport(password));
       }
 
       const response = await fetch('/api/portfolio/import-cas', {

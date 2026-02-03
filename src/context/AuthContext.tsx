@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { obfuscateForTransport } from '@/lib/encryption';
 
 interface User {
   id: string;
@@ -51,10 +52,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
+      // Obfuscate password so it's not visible in plain text in DevTools
+      const obfuscatedPassword = obfuscateForTransport(password);
+      
       const response = await fetch('/api/auth/signin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password: obfuscatedPassword })
       });
 
       const data = await response.json();
@@ -77,10 +81,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     phone?: string
   ): Promise<{ success: boolean; error?: string }> => {
     try {
+      // Obfuscate password so it's not visible in plain text in DevTools
+      const obfuscatedPassword = obfuscateForTransport(password);
+      
       const response = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, fullName, phone })
+        body: JSON.stringify({ email, password: obfuscatedPassword, fullName, phone })
       });
 
       const data = await response.json();

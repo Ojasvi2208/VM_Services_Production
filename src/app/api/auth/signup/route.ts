@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { registerUser, createSession, SESSION_COOKIE_NAME } from '@/lib/auth';
+import { deobfuscateFromTransport } from '@/lib/encryption';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, fullName, phone } = body;
+    const { email, password: obfuscatedPassword, fullName, phone } = body;
 
     // Validation
-    if (!email || !password || !fullName) {
+    if (!email || !obfuscatedPassword || !fullName) {
       return NextResponse.json(
         { success: false, error: 'Email, password, and full name are required' },
         { status: 400 }
       );
     }
+
+    // Deobfuscate password
+    const password = deobfuscateFromTransport(obfuscatedPassword);
 
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

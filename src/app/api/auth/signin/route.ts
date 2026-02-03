@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { loginUser, createSession, SESSION_COOKIE_NAME } from '@/lib/auth';
+import { deobfuscateFromTransport } from '@/lib/encryption';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password } = body;
+    const { email, password: obfuscatedPassword } = body;
 
     // Validation
-    if (!email || !password) {
+    if (!email || !obfuscatedPassword) {
       return NextResponse.json(
         { success: false, error: 'Email and password are required' },
         { status: 400 }
       );
     }
+
+    // Deobfuscate password
+    const password = deobfuscateFromTransport(obfuscatedPassword);
 
     // Login user
     const result = await loginUser(email, password);
