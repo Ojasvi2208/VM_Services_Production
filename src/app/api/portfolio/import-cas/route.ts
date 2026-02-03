@@ -19,6 +19,7 @@ interface CASFolio {
   amc: string;
   schemeName: string;
   schemeCode?: string;
+  costValue?: number;
   pan: string;
   registrar: string;
   closingBalance: number;
@@ -44,7 +45,7 @@ interface ParsedCAS {
 function parseCASText(text: string): ParsedCAS {
   // Normalize text - handle various line endings and extra spaces
   const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const lines = normalizedText.split('\n').map(l => l.trim()).filter(l => l);
+  const fullText = normalizedText.replace(/\s+/g, ' ');
   
   const parsed: ParsedCAS = {
     investorName: '',
@@ -60,261 +61,180 @@ function parseCASText(text: string): ParsedCAS {
     }
   };
 
-  // Join all text for regex matching across lines
-  const fullText = lines.join(' ');
-  
-  // Extract PAN - multiple patterns
+  // Extract investor name - look for pattern after NSDL ID
+  const nameMatch = fullText.match(/NSDL ID:\s*\d+\s+([A-Z][A-Z\s]+?)(?:\s+H\s*NO|\s+FLAT|\s+HOUSE|\s+\d)/i);
+  if (nameMatch) {
+    parsed.investorName = nameMatch[1].trim();
+  }
+
+  // Extract PAN - look for full PAN or masked PAN
   const panPatterns = [
+    /\[([A-Z]{5}[0-9]{4}[A-Z])\]/,  // [BUFPM1041P]
     /PAN\s*[:\-]?\s*([A-Z]{5}[0-9]{4}[A-Z])/i,
-    /\b([A-Z]{5}[0-9]{4}[A-Z])\b/
+    /PAN\s*[:\-]?\s*([A-Z]{2}X{4,6}[0-9]?[A-Z0-9]?[A-Z])/i  // Masked PAN like BUXXXXXX1P
   ];
   for (const pattern of panPatterns) {
     const match = fullText.match(pattern);
-    if (match && !parsed.pan) {
+    if (match) {
       parsed.pan = match[1].toUpperCase();
       break;
     }
   }
 
-  // Extract email
-  const emailMatch = fullText.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-  if (emailMatch) {
-    parsed.email = emailMatch[1];
+  // Extract statement period
+  const periodMatch = fullText.match(/(?:period\s+)?from\s+(\d{2}-[A-Za-z]{3}-\d{4})\s+to\s+(\d{2}-[A-Za-z]{3}-\d{4})/i);
+  if (periodMatch) {
+    parsed.statementPeriod.from = periodMatch[1];
+    parsed.statementPeriod.to = periodMatch[2];
   }
 
-  // Extract statement period - multiple formats
-  const periodPatterns = [
-    /(\d{2}[-\/][A-Za-z]{3}[-\/]\d{4})\s*(?:to|-)\s*(\d{2}[-\/][A-Za-z]{3}[-\/]\d{4})/i,
-    /Period\s*[:\-]?\s*(\d{2}[-\/]\d{2}[-\/]\d{4})\s*(?:to|-)\s*(\d{2}[-\/]\d{2}[-\/]\d{4})/i,
-    /from\s*(\d{2}[-\/][A-Za-z]{3}[-\/]\d{4})\s*to\s*(\d{2}[-\/][A-Za-z]{3}[-\/]\d{4})/i
-  ];
-  for (const pattern of periodPatterns) {
-    const match = fullText.match(pattern);
-    if (match) {
-      parsed.statementPeriod.from = match[1];
-      parsed.statementPeriod.to = match[2];
-      break;
-    }
-  }
-
-  // NSDL CAS Format parsing - look for mutual fund sections
-  // Pattern: AMC name followed by folio and scheme details
+  // NSDL CAS ISIN-based parsing
+  // Pattern 1: Mutual Funds in Demat - ISIN followed by scheme name, units, NAV, value
+  // Format: INFxxxxx SCHEME NAME X,XXX.XXX XXX.XXXX XX,XXX.XX
   
-  // Common AMC names
-  const amcNames = [
-    'HDFC', 'ICICI', 'SBI', 'Axis', 'Kotak', 'Nippon', 'Aditya Birla', 'UTI', 'DSP', 
-    'Tata', 'Franklin', 'Mirae', 'PPFAS', 'Motilal', 'Edelweiss', 'IDFC', 'L&T', 
-    'Invesco', 'Sundaram', 'Canara', 'Baroda', 'Union', 'HSBC', 'Principal', 
-    'Quantum', 'Mahindra', 'PGIM', 'ITI', 'Navi', 'Groww', 'Bandhan', 'Quant',
-    'Parag Parikh', 'WhiteOak', 'JM Financial', 'LIC', 'IDBI', 'BOI AXA', 'Shriram'
-  ];
+  // Find all ISIN codes for mutual funds (start with INF)
+  const isinPattern = /\b(INF[A-Z0-9]{9})\b/g;
+  const isins = new Set<string>();
+  let isinMatch;
+  while ((isinMatch = isinPattern.exec(fullText)) !== null) {
+    isins.add(isinMatch[1]);
+  }
 
-  let currentFolio: CASFolio | null = null;
-  let currentAMC = '';
-  let i = 0;
+  console.log(`Found ${isins.size} unique mutual fund ISINs`);
 
-  while (i < lines.length) {
-    const line = lines[i];
-    const lineLower = line.toLowerCase();
+  // For each ISIN, extract the scheme details
+  for (const isin of isins) {
+    // Pattern for Mutual Funds in Demat section:
+    // ISIN SCHEME_NAME UNITS NAV VALUE
+    // Example: INF179K01574 HDFC FOCUSED 30 FUND REGULAR PLAN GROWTH OPTION 7,346.606 217.2050 15,95,719.55
     
-    // Check for AMC name
-    for (const amc of amcNames) {
-      if (line.toUpperCase().includes(amc.toUpperCase()) && 
-          (lineLower.includes('mutual fund') || lineLower.includes('asset management') || 
-           lineLower.includes('amc') || line.match(new RegExp(amc, 'i')))) {
-        currentAMC = line;
-        break;
-      }
-    }
-
-    // Look for Folio patterns - NSDL format
-    const folioPatterns = [
-      /Folio\s*(?:No\.?|Number)?[:\s]*([A-Z0-9\/\-]+)/i,
-      /Folio[:\s]+([A-Z0-9\/\-]+)/i,
-      /([A-Z0-9]{8,}\/[A-Z0-9]+)/  // Format like 12345678/12
-    ];
+    // Build regex to find this ISIN and its data
+    const isinEscaped = isin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     
-    for (const pattern of folioPatterns) {
-      const folioMatch = line.match(pattern);
-      if (folioMatch) {
-        // Save previous folio
-        if (currentFolio && currentFolio.schemeName) {
-          parsed.folios.push(currentFolio);
+    // Try to match ISIN followed by scheme name and numbers
+    // The scheme name contains words, then we have units (decimal), NAV (decimal), value (decimal)
+    const schemePattern = new RegExp(
+      isinEscaped + 
+      '\\s+([A-Z][A-Z0-9\\s\\-\\/&]+(?:FUND|GROWTH|PLAN|OPTION|SCHEME)[A-Z0-9\\s\\-\\/&]*)' +
+      '(?:\\s+of\\s+which\\s+locked-in\\s+[\\d,\\.]+)?\\s*' +
+      '([\\d,]+\\.\\d{2,4})\\s+' +  // Units
+      '([\\d,]+\\.\\d{2,4})\\s+' +  // NAV
+      '([\\d,]+\\.\\d{2})',          // Value
+      'i'
+    );
+    
+    const schemeMatch = fullText.match(schemePattern);
+    
+    if (schemeMatch) {
+      const schemeName = schemeMatch[1].replace(/\s+/g, ' ').trim();
+      const units = parseFloat(schemeMatch[2].replace(/,/g, ''));
+      const nav = parseFloat(schemeMatch[3].replace(/,/g, ''));
+      const value = parseFloat(schemeMatch[4].replace(/,/g, ''));
+      
+      // Only add if units > 0 (skip zero balance holdings)
+      if (units > 0) {
+        // Extract AMC from scheme name
+        let amc = '';
+        const amcPatterns = ['HDFC', 'ICICI', 'SBI', 'Axis', 'Kotak', 'Nippon', 'DSP', 'Motilal', 'Canara', 'Quant', 'NJ', 'Tata', 'UTI', 'Aditya Birla', 'Franklin', 'Mirae', 'PPFAS', 'Edelweiss', 'IDFC', 'L&T', 'Invesco', 'Sundaram', 'Baroda', 'Union', 'HSBC', 'Quantum', 'Mahindra', 'PGIM', 'Bandhan', 'WhiteOak', 'JM', 'LIC'];
+        for (const amcName of amcPatterns) {
+          if (schemeName.toUpperCase().includes(amcName.toUpperCase())) {
+            amc = amcName;
+            break;
+          }
         }
         
-        currentFolio = {
-          folioNumber: folioMatch[1],
-          amc: currentAMC,
-          schemeName: '',
+        parsed.folios.push({
+          folioNumber: isin, // Use ISIN as identifier for demat holdings
+          amc: amc,
+          schemeName: schemeName,
+          schemeCode: isin,
           pan: parsed.pan,
-          registrar: '',
-          closingBalance: 0,
+          registrar: 'NSDL',
+          closingBalance: units,
+          closingNav: nav,
+          closingValue: value,
           transactions: []
-        };
-        break;
+        });
       }
     }
-
-    // Look for scheme name - contains Fund, Growth, Direct, Regular, etc.
-    if (currentFolio && !currentFolio.schemeName) {
-      const schemeIndicators = ['fund', 'growth', 'direct', 'regular', 'plan', 'dividend', 'idcw', 'flexi', 'equity', 'debt', 'hybrid', 'index', 'gilt', 'liquid'];
-      const hasSchemeIndicator = schemeIndicators.some(ind => lineLower.includes(ind));
-      
-      if (hasSchemeIndicator && line.length > 15 && !lineLower.includes('folio') && !lineLower.includes('nav')) {
-        currentFolio.schemeName = line.replace(/\s+/g, ' ').trim();
-      }
-    }
-
-    // Look for units/balance - NSDL format often has "Units: X.XXX" or just numbers
-    if (currentFolio) {
-      // Pattern: Closing Balance or Units followed by number
-      const unitsPatterns = [
-        /(?:Closing\s*)?(?:Unit\s*)?Balance[:\s]*([\d,]+\.?\d*)/i,
-        /Units[:\s]*([\d,]+\.?\d*)/i,
-        /Total\s*Units[:\s]*([\d,]+\.?\d*)/i,
-        /Available\s*Units[:\s]*([\d,]+\.?\d*)/i
-      ];
-      
-      for (const pattern of unitsPatterns) {
-        const unitsMatch = line.match(pattern);
-        if (unitsMatch) {
-          const units = parseFloat(unitsMatch[1].replace(/,/g, ''));
-          if (units > 0) {
-            currentFolio.closingBalance = units;
-          }
-          break;
-        }
-      }
-
-      // Look for NAV
-      const navPatterns = [
-        /NAV[:\s]*(?:Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)/i,
-        /(?:Current|Latest)\s*NAV[:\s]*([\d,]+\.?\d*)/i
-      ];
-      
-      for (const pattern of navPatterns) {
-        const navMatch = line.match(pattern);
-        if (navMatch) {
-          currentFolio.closingNav = parseFloat(navMatch[1].replace(/,/g, ''));
-          break;
-        }
-      }
-
-      // Look for value
-      const valuePatterns = [
-        /(?:Market\s*)?Value[:\s]*(?:Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)/i,
-        /(?:Current|Total)\s*Value[:\s]*(?:Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)/i,
-        /Valuation[:\s]*(?:Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)/i
-      ];
-      
-      for (const pattern of valuePatterns) {
-        const valueMatch = line.match(pattern);
-        if (valueMatch) {
-          const value = parseFloat(valueMatch[1].replace(/,/g, ''));
-          if (value > 0) {
-            currentFolio.closingValue = value;
-          }
-          break;
-        }
-      }
-
-      // Parse transaction lines - date followed by description and numbers
-      // Format: DD-MMM-YYYY Description Amount Units NAV Balance
-      const txPatterns = [
-        /(\d{2}[-\/][A-Za-z]{3}[-\/]\d{4})\s+(.+?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)/,
-        /(\d{2}[-\/]\d{2}[-\/]\d{4})\s+(.+?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)/
-      ];
-      
-      for (const pattern of txPatterns) {
-        const txMatch = line.match(pattern);
-        if (txMatch) {
-          const [, date, description, ...numbers] = txMatch;
-          const amount = parseFloat(numbers[0]?.replace(/,/g, '') || '0');
-          const units = parseFloat(numbers[1]?.replace(/,/g, '') || '0');
-          const nav = parseFloat(numbers[2]?.replace(/,/g, '') || '0');
-          const balance = parseFloat(numbers[3]?.replace(/,/g, '') || '0');
-          
-          let type: CASTransaction['type'] = 'BUY';
-          const descLower = description.toLowerCase();
-          if (descLower.includes('redemption') || descLower.includes('redeem')) type = 'REDEMPTION';
-          else if (descLower.includes('sip') || descLower.includes('systematic')) type = 'SIP';
-          else if (descLower.includes('switch') && descLower.includes('in')) type = 'SWITCH_IN';
-          else if (descLower.includes('switch') && descLower.includes('out')) type = 'SWITCH_OUT';
-          else if (descLower.includes('dividend')) type = 'DIVIDEND';
-          else if (descLower.includes('swp')) type = 'SWP';
-          else if (units < 0) type = 'SELL';
-
-          currentFolio.transactions.push({
-            date,
-            description: description.trim(),
-            amount: Math.abs(amount),
-            units: Math.abs(units),
-            nav,
-            balance,
-            type
-          });
-          break;
-        }
-      }
-
-      // Detect registrar
-      if (lineLower.includes('cams')) currentFolio.registrar = 'CAMS';
-      else if (lineLower.includes('kfintech') || lineLower.includes('karvy')) currentFolio.registrar = 'KFINTECH';
-    }
-
-    i++;
   }
 
-  // Add last folio
-  if (currentFolio && (currentFolio.schemeName || currentFolio.closingBalance > 0)) {
-    parsed.folios.push(currentFolio);
-  }
-
-  // If no folios found with the above method, try alternative parsing
-  // Look for patterns like "Scheme Name" followed by units/value on subsequent lines
-  if (parsed.folios.length === 0) {
-    console.log('Primary parsing found no folios, trying alternative method...');
+  // Pattern 2: Mutual Fund Folios section
+  // Format: ISIN UCC SCHEME_NAME FOLIO_NO UNITS AVG_COST TOTAL_COST CURRENT_NAV CURRENT_VALUE P/L RETURN%
+  // Example: INF760K01167 NOT AVAILABLE Canara Robeco Emerging Equities - Regular Growth 1219192596 4.090 92.9609 380.21 248.3000 1,015.55 635.34 18.30
+  
+  const folioSectionMatch = fullText.match(/Mutual Fund Folios \(F\)([\s\S]*?)(?:Notes:|Page \d|$)/i);
+  if (folioSectionMatch) {
+    const folioSection = folioSectionMatch[1];
     
-    // Try to find any scheme-like entries
-    for (let j = 0; j < lines.length; j++) {
-      const line = lines[j];
-      const lineLower = line.toLowerCase();
+    // Find ISINs in folio section
+    const folioIsinPattern = /\b(INF[A-Z0-9]{9})\s+(?:NOT AVAILABLE|[A-Z0-9]+)\s+([A-Za-z][A-Za-z0-9\s\-\/&]+(?:Growth|Fund|Plan))\s+(\d{8,12})\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)/gi;
+    
+    let folioMatch;
+    while ((folioMatch = folioIsinPattern.exec(folioSection)) !== null) {
+      const isin = folioMatch[1];
+      const schemeName = folioMatch[2].replace(/\s+/g, ' ').trim();
+      const folioNumber = folioMatch[3];
+      const units = parseFloat(folioMatch[4].replace(/,/g, ''));
+      const avgCost = parseFloat(folioMatch[5].replace(/,/g, ''));
+      const totalCost = parseFloat(folioMatch[6].replace(/,/g, ''));
+      const currentNav = parseFloat(folioMatch[7].replace(/,/g, ''));
+      const currentValue = parseFloat(folioMatch[8].replace(/,/g, ''));
       
-      // Look for lines that look like scheme names
-      if ((lineLower.includes('fund') || lineLower.includes('growth') || lineLower.includes('direct')) &&
-          line.length > 20 && !lineLower.includes('folio') && !lineLower.includes('statement')) {
-        
-        // Look ahead for units/value
-        let units = 0;
-        let nav = 0;
-        let value = 0;
-        
-        for (let k = j + 1; k < Math.min(j + 10, lines.length); k++) {
-          const nextLine = lines[k];
-          
-          const unitsMatch = nextLine.match(/([\d,]+\.\d{3,})/);
-          if (unitsMatch && units === 0) {
-            units = parseFloat(unitsMatch[1].replace(/,/g, ''));
+      if (units > 0) {
+        // Check if this folio already exists
+        const existingFolio = parsed.folios.find(f => f.folioNumber === folioNumber || f.schemeCode === isin);
+        if (!existingFolio) {
+          let amc = '';
+          const amcPatterns = ['HDFC', 'ICICI', 'SBI', 'Axis', 'Kotak', 'Nippon', 'DSP', 'Motilal', 'Canara', 'Quant', 'NJ', 'Tata', 'UTI', 'Aditya Birla', 'Franklin', 'Mirae', 'PPFAS', 'Edelweiss', 'IDFC', 'L&T', 'Invesco', 'Sundaram', 'Baroda', 'Union', 'HSBC', 'Quantum', 'Mahindra', 'PGIM', 'Bandhan', 'WhiteOak', 'JM', 'LIC'];
+          for (const amcName of amcPatterns) {
+            if (schemeName.toUpperCase().includes(amcName.toUpperCase())) {
+              amc = amcName;
+              break;
+            }
           }
           
-          const navMatch = nextLine.match(/NAV[:\s]*([\d,]+\.?\d*)/i);
-          if (navMatch) {
-            nav = parseFloat(navMatch[1].replace(/,/g, ''));
-          }
-          
-          const valueMatch = nextLine.match(/(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)/i);
-          if (valueMatch && value === 0) {
-            value = parseFloat(valueMatch[1].replace(/,/g, ''));
-          }
-        }
-        
-        if (units > 0 || value > 0) {
           parsed.folios.push({
-            folioNumber: 'Unknown',
-            amc: '',
-            schemeName: line.replace(/\s+/g, ' ').trim(),
+            folioNumber: folioNumber,
+            amc: amc,
+            schemeName: schemeName,
+            schemeCode: isin,
             pan: parsed.pan,
-            registrar: '',
+            registrar: 'KFIN',
+            closingBalance: units,
+            closingNav: currentNav,
+            closingValue: currentValue,
+            costValue: totalCost,
+            transactions: []
+          });
+        }
+      }
+    }
+  }
+
+  // If still no folios found, try a simpler pattern matching
+  if (parsed.folios.length === 0) {
+    console.log('ISIN-based parsing found no folios, trying simpler pattern...');
+    
+    // Look for any line with FUND/GROWTH and numbers
+    const simplePattern = /([A-Z][A-Za-z0-9\s\-\/&]+(?:FUND|GROWTH|PLAN)[A-Za-z0-9\s\-\/&]*)\s+([\d,]+\.?\d{3})\s+([\d,]+\.?\d{4})\s+([\d,]+\.?\d{2})/gi;
+    let simpleMatch;
+    while ((simpleMatch = simplePattern.exec(fullText)) !== null) {
+      const schemeName = simpleMatch[1].replace(/\s+/g, ' ').trim();
+      const units = parseFloat(simpleMatch[2].replace(/,/g, ''));
+      const nav = parseFloat(simpleMatch[3].replace(/,/g, ''));
+      const value = parseFloat(simpleMatch[4].replace(/,/g, ''));
+      
+      if (units > 0 && !schemeName.toLowerCase().includes('sub total') && !schemeName.toLowerCase().includes('total')) {
+        // Check for duplicates
+        const exists = parsed.folios.some(f => f.schemeName === schemeName);
+        if (!exists) {
+          parsed.folios.push({
+            folioNumber: 'DEMAT',
+            amc: '',
+            schemeName: schemeName,
+            pan: parsed.pan,
+            registrar: 'NSDL',
             closingBalance: units,
             closingNav: nav,
             closingValue: value,
@@ -338,15 +258,13 @@ function parseCASText(text: string): ParsedCAS {
       parsed.summary.currentValue += calculatedValue;
     }
     
-    for (const tx of folio.transactions) {
-      if (tx.type === 'BUY' || tx.type === 'SIP') {
-        parsed.summary.totalInvested += Math.abs(tx.amount);
-      } else if (tx.type === 'SELL' || tx.type === 'REDEMPTION') {
-        parsed.summary.totalInvested -= Math.abs(tx.amount);
-      }
+    if (folio.costValue) {
+      parsed.summary.totalInvested += folio.costValue;
     }
   }
 
+  console.log(`Parsed ${parsed.folios.length} mutual fund holdings`);
+  
   return parsed;
 }
 
