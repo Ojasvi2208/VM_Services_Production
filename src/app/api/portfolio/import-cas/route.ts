@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import pool from '@/lib/postgres-db';
-import PDFParser from 'pdf2json';
+import { extractText, getDocumentProxy } from 'unpdf';
 
 interface CASTransaction {
   date: string;
@@ -247,28 +247,18 @@ export async function POST(request: NextRequest) {
     let textContent = '';
     
     try {
-      // Parse PDF server-side using pdf2json
-      textContent = await new Promise<string>((resolve, reject) => {
-        const pdfParser = new PDFParser(null, true);
-        
-        pdfParser.on('pdfParser_dataError', (errData: Error | { parserError: Error }) => {
-          const error = 'parserError' in errData ? errData.parserError : errData;
-          reject(error);
-        });
-        
-        pdfParser.on('pdfParser_dataReady', () => {
-          const text = pdfParser.getRawTextContent();
-          resolve(text);
-        });
-        
-        // Parse from buffer
-        pdfParser.parseBuffer(buffer);
+      // Parse PDF server-side using unpdf (supports password-protected PDFs)
+      // First get document proxy with password, then extract text
+      const pdf = await getDocumentProxy(new Uint8Array(buffer), { 
+        password: password || undefined 
       });
+      const result = await extractText(pdf, { mergePages: true });
+      textContent = result.text;
     } catch (pdfError) {
       console.error('PDF parsing error:', pdfError);
       const errorMessage = pdfError instanceof Error ? pdfError.message : 'Unknown error';
       
-      if (errorMessage.includes('password') || errorMessage.includes('encrypted')) {
+      if (errorMessage.includes('password') || errorMessage.includes('encrypted') || errorMessage.includes('Incorrect Password')) {
         return NextResponse.json({ 
           error: 'This PDF is password protected. Please enter the correct password (usually your PAN like ABCDE1234F or DOB like 01011990).',
           requiresPassword: true 
