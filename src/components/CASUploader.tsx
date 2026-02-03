@@ -90,6 +90,11 @@ export default function CASUploader({ onImportComplete }: CASUploaderProps) {
       });
 
       const result = await response.json();
+      
+      // Log debug info to console
+      if (result.debug) {
+        console.log('CAS Parse Debug:', result.debug);
+      }
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to parse CAS');

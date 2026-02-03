@@ -277,6 +277,9 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // Log first 2000 chars of extracted text for debugging
+    console.log('Extracted PDF text (first 2000 chars):', textContent.substring(0, 2000));
+    
     // Parse the CAS text
     const parsedData = parseCASText(textContent);
 
@@ -291,7 +294,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: parsedData,
-      message: `Successfully parsed ${parsedData.folios.length} mutual fund holdings`
+      message: `Successfully parsed ${parsedData.folios.length} mutual fund holdings`,
+      debug: {
+        textLength: textContent.length,
+        textPreview: textContent.substring(0, 500)
+      }
     });
 
   } catch (error) {
