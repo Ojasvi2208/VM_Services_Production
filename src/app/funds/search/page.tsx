@@ -624,7 +624,7 @@ export default function EnhancedFundSearchPage() {
             {loading && (
               <div className="card-light p-12 text-center max-w-2xl mx-auto">
                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-brand-royal border-t-transparent mb-4"></div>
-                <p className="text-brand-navy/70">Searching 14,083+ funds...</p>
+                <p className="text-brand-navy/70">Searching 37,000+ funds...</p>
               </div>
             )}
 

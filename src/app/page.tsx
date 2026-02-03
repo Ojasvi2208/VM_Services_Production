@@ -137,7 +137,7 @@ export default function Home() {
         <ResponsiveContainer>
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-brand-navy mb-4">
-              Explore <span className="text-brand-gold">14,083+ Mutual Funds</span>
+              Explore <span className="text-brand-gold">37,000+ Mutual Funds</span>
             </h2>
             <p className="text-lg text-brand-navy/70 max-w-2xl mx-auto">
               Search, compare, and track your investments with our comprehensive tools
@@ -212,7 +212,7 @@ export default function Home() {
           {/* Stats Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-gradient-to-r from-brand-navy to-brand-royal rounded-2xl">
             <div className="text-center">
-              <div className="text-3xl font-bold text-brand-gold mb-1">14,083+</div>
+              <div className="text-3xl font-bold text-brand-gold mb-1">37,000+</div>
               <div className="text-white/80 text-sm">Mutual Funds</div>
             </div>
             <div className="text-center">

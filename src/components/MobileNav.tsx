@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 
 type MobileNavProps = {
   isOpen: boolean;
@@ -12,6 +13,7 @@ type MobileNavProps = {
 export default function MobileNav({ isOpen, onClose }: MobileNavProps) {
   const pathname = usePathname();
   const previousPathname = useRef(pathname);
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   
   // Close menu ONLY when pathname actually changes (navigation occurs)
   useEffect(() => {
@@ -34,15 +36,17 @@ export default function MobileNav({ isOpen, onClose }: MobileNavProps) {
     };
   }, [isOpen]);
 
+  // Build nav links dynamically based on auth state
   const navLinks = [
     { href: '/', label: 'Home' },
     { href: '/funds/search', label: 'Search Funds' },
     { href: '/funds/compare', label: 'Compare' },
-    { href: '/portfolio', label: 'Portfolio' },
+    ...(isAuthenticated ? [{ href: '/dashboard', label: 'Portfolio' }] : []),
     { href: '/calculators/sip', label: 'Calculators' },
     { href: '/partners', label: 'Partners' },
     { href: '/about', label: 'About' },
-    { href: '/contact', label: 'Contact' }
+    { href: '/contact', label: 'Contact' },
+    ...(!isAuthenticated && !authLoading ? [{ href: '/auth/signin', label: 'Sign In' }] : [])
   ];
   
   const isActive = (path: string) => {

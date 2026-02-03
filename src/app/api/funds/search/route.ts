@@ -1,6 +1,6 @@
 /**
  * Fast Fund Search API
- * Searches through 14,083+ funds in PostgreSQL
+ * Searches through 37,000+ funds in PostgreSQL
  * Optimized for speed with indexed queries
  */
 

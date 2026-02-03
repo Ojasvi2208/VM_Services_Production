@@ -6,11 +6,13 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import MobileNav from './MobileNav';
 import ComplianceNotice from './ComplianceNotice';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
+  const { isAuthenticated, user, isLoading: authLoading } = useAuth();
   
   // Handle scroll effect
   useEffect(() => {
@@ -36,15 +38,17 @@ export default function Header() {
     return false;
   };
   
+  // Build nav links dynamically based on auth state
   const navLinks = [
     { href: '/', label: 'Home' },
     { href: '/funds/search', label: 'Search Funds' },
     { href: '/funds/compare', label: 'Compare' },
-    { href: '/portfolio', label: 'Portfolio' },
+    ...(isAuthenticated ? [{ href: '/dashboard', label: 'Portfolio' }] : []),
     { href: '/calculators/sip', label: 'Calculators' },
     { href: '/partners', label: 'Partners' },
     { href: '/about', label: 'About' },
-    { href: '/contact', label: 'Contact' }
+    { href: '/contact', label: 'Contact' },
+    ...(!isAuthenticated && !authLoading ? [{ href: '/auth/signin', label: 'Sign In' }] : [])
   ];
 
   return (
