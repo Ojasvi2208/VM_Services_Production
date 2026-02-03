@@ -44,6 +44,20 @@ interface NewsItem {
   source: string;
   publishedAt: string;
   category: string;
+  imageUrl?: string;
+}
+
+interface NFOItem {
+  id: string;
+  schemeName: string;
+  amcName: string;
+  category: string;
+  openDate: string;
+  closeDate: string;
+  minInvestment: number;
+  fundType: string;
+  status: 'open' | 'upcoming' | 'closed';
+  url: string;
 }
 
 const menuItems = [
@@ -53,15 +67,19 @@ const menuItems = [
   { id: 'watchlist', label: 'Watchlist', icon: 'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z' },
   { id: 'blogs', label: 'Blogs', icon: 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z' },
   { id: 'news', label: 'Market News', icon: 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2zM5 8h14M5 12h14M5 16h6' },
+  { id: 'nfo', label: 'New NFOs', icon: 'M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z' },
 ];
 
 export default function DashboardPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'holdings' | 'transactions' | 'watchlist' | 'blogs' | 'news'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'holdings' | 'transactions' | 'watchlist' | 'blogs' | 'news' | 'nfo'>('overview');
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
+  const [nfos, setNfos] = useState<{ open: NFOItem[]; upcoming: NFOItem[] }>({ open: [], upcoming: [] });
+  const [nfoLoading, setNfoLoading] = useState(false);
+  const [newsCategory, setNewsCategory] = useState<string>('all');
   const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
@@ -79,6 +97,71 @@ export default function DashboardPage() {
       fetchDashboardData();
     }
   }, [isAuthenticated]);
+
+  // Fetch news when news tab is active or category changes
+  useEffect(() => {
+    if (activeTab === 'news') {
+      fetchNews(newsCategory);
+    }
+  }, [activeTab, newsCategory]);
+
+  // Fetch NFOs when NFO tab is active
+  useEffect(() => {
+    if (activeTab === 'nfo') {
+      fetchNFOs();
+    }
+  }, [activeTab]);
+
+  const fetchNews = async (category: string) => {
+    setNewsLoading(true);
+    try {
+      const res = await fetch(`/api/news?category=${category}`);
+      if (res.ok) {
+        const data = await res.json();
+        setNews(data.articles || []);
+      }
+    } catch (error) {
+      console.error('Error fetching news:', error);
+    } finally {
+      setNewsLoading(false);
+    }
+  };
+
+  const fetchNFOs = async () => {
+    setNfoLoading(true);
+    try {
+      const res = await fetch('/api/nfo');
+      if (res.ok) {
+        const data = await res.json();
+        setNfos({ open: data.open || [], upcoming: data.upcoming || [] });
+      }
+    } catch (error) {
+      console.error('Error fetching NFOs:', error);
+    } finally {
+      setNfoLoading(false);
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  const getTimeAgo = (dateStr: string) => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  };
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
@@ -545,122 +628,90 @@ export default function DashboardPage() {
                 </div>
               ) : activeTab === 'news' ? (
                 <div className="space-y-6">
-                  <div>
-                    <h2 className="text-xl font-bold text-brand-navy mb-2">Market News & Updates</h2>
-                    <p className="text-gray-600 mb-4">Latest news on financial markets, mutual funds, business, geopolitics, and crypto.</p>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <h2 className="text-xl font-bold text-brand-navy">Market News & Updates</h2>
+                      <p className="text-gray-600 text-sm">Latest headlines on financial markets, mutual funds, business, geopolitics, and crypto.</p>
+                    </div>
+                    <button
+                      onClick={() => fetchNews(newsCategory)}
+                      className="flex items-center gap-2 px-4 py-2 bg-brand-royal text-white rounded-lg hover:bg-brand-navy transition-colors text-sm font-medium"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </button>
                   </div>
 
-                  {/* News Categories */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                    <a href="https://www.moneycontrol.com/news/business/markets/" target="_blank" rel="noopener noreferrer" className="p-3 bg-brand-navy text-white rounded-lg text-center text-sm font-medium hover:bg-brand-royal transition-colors">
-                      Stock Markets
-                    </a>
-                    <a href="https://economictimes.indiatimes.com/mf/mf-news" target="_blank" rel="noopener noreferrer" className="p-3 bg-green-600 text-white rounded-lg text-center text-sm font-medium hover:bg-green-700 transition-colors">
-                      Mutual Funds
-                    </a>
-                    <a href="https://www.livemint.com/market/cryptocurrency" target="_blank" rel="noopener noreferrer" className="p-3 bg-orange-500 text-white rounded-lg text-center text-sm font-medium hover:bg-orange-600 transition-colors">
-                      Crypto
-                    </a>
-                    <a href="https://www.reuters.com/markets/" target="_blank" rel="noopener noreferrer" className="p-3 bg-purple-600 text-white rounded-lg text-center text-sm font-medium hover:bg-purple-700 transition-colors">
-                      Global Markets
-                    </a>
+                  {/* Category Filter */}
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: 'all', label: 'All News', color: 'bg-brand-navy' },
+                      { id: 'markets', label: 'Stock Markets', color: 'bg-blue-600' },
+                      { id: 'mutual_funds', label: 'Mutual Funds', color: 'bg-green-600' },
+                      { id: 'crypto', label: 'Crypto', color: 'bg-orange-500' },
+                      { id: 'global', label: 'Global', color: 'bg-purple-600' },
+                      { id: 'nfo', label: 'NFO News', color: 'bg-pink-600' },
+                    ].map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setNewsCategory(cat.id)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                          newsCategory === cat.id
+                            ? `${cat.color} text-white shadow-md`
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
                   </div>
 
-                  {/* News Sources */}
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-brand-navy">Top News Sources</h3>
-                    
-                    <a href="https://www.moneycontrol.com/news/business/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-brand-royal/30 transition-all">
-                      <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                        <span className="text-red-600 font-bold text-sm">MC</span>
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-brand-navy">Moneycontrol</h4>
-                        <p className="text-xs text-gray-500">Business & Financial News</p>
-                      </div>
-                      <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  {/* News Headlines */}
+                  {newsLoading ? (
+                    <div className="text-center py-12">
+                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-royal mx-auto"></div>
+                      <p className="mt-4 text-gray-500">Fetching latest news...</p>
+                    </div>
+                  ) : news.length === 0 ? (
+                    <div className="text-center py-12 bg-gray-50 rounded-xl">
+                      <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2z" />
                       </svg>
-                    </a>
-
-                    <a href="https://economictimes.indiatimes.com/markets" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-brand-royal/30 transition-all">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <span className="text-blue-600 font-bold text-sm">ET</span>
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-brand-navy">Economic Times</h4>
-                        <p className="text-xs text-gray-500">Markets & Economy</p>
-                      </div>
-                      <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-
-                    <a href="https://www.reuters.com/business/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-brand-royal/30 transition-all">
-                      <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                        <span className="text-orange-600 font-bold text-sm">R</span>
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-brand-navy">Reuters</h4>
-                        <p className="text-xs text-gray-500">Global Business & Geopolitics</p>
-                      </div>
-                      <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-
-                    <a href="https://www.bloomberg.com/markets" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-brand-royal/30 transition-all">
-                      <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center">
-                        <span className="text-white font-bold text-sm">B</span>
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-brand-navy">Bloomberg</h4>
-                        <p className="text-xs text-gray-500">Global Financial Markets</p>
-                      </div>
-                      <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-
-                    <a href="https://www.coindesk.com/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-brand-royal/30 transition-all">
-                      <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                        <span className="text-yellow-600 font-bold text-sm">CD</span>
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-brand-navy">CoinDesk</h4>
-                        <p className="text-xs text-gray-500">Cryptocurrency News</p>
-                      </div>
-                      <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-
-                    <a href="https://www.bseindia.com/markets.html" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-brand-royal/30 transition-all">
-                      <div className="w-10 h-10 bg-brand-royal/10 rounded-lg flex items-center justify-center">
-                        <span className="text-brand-royal font-bold text-sm">BSE</span>
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-brand-navy">BSE India</h4>
-                        <p className="text-xs text-gray-500">Indian Stock Exchange</p>
-                      </div>
-                      <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-
-                    <a href="https://www.nseindia.com/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-brand-royal/30 transition-all">
-                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                        <span className="text-green-600 font-bold text-sm">NSE</span>
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-brand-navy">NSE India</h4>
-                        <p className="text-xs text-gray-500">National Stock Exchange</p>
-                      </div>
-                      <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-                  </div>
+                      <p className="text-gray-500">No news available. Click refresh to fetch latest headlines.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {news.map((article, index) => (
+                        <a
+                          key={index}
+                          href={article.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-brand-royal/30 transition-all"
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="px-2 py-0.5 bg-brand-royal/10 text-brand-royal text-xs font-medium rounded">
+                                  {article.source}
+                                </span>
+                                <span className="text-xs text-gray-400">{getTimeAgo(article.publishedAt)}</span>
+                              </div>
+                              <h3 className="font-semibold text-brand-navy mb-1 line-clamp-2">{article.title}</h3>
+                              {article.description && (
+                                <p className="text-sm text-gray-600 line-clamp-2">{article.description}</p>
+                              )}
+                            </div>
+                            <svg className="w-5 h-5 text-gray-400 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Market Factors Info */}
                   <div className="mt-6 p-4 bg-brand-navy/5 rounded-xl border border-brand-navy/10">
@@ -684,6 +735,119 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </div>
+                </div>
+              ) : activeTab === 'nfo' ? (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <h2 className="text-xl font-bold text-brand-navy">New Fund Offers (NFOs)</h2>
+                      <p className="text-gray-600 text-sm">Latest mutual fund launches and upcoming NFOs.</p>
+                    </div>
+                    <button
+                      onClick={fetchNFOs}
+                      className="flex items-center gap-2 px-4 py-2 bg-brand-royal text-white rounded-lg hover:bg-brand-navy transition-colors text-sm font-medium"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </button>
+                  </div>
+
+                  {nfoLoading ? (
+                    <div className="text-center py-12">
+                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-royal mx-auto"></div>
+                      <p className="mt-4 text-gray-500">Fetching NFO data...</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Open NFOs */}
+                      <div>
+                        <h3 className="font-semibold text-brand-navy mb-3 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                          Currently Open NFOs
+                        </h3>
+                        {nfos.open.length === 0 ? (
+                          <p className="text-gray-500 text-sm p-4 bg-gray-50 rounded-xl">No open NFOs at the moment.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {nfos.open.map((nfo) => (
+                              <a
+                                key={nfo.id}
+                                href={nfo.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 hover:shadow-md transition-all"
+                              >
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="px-2 py-0.5 bg-green-500 text-white text-xs font-medium rounded">OPEN</span>
+                                      <span className="text-xs text-gray-500">{nfo.category}</span>
+                                    </div>
+                                    <h4 className="font-semibold text-brand-navy">{nfo.schemeName}</h4>
+                                    <p className="text-sm text-gray-600">{nfo.amcName}</p>
+                                  </div>
+                                  <div className="text-sm">
+                                    <p className="text-gray-500">Closes: <span className="font-medium text-brand-navy">{formatDate(nfo.closeDate)}</span></p>
+                                    <p className="text-gray-500">Min: <span className="font-medium text-brand-navy">₹{nfo.minInvestment.toLocaleString()}</span></p>
+                                  </div>
+                                </div>
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Upcoming NFOs */}
+                      <div>
+                        <h3 className="font-semibold text-brand-navy mb-3 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                          Upcoming NFOs
+                        </h3>
+                        {nfos.upcoming.length === 0 ? (
+                          <p className="text-gray-500 text-sm p-4 bg-gray-50 rounded-xl">No upcoming NFOs announced.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {nfos.upcoming.map((nfo) => (
+                              <a
+                                key={nfo.id}
+                                href={nfo.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 hover:shadow-md transition-all"
+                              >
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="px-2 py-0.5 bg-blue-500 text-white text-xs font-medium rounded">UPCOMING</span>
+                                      <span className="text-xs text-gray-500">{nfo.category}</span>
+                                    </div>
+                                    <h4 className="font-semibold text-brand-navy">{nfo.schemeName}</h4>
+                                    <p className="text-sm text-gray-600">{nfo.amcName}</p>
+                                  </div>
+                                  <div className="text-sm">
+                                    <p className="text-gray-500">Opens: <span className="font-medium text-brand-navy">{formatDate(nfo.openDate)}</span></p>
+                                    <p className="text-gray-500">Min: <span className="font-medium text-brand-navy">₹{nfo.minInvestment.toLocaleString()}</span></p>
+                                  </div>
+                                </div>
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* NFO Info */}
+                      <div className="p-4 bg-brand-gold/10 rounded-xl border border-brand-gold/20">
+                        <h3 className="font-semibold text-brand-navy mb-2">What is an NFO?</h3>
+                        <p className="text-sm text-gray-600">
+                          A New Fund Offer (NFO) is the first subscription offering for a new mutual fund scheme. 
+                          During the NFO period, investors can subscribe to units at a fixed price (usually ₹10). 
+                          After the NFO closes, the fund becomes open-ended and trades at NAV.
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : null}
             </div>
