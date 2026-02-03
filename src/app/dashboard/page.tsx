@@ -67,6 +67,7 @@ const menuItems = [
   { id: 'holdings', label: 'Holdings', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
   { id: 'transactions', label: 'Transactions', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
   { id: 'watchlist', label: 'Watchlist', icon: 'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z' },
+  { id: 'calculators', label: 'SIP Calculator', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
   { id: 'blogs', label: 'Blogs', icon: 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z' },
   { id: 'news', label: 'Market News', icon: 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2zM5 8h14M5 12h14M5 16h6' },
   { id: 'nfo', label: 'New NFOs', icon: 'M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z' },
@@ -76,7 +77,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'add-investment' | 'holdings' | 'transactions' | 'watchlist' | 'blogs' | 'news' | 'nfo'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'add-investment' | 'holdings' | 'transactions' | 'watchlist' | 'calculators' | 'blogs' | 'news' | 'nfo'>('overview');
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
   const [nfos, setNfos] = useState<{ open: NFOItem[]; upcoming: NFOItem[] }>({ open: [], upcoming: [] });
@@ -87,6 +88,13 @@ export default function DashboardPage() {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Calculator state
+  const [calcType, setCalcType] = useState<'sip' | 'lumpsum'>('sip');
+  const [sipAmount, setSipAmount] = useState(5000);
+  const [lumpsumAmount, setLumpsumAmount] = useState(100000);
+  const [expectedReturn, setExpectedReturn] = useState(12);
+  const [investmentYears, setInvestmentYears] = useState(10);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -782,6 +790,255 @@ export default function DashboardPage() {
                         <p className="text-xs text-gray-500">Trade wars, conflicts</p>
                       </div>
                     </div>
+                  </div>
+                </div>
+              ) : activeTab === 'calculators' ? (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-brand-navy mb-2">SIP & Lumpsum Calculator</h2>
+                    <p className="text-gray-600">Plan your investments and see how your money can grow over time.</p>
+                  </div>
+
+                  {/* Calculator Tabs */}
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="flex border-b border-gray-200">
+                      <button
+                        onClick={() => setCalcType('sip')}
+                        className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                          calcType === 'sip' 
+                            ? 'bg-brand-royal text-white' 
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        SIP Calculator
+                      </button>
+                      <button
+                        onClick={() => setCalcType('lumpsum')}
+                        className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                          calcType === 'lumpsum' 
+                            ? 'bg-brand-royal text-white' 
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        Lumpsum Calculator
+                      </button>
+                    </div>
+
+                    <div className="p-6">
+                      {calcType === 'sip' ? (
+                        <div className="space-y-6">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Monthly SIP Amount (₹)
+                            </label>
+                            <input
+                              type="number"
+                              value={sipAmount}
+                              onChange={(e) => setSipAmount(Number(e.target.value))}
+                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-royal focus:border-transparent"
+                              min="500"
+                              step="500"
+                            />
+                            <input
+                              type="range"
+                              value={sipAmount}
+                              onChange={(e) => setSipAmount(Number(e.target.value))}
+                              className="w-full mt-2"
+                              min="500"
+                              max="100000"
+                              step="500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Expected Annual Return (%)
+                            </label>
+                            <input
+                              type="number"
+                              value={expectedReturn}
+                              onChange={(e) => setExpectedReturn(Number(e.target.value))}
+                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-royal focus:border-transparent"
+                              min="1"
+                              max="30"
+                              step="0.5"
+                            />
+                            <input
+                              type="range"
+                              value={expectedReturn}
+                              onChange={(e) => setExpectedReturn(Number(e.target.value))}
+                              className="w-full mt-2"
+                              min="1"
+                              max="30"
+                              step="0.5"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Investment Period (Years)
+                            </label>
+                            <input
+                              type="number"
+                              value={investmentYears}
+                              onChange={(e) => setInvestmentYears(Number(e.target.value))}
+                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-royal focus:border-transparent"
+                              min="1"
+                              max="40"
+                            />
+                            <input
+                              type="range"
+                              value={investmentYears}
+                              onChange={(e) => setInvestmentYears(Number(e.target.value))}
+                              className="w-full mt-2"
+                              min="1"
+                              max="40"
+                            />
+                          </div>
+
+                          {/* SIP Results */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                            <div className="bg-blue-50 rounded-xl p-4 text-center">
+                              <p className="text-sm text-gray-600 mb-1">Total Investment</p>
+                              <p className="text-2xl font-bold text-brand-navy">
+                                ₹{(sipAmount * investmentYears * 12).toLocaleString('en-IN')}
+                              </p>
+                            </div>
+                            <div className="bg-green-50 rounded-xl p-4 text-center">
+                              <p className="text-sm text-gray-600 mb-1">Estimated Returns</p>
+                              <p className="text-2xl font-bold text-green-600">
+                                ₹{(() => {
+                                  const monthlyRate = expectedReturn / 100 / 12;
+                                  const months = investmentYears * 12;
+                                  const futureValue = sipAmount * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate) * (1 + monthlyRate);
+                                  const totalInvested = sipAmount * months;
+                                  return Math.round(futureValue - totalInvested).toLocaleString('en-IN');
+                                })()}
+                              </p>
+                            </div>
+                            <div className="bg-brand-gold/20 rounded-xl p-4 text-center">
+                              <p className="text-sm text-gray-600 mb-1">Total Value</p>
+                              <p className="text-2xl font-bold text-brand-navy">
+                                ₹{(() => {
+                                  const monthlyRate = expectedReturn / 100 / 12;
+                                  const months = investmentYears * 12;
+                                  const futureValue = sipAmount * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate) * (1 + monthlyRate);
+                                  return Math.round(futureValue).toLocaleString('en-IN');
+                                })()}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Lumpsum Amount (₹)
+                            </label>
+                            <input
+                              type="number"
+                              value={lumpsumAmount}
+                              onChange={(e) => setLumpsumAmount(Number(e.target.value))}
+                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-royal focus:border-transparent"
+                              min="1000"
+                              step="1000"
+                            />
+                            <input
+                              type="range"
+                              value={lumpsumAmount}
+                              onChange={(e) => setLumpsumAmount(Number(e.target.value))}
+                              className="w-full mt-2"
+                              min="1000"
+                              max="10000000"
+                              step="10000"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Expected Annual Return (%)
+                            </label>
+                            <input
+                              type="number"
+                              value={expectedReturn}
+                              onChange={(e) => setExpectedReturn(Number(e.target.value))}
+                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-royal focus:border-transparent"
+                              min="1"
+                              max="30"
+                              step="0.5"
+                            />
+                            <input
+                              type="range"
+                              value={expectedReturn}
+                              onChange={(e) => setExpectedReturn(Number(e.target.value))}
+                              className="w-full mt-2"
+                              min="1"
+                              max="30"
+                              step="0.5"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Investment Period (Years)
+                            </label>
+                            <input
+                              type="number"
+                              value={investmentYears}
+                              onChange={(e) => setInvestmentYears(Number(e.target.value))}
+                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-royal focus:border-transparent"
+                              min="1"
+                              max="40"
+                            />
+                            <input
+                              type="range"
+                              value={investmentYears}
+                              onChange={(e) => setInvestmentYears(Number(e.target.value))}
+                              className="w-full mt-2"
+                              min="1"
+                              max="40"
+                            />
+                          </div>
+
+                          {/* Lumpsum Results */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                            <div className="bg-blue-50 rounded-xl p-4 text-center">
+                              <p className="text-sm text-gray-600 mb-1">Total Investment</p>
+                              <p className="text-2xl font-bold text-brand-navy">
+                                ₹{lumpsumAmount.toLocaleString('en-IN')}
+                              </p>
+                            </div>
+                            <div className="bg-green-50 rounded-xl p-4 text-center">
+                              <p className="text-sm text-gray-600 mb-1">Estimated Returns</p>
+                              <p className="text-2xl font-bold text-green-600">
+                                ₹{(() => {
+                                  const futureValue = lumpsumAmount * Math.pow(1 + expectedReturn / 100, investmentYears);
+                                  return Math.round(futureValue - lumpsumAmount).toLocaleString('en-IN');
+                                })()}
+                              </p>
+                            </div>
+                            <div className="bg-brand-gold/20 rounded-xl p-4 text-center">
+                              <p className="text-sm text-gray-600 mb-1">Total Value</p>
+                              <p className="text-2xl font-bold text-brand-navy">
+                                ₹{(() => {
+                                  const futureValue = lumpsumAmount * Math.pow(1 + expectedReturn / 100, investmentYears);
+                                  return Math.round(futureValue).toLocaleString('en-IN');
+                                })()}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Disclaimer */}
+                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <p className="text-xs text-gray-500">
+                      <strong>Disclaimer:</strong> The calculations are based on assumed rate of returns. 
+                      Actual returns may vary based on market conditions. Mutual fund investments are subject to market risks. 
+                      Please read all scheme related documents carefully before investing.
+                    </p>
                   </div>
                 </div>
               ) : activeTab === 'nfo' ? (

@@ -1,13 +1,34 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import ComplianceNotice from "@/components/ComplianceNotice";
 import Section from '@/components/Section';
 import ResponsiveContainer from '@/components/ResponsiveContainer';
 import AnimatedBackground from "@/components/AnimatedBackground";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Home() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.replace('/dashboard');
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  // Show nothing while checking auth or redirecting
+  if (isLoading || isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-brand-navy">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-gold"></div>
+      </div>
+    );
+  }
   return (
     <>
       {/* Hero Section */}

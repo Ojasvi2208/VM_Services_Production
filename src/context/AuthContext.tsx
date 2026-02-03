@@ -96,15 +96,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await fetch('/api/auth/signout', { method: 'POST' });
+      sessionStorage.removeItem('vmfs_session_active');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
       setUser(null);
     }
-  };
+  }, []);
+
+  // Session management - auto-logout on tab/browser close
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    // Set session marker when user logs in
+    if (user) {
+      sessionStorage.setItem('vmfs_session_active', 'true');
+    }
+    
+    // On page load, check if this is a fresh browser session
+    const checkSession = () => {
+      const sessionMarker = sessionStorage.getItem('vmfs_session_active');
+      // If user exists in cookie but no session marker, this is a new browser session
+      if (user && !sessionMarker) {
+        logout();
+      }
+    };
+    
+    // Small delay to allow sessionStorage to be checked properly
+    const timer = setTimeout(checkSession, 100);
+    
+    return () => clearTimeout(timer);
+  }, [user, logout]);
 
   return (
     <AuthContext.Provider
