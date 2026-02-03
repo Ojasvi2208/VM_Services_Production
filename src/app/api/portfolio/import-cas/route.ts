@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { Pool } from 'pg';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse');
+import PDFParser from 'pdf2json';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -269,12 +268,23 @@ export async function POST(request: NextRequest) {
     let textContent = '';
     
     try {
-      // Parse PDF server-side using pdf-parse
-      const pdfData = await pdfParse(buffer, {
-        // Password for encrypted PDFs
-        password: password || undefined
+      // Parse PDF server-side using pdf2json
+      textContent = await new Promise<string>((resolve, reject) => {
+        const pdfParser = new PDFParser(null, true);
+        
+        pdfParser.on('pdfParser_dataError', (errData: Error | { parserError: Error }) => {
+          const error = 'parserError' in errData ? errData.parserError : errData;
+          reject(error);
+        });
+        
+        pdfParser.on('pdfParser_dataReady', () => {
+          const text = pdfParser.getRawTextContent();
+          resolve(text);
+        });
+        
+        // Parse from buffer
+        pdfParser.parseBuffer(buffer);
       });
-      textContent = pdfData.text;
     } catch (pdfError) {
       console.error('PDF parsing error:', pdfError);
       const errorMessage = pdfError instanceof Error ? pdfError.message : 'Unknown error';
