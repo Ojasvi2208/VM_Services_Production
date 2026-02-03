@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
+import CASUploader from '@/components/CASUploader';
 
 interface PortfolioSummary {
   totalInvested: number;
@@ -62,6 +63,7 @@ interface NFOItem {
 
 const menuItems = [
   { id: 'overview', label: 'Overview', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+  { id: 'add-investment', label: 'Add Investment', icon: 'M12 6v6m0 0v6m0-6h6m-6 0H6' },
   { id: 'holdings', label: 'Holdings', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
   { id: 'transactions', label: 'Transactions', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
   { id: 'watchlist', label: 'Watchlist', icon: 'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z' },
@@ -74,7 +76,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'holdings' | 'transactions' | 'watchlist' | 'blogs' | 'news' | 'nfo'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'add-investment' | 'holdings' | 'transactions' | 'watchlist' | 'blogs' | 'news' | 'nfo'>('overview');
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
   const [nfos, setNfos] = useState<{ open: NFOItem[]; upcoming: NFOItem[] }>({ open: [], upcoming: [] });
@@ -387,9 +389,9 @@ export default function DashboardPage() {
                   <div>
                     <h3 className="text-lg font-bold text-brand-navy mb-4">Quick Actions</h3>
                     <div className="space-y-3">
-                      <Link
-                        href="/dashboard/add-investment"
-                        className="flex items-center gap-4 p-4 bg-gradient-to-r from-brand-royal to-brand-navy text-white rounded-xl hover:shadow-lg transition-all"
+                      <button
+                        onClick={() => setActiveTab('add-investment')}
+                        className="w-full flex items-center gap-4 p-4 bg-gradient-to-r from-brand-royal to-brand-navy text-white rounded-xl hover:shadow-lg transition-all text-left"
                       >
                         <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
                           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -398,9 +400,9 @@ export default function DashboardPage() {
                         </div>
                         <div>
                           <span className="font-semibold">Add Investment</span>
-                          <p className="text-white/70 text-sm">Record a new mutual fund purchase</p>
+                          <p className="text-white/70 text-sm">Import CAS or add manually</p>
                         </div>
-                      </Link>
+                      </button>
                       
                       <Link
                         href="/funds/search"
@@ -457,17 +459,63 @@ export default function DashboardPage() {
                       </svg>
                       <h3 className="text-xl font-bold text-gray-700 mb-2">No Investments Yet</h3>
                       <p className="text-gray-500 mb-6">Start building your portfolio by adding your first investment</p>
-                      <Link
-                        href="/dashboard/add-investment"
+                      <button
+                        onClick={() => setActiveTab('add-investment')}
                         className="inline-flex items-center gap-2 bg-brand-royal text-white px-6 py-3 rounded-xl font-semibold hover:bg-brand-navy transition-colors"
                       >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                         </svg>
                         Add Your First Investment
-                      </Link>
+                      </button>
                     </div>
                   )}
+                </div>
+              ) : activeTab === 'add-investment' ? (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-brand-navy mb-2">Add Investment</h2>
+                    <p className="text-gray-600">Import your mutual fund holdings from CAS statement or add manually.</p>
+                  </div>
+
+                  {/* Import Options */}
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="p-6 bg-gradient-to-br from-brand-royal/10 to-brand-navy/10 rounded-xl border-2 border-brand-royal">
+                      <div className="w-12 h-12 bg-brand-royal rounded-lg flex items-center justify-center mb-4">
+                        <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                      </div>
+                      <h3 className="font-bold text-brand-navy mb-2">Import from CAS</h3>
+                      <p className="text-sm text-gray-600 mb-4">
+                        Upload your Consolidated Account Statement (CAS) PDF to automatically import all your mutual fund holdings with complete transaction history.
+                      </p>
+                      <span className="inline-block px-3 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Recommended</span>
+                    </div>
+
+                    <div className="p-6 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center mb-4">
+                        <svg className="w-6 h-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </div>
+                      <h3 className="font-bold text-gray-700 mb-2">Manual Entry</h3>
+                      <p className="text-sm text-gray-600 mb-4">
+                        Add individual investments manually by entering scheme details, units, and purchase information.
+                      </p>
+                      <Link href="/funds/search" className="text-sm text-brand-royal hover:underline">
+                        Search & Add Fund →
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* CAS Uploader */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <CASUploader onImportComplete={() => {
+                      fetchDashboardData();
+                      setActiveTab('holdings');
+                    }} />
+                  </div>
                 </div>
               ) : activeTab === 'holdings' ? (
                 <div>
