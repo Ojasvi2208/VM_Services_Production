@@ -66,46 +66,6 @@ export default function CASUploader({ onImportComplete }: CASUploaderProps) {
     }
   };
 
-  const extractTextFromPDF = async (file: File): Promise<string> => {
-    // Use PDF.js to extract text with legacy build (no worker needed)
-    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    
-    // Disable worker to avoid CORS issues
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-
-    const arrayBuffer = await file.arrayBuffer();
-    
-    try {
-      const loadingTask = pdfjsLib.getDocument({ 
-        data: arrayBuffer, 
-        password: password || undefined,
-        useWorkerFetch: false,
-        isEvalSupported: false,
-        useSystemFonts: true
-      });
-      
-      const pdf = await loadingTask.promise;
-      
-      let fullText = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: { str?: string }) => item.str || '')
-          .join(' ');
-        fullText += pageText + '\n';
-      }
-      
-      return fullText;
-    } catch (err) {
-      console.error('PDF parsing error:', err);
-      if (err instanceof Error && err.message.includes('password')) {
-        throw new Error('This PDF is password protected. Please enter the correct password (usually your PAN or DOB like ABCDE1234F or 01011990).');
-      }
-      throw err;
-    }
-  };
-
   const handleUpload = async () => {
     if (!file) {
       setError('Please select a file');
@@ -117,13 +77,9 @@ export default function CASUploader({ onImportComplete }: CASUploaderProps) {
     setError(null);
 
     try {
-      // Extract text from PDF
-      const textContent = await extractTextFromPDF(file);
-
-      // Send to API for parsing
+      // Send file to server for PDF parsing (server-side using pdf-parse)
       const formData = new FormData();
       formData.append('casFile', file);
-      formData.append('textContent', textContent);
       if (password) {
         formData.append('password', password);
       }

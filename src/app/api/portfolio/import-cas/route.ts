@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { Pool } from 'pg';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require('pdf-parse');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -260,14 +262,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
-    // For now, we'll handle text extraction on client side
-    // In production, use pdf-parse or similar library
-    const textContent = formData.get('textContent') as string;
+    // Convert file to buffer for server-side PDF parsing
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
     
-    if (!textContent) {
+    let textContent = '';
+    
+    try {
+      // Parse PDF server-side using pdf-parse
+      const pdfData = await pdfParse(buffer, {
+        // Password for encrypted PDFs
+        password: password || undefined
+      });
+      textContent = pdfData.text;
+    } catch (pdfError) {
+      console.error('PDF parsing error:', pdfError);
+      const errorMessage = pdfError instanceof Error ? pdfError.message : 'Unknown error';
+      
+      if (errorMessage.includes('password') || errorMessage.includes('encrypted')) {
+        return NextResponse.json({ 
+          error: 'This PDF is password protected. Please enter the correct password (usually your PAN like ABCDE1234F or DOB like 01011990).',
+          requiresPassword: true 
+        }, { status: 400 });
+      }
+      
       return NextResponse.json({ 
-        error: 'Could not extract text from PDF. Please ensure the PDF is not password protected or try a different file.',
-        requiresPassword: true 
+        error: 'Could not parse PDF. Please ensure the file is a valid CAS statement.',
+        details: errorMessage
+      }, { status: 400 });
+    }
+    
+    if (!textContent || textContent.trim().length < 100) {
+      return NextResponse.json({ 
+        error: 'Could not extract text from PDF. The file may be scanned or image-based. Please use a text-based CAS PDF.',
       }, { status: 400 });
     }
 
