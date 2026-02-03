@@ -67,24 +67,43 @@ export default function CASUploader({ onImportComplete }: CASUploaderProps) {
   };
 
   const extractTextFromPDF = async (file: File): Promise<string> => {
-    // Use PDF.js to extract text
-    const pdfjsLib = await import('pdfjs-dist');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    // Use PDF.js to extract text with legacy build (no worker needed)
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    
+    // Disable worker to avoid CORS issues
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, password: password || undefined }).promise;
     
-    let fullText = '';
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: { str?: string }) => item.str || '')
-        .join(' ');
-      fullText += pageText + '\n';
+    try {
+      const loadingTask = pdfjsLib.getDocument({ 
+        data: arrayBuffer, 
+        password: password || undefined,
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: true
+      });
+      
+      const pdf = await loadingTask.promise;
+      
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: { str?: string }) => item.str || '')
+          .join(' ');
+        fullText += pageText + '\n';
+      }
+      
+      return fullText;
+    } catch (err) {
+      console.error('PDF parsing error:', err);
+      if (err instanceof Error && err.message.includes('password')) {
+        throw new Error('This PDF is password protected. Please enter the correct password (usually your PAN or DOB like ABCDE1234F or 01011990).');
+      }
+      throw err;
     }
-    
-    return fullText;
   };
 
   const handleUpload = async () => {
