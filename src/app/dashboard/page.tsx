@@ -1,11 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import CASUploader from '@/components/CASUploader';
+
+interface FundSearchResult {
+  schemeCode: string;
+  schemeName: string;
+  latestNav?: number;
+}
 
 interface PortfolioSummary {
   totalInvested: number;
@@ -95,6 +101,18 @@ export default function DashboardPage() {
   const [lumpsumAmount, setLumpsumAmount] = useState(100000);
   const [expectedReturn, setExpectedReturn] = useState(12);
   const [investmentYears, setInvestmentYears] = useState(10);
+  
+  // Watchlist search state
+  const [watchlistSearch, setWatchlistSearch] = useState('');
+  const [watchlistSearchResults, setWatchlistSearchResults] = useState<FundSearchResult[]>([]);
+  const [watchlistSearchLoading, setWatchlistSearchLoading] = useState(false);
+  const [showWatchlistDropdown, setShowWatchlistDropdown] = useState(false);
+  const watchlistSearchRef = useRef<HTMLDivElement>(null);
+  const watchlistDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Delete holdings state
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -207,6 +225,116 @@ export default function DashboardPage() {
     await logout();
     router.push('/');
   };
+
+  // Watchlist search functions
+  const searchFundsForWatchlist = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setWatchlistSearchResults([]);
+      setShowWatchlistDropdown(false);
+      return;
+    }
+
+    setWatchlistSearchLoading(true);
+    try {
+      const response = await fetch(`/api/funds/search?q=${encodeURIComponent(query)}&pageSize=10`);
+      const data = await response.json();
+      
+      if (data.success && data.funds.length > 0) {
+        setWatchlistSearchResults(data.funds);
+        setShowWatchlistDropdown(true);
+      } else {
+        setWatchlistSearchResults([]);
+        setShowWatchlistDropdown(false);
+      }
+    } catch (error) {
+      console.error('Watchlist search error:', error);
+      setWatchlistSearchResults([]);
+    } finally {
+      setWatchlistSearchLoading(false);
+    }
+  }, []);
+
+  const handleWatchlistSearchChange = (value: string) => {
+    setWatchlistSearch(value);
+    
+    if (watchlistDebounceRef.current) {
+      clearTimeout(watchlistDebounceRef.current);
+    }
+    
+    watchlistDebounceRef.current = setTimeout(() => {
+      searchFundsForWatchlist(value);
+    }, 300);
+  };
+
+  const addToWatchlist = async (fund: FundSearchResult) => {
+    try {
+      const response = await fetch('/api/portfolio/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schemeCode: fund.schemeCode }),
+      });
+
+      if (response.ok) {
+        // Refresh watchlist
+        const watchlistRes = await fetch('/api/portfolio/watchlist');
+        if (watchlistRes.ok) {
+          const data = await watchlistRes.json();
+          setWatchlist(data.watchlist || []);
+        }
+        setWatchlistSearch('');
+        setWatchlistSearchResults([]);
+        setShowWatchlistDropdown(false);
+      }
+    } catch (error) {
+      console.error('Add to watchlist error:', error);
+    }
+  };
+
+  const removeFromWatchlist = async (schemeCode: string) => {
+    try {
+      const response = await fetch(`/api/portfolio/watchlist?schemeCode=${schemeCode}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setWatchlist(prev => prev.filter(item => item.schemeCode !== schemeCode));
+      }
+    } catch (error) {
+      console.error('Remove from watchlist error:', error);
+    }
+  };
+
+  // Delete all holdings
+  const handleDeleteHoldings = async () => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch('/api/portfolio/delete-holdings', {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setHoldings([]);
+        setPortfolio(null);
+        setShowDeleteConfirm(false);
+        fetchDashboardData();
+      }
+    } catch (error) {
+      console.error('Delete holdings error:', error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Close watchlist dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (watchlistSearchRef.current && !watchlistSearchRef.current.contains(event.target as Node)) {
+        setShowWatchlistDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -526,40 +654,90 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : activeTab === 'holdings' ? (
-                <div>
+                <div className="space-y-4">
                   {holdings.length === 0 ? (
                     <div className="text-center py-12">
                       <p className="text-gray-500">No holdings yet. Add your first investment to get started.</p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {holdings.map((holding) => (
-                        <div key={holding.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <div className="flex-1">
-                              <Link href={`/funds/${holding.schemeCode}`} className="text-brand-royal hover:underline font-semibold">
-                                {holding.schemeName}
-                              </Link>
-                              <p className="text-sm text-gray-500 mt-1">{holding.units.toFixed(3)} units</p>
-                            </div>
-                            <div className="flex items-center gap-6 text-sm">
-                              <div>
-                                <p className="text-gray-500">Invested</p>
-                                <p className="font-semibold">{formatCurrency(holding.purchaseAmount)}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-500">Current</p>
-                                <p className="font-semibold">{formatCurrency(holding.currentValue)}</p>
-                              </div>
-                              <div className={`text-right ${holding.returns >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                <p className="text-gray-500">Returns</p>
-                                <p className="font-bold">{formatPercent(holding.returnsPercentage)}</p>
-                              </div>
+                    <>
+                      {/* Delete All Holdings Button */}
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => setShowDeleteConfirm(true)}
+                          className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Clear All Holdings
+                        </button>
+                      </div>
+
+                      {/* Delete Confirmation Modal */}
+                      {showDeleteConfirm && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                          <div className="bg-white rounded-xl p-6 max-w-md mx-4 shadow-xl">
+                            <h3 className="text-lg font-bold text-brand-navy mb-2">Delete All Holdings?</h3>
+                            <p className="text-gray-600 mb-4">
+                              This will permanently delete all your imported CAS holdings and transactions. This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3 justify-end">
+                              <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                disabled={isDeleting}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleDeleteHoldings}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                                disabled={isDeleting}
+                              >
+                                {isDeleting ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                    Deleting...
+                                  </>
+                                ) : (
+                                  'Delete All'
+                                )}
+                              </button>
                             </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      )}
+
+                      <div className="space-y-3">
+                        {holdings.map((holding) => (
+                          <div key={holding.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div className="flex-1">
+                                <Link href={`/funds/${holding.schemeCode}`} className="text-brand-royal hover:underline font-semibold">
+                                  {holding.schemeName}
+                                </Link>
+                                <p className="text-sm text-gray-500 mt-1">{holding.units.toFixed(3)} units</p>
+                              </div>
+                              <div className="flex items-center gap-6 text-sm">
+                                <div>
+                                  <p className="text-gray-500">Invested</p>
+                                  <p className="font-semibold">{formatCurrency(holding.purchaseAmount)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500">Current</p>
+                                  <p className="font-semibold">{formatCurrency(holding.currentValue)}</p>
+                                </div>
+                                <div className={`text-right ${holding.returns >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  <p className="text-gray-500">Returns</p>
+                                  <p className="font-bold">{formatPercent(holding.returnsPercentage)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
               ) : activeTab === 'transactions' ? (
@@ -570,28 +748,73 @@ export default function DashboardPage() {
                   <p className="text-gray-500">Transaction history will appear here once you make investments.</p>
                 </div>
               ) : activeTab === 'watchlist' ? (
-                <div>
+                <div className="space-y-6">
+                  {/* Search to add funds */}
+                  <div ref={watchlistSearchRef} className="relative">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Search & Add Funds to Watchlist</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={watchlistSearch}
+                        onChange={(e) => handleWatchlistSearchChange(e.target.value)}
+                        placeholder="Search for mutual funds..."
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-royal focus:border-transparent"
+                      />
+                      {watchlistSearchLoading && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-royal"></div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Search Results Dropdown */}
+                    {showWatchlistDropdown && watchlistSearchResults.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-64 overflow-y-auto">
+                        {watchlistSearchResults.map((fund) => (
+                          <button
+                            key={fund.schemeCode}
+                            onClick={() => addToWatchlist(fund)}
+                            className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                          >
+                            <p className="font-medium text-brand-navy text-sm">{fund.schemeName}</p>
+                            <p className="text-xs text-gray-500">NAV: ₹{fund.latestNav?.toFixed(2) || 'N/A'}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Watchlist Items */}
                   {watchlist.length === 0 ? (
                     <div className="text-center py-12">
                       <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                       </svg>
-                      <p className="text-gray-500">Your watchlist is empty. Add funds to track them here.</p>
+                      <p className="text-gray-500">Your watchlist is empty. Search and add funds above to track them.</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {watchlist.map((item) => (
                         <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                          <div>
+                          <div className="flex-1">
                             <Link href={`/funds/${item.schemeCode}`} className="text-brand-royal hover:underline font-semibold">
                               {item.schemeName}
                             </Link>
                             <p className="text-sm text-gray-500">NAV: ₹{item.currentNav?.toFixed(2)}</p>
                           </div>
-                          <div className={`text-right ${item.return1y >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          <div className={`text-right mr-4 ${item.return1y >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                             <p className="font-bold">{formatPercent(item.return1y)}</p>
                             <p className="text-xs text-gray-500">1Y Return</p>
                           </div>
+                          <button
+                            onClick={() => removeFromWatchlist(item.schemeCode)}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remove from watchlist"
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       ))}
                     </div>

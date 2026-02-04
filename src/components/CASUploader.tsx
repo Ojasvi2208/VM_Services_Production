@@ -120,10 +120,17 @@ export default function CASUploader({ onImportComplete }: CASUploaderProps) {
     setError(null);
 
     try {
+      // Include investor info (PAN, email, phone) to be stored with user record
       const response = await fetch('/api/portfolio/import-cas', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folios: parsedData.folios }),
+        body: JSON.stringify({ 
+          folios: parsedData.folios,
+          investorInfo: {
+            pan: parsedData.pan,
+            email: parsedData.email,
+          }
+        }),
       });
 
       const result = await response.json();

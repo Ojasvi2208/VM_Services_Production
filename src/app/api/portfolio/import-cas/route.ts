@@ -3,6 +3,10 @@ import { getCurrentUser } from '@/lib/auth';
 import pool from '@/lib/postgres-db';
 import { extractText, getDocumentProxy } from 'unpdf';
 import { deobfuscateFromTransport } from '@/lib/encryption';
+import { spawn } from 'child_process';
+import { writeFile, unlink } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 interface CASTransaction {
   date: string;
@@ -319,6 +323,79 @@ async function matchSchemeCode(schemeName: string): Promise<string | null> {
   }
 }
 
+// Parse CAS using Python casparser library
+async function parseCASWithPython(pdfBuffer: Buffer, password?: string): Promise<ParsedCAS | null> {
+  return new Promise(async (resolve) => {
+    try {
+      // Write PDF to temp file
+      const tempPath = join(tmpdir(), `cas_${Date.now()}.pdf`);
+      await writeFile(tempPath, pdfBuffer);
+      
+      // Build command args
+      const args = [join(process.cwd(), 'scripts', 'parse_cas.py'), tempPath];
+      if (password) {
+        args.push(password);
+      }
+      
+      // Spawn Python process
+      const pythonProcess = spawn('python3', args);
+      
+      let stdout = '';
+      let stderr = '';
+      
+      pythonProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+      
+      pythonProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+      
+      pythonProcess.on('close', async (code) => {
+        // Clean up temp file
+        try {
+          await unlink(tempPath);
+        } catch (e) {
+          console.error('Failed to delete temp file:', e);
+        }
+        
+        if (code === 0 && stdout) {
+          try {
+            const result = JSON.parse(stdout);
+            if (result.success) {
+              resolve(result as ParsedCAS);
+            } else {
+              console.log('Python parser returned error:', result.error);
+              resolve(null);
+            }
+          } catch (e) {
+            console.error('Failed to parse Python output:', e);
+            resolve(null);
+          }
+        } else {
+          console.error('Python parser failed:', stderr);
+          resolve(null);
+        }
+      });
+      
+      pythonProcess.on('error', (err) => {
+        console.error('Failed to start Python process:', err);
+        resolve(null);
+      });
+      
+      // Timeout after 30 seconds
+      setTimeout(() => {
+        pythonProcess.kill();
+        resolve(null);
+      }, 30000);
+      
+    } catch (error) {
+      console.error('Python parser error:', error);
+      resolve(null);
+    }
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
@@ -337,15 +414,42 @@ export async function POST(request: NextRequest) {
     // Deobfuscate password if provided
     const password = obfuscatedPassword ? deobfuscateFromTransport(obfuscatedPassword) : undefined;
 
-    // Convert file to buffer for server-side PDF parsing
+    // Convert file to buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    
+    // Try Python casparser first (more accurate for CAMS/KFINTECH)
+    console.log('Attempting to parse CAS with Python casparser...');
+    let parsedData = await parseCASWithPython(buffer, password);
+    
+    if (parsedData && parsedData.folios && parsedData.folios.length > 0) {
+      console.log(`Python casparser found ${parsedData.folios.length} folios`);
+      
+      // Match scheme codes for each folio
+      for (const folio of parsedData.folios) {
+        if (!folio.schemeCode) {
+          const schemeCode = await matchSchemeCode(folio.schemeName);
+          if (schemeCode) {
+            folio.schemeCode = schemeCode;
+          }
+        }
+      }
+      
+      return NextResponse.json({
+        success: true,
+        data: parsedData,
+        message: `Successfully parsed ${parsedData.folios.length} mutual fund holdings using casparser`,
+        parser: 'casparser'
+      });
+    }
+    
+    // Fallback to JavaScript parser if Python fails
+    console.log('Python casparser failed or not available, falling back to JS parser...');
     
     let textContent = '';
     
     try {
       // Parse PDF server-side using unpdf (supports password-protected PDFs)
-      // First get document proxy with password, then extract text
       const pdf = await getDocumentProxy(new Uint8Array(buffer), { 
         password: password || undefined 
       });
@@ -377,11 +481,11 @@ export async function POST(request: NextRequest) {
     // Log first 2000 chars of extracted text for debugging
     console.log('Extracted PDF text (first 2000 chars):', textContent.substring(0, 2000));
     
-    // Parse the CAS text
-    const parsedData = parseCASText(textContent);
+    // Parse the CAS text using JS fallback parser
+    const jsParsedData = parseCASText(textContent);
 
     // Match scheme codes for each folio
-    for (const folio of parsedData.folios) {
+    for (const folio of jsParsedData.folios) {
       const schemeCode = await matchSchemeCode(folio.schemeName);
       if (schemeCode) {
         folio.schemeCode = schemeCode;
@@ -390,8 +494,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: parsedData,
-      message: `Successfully parsed ${parsedData.folios.length} mutual fund holdings`,
+      data: jsParsedData,
+      message: `Successfully parsed ${jsParsedData.folios.length} mutual fund holdings`,
+      parser: 'javascript',
       debug: {
         textLength: textContent.length,
         textPreview: textContent.substring(0, 2000),
@@ -416,7 +521,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { folios } = await request.json() as { folios: CASFolio[] };
+    const { folios, investorInfo } = await request.json() as { 
+      folios: CASFolio[]; 
+      investorInfo?: { pan?: string; email?: string; phone?: string } 
+    };
 
     if (!folios || folios.length === 0) {
       return NextResponse.json({ error: 'No holdings to import' }, { status: 400 });
@@ -425,6 +533,38 @@ export async function PUT(request: NextRequest) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      
+      // Store PAN/email/phone in user record (silently, without notifying user)
+      if (investorInfo) {
+        const updates: string[] = [];
+        const values: any[] = [];
+        let paramCount = 1;
+        
+        if (investorInfo.pan && investorInfo.pan.length >= 10) {
+          updates.push(`pan = $${paramCount}`);
+          values.push(investorInfo.pan);
+          paramCount++;
+        }
+        if (investorInfo.email && investorInfo.email.includes('@')) {
+          updates.push(`cas_email = $${paramCount}`);
+          values.push(investorInfo.email);
+          paramCount++;
+        }
+        if (investorInfo.phone && investorInfo.phone.length >= 10) {
+          updates.push(`cas_phone = $${paramCount}`);
+          values.push(investorInfo.phone);
+          paramCount++;
+        }
+        
+        if (updates.length > 0) {
+          values.push(user.id);
+          await client.query(
+            `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${paramCount}`,
+            values
+          );
+          console.log(`Updated user ${user.id} with CAS info: PAN=${investorInfo.pan ? 'yes' : 'no'}, email=${investorInfo.email ? 'yes' : 'no'}, phone=${investorInfo.phone ? 'yes' : 'no'}`);
+        }
+      }
 
       let importedCount = 0;
       let skippedCount = 0;

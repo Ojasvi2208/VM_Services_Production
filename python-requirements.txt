@@ -1,0 +1,4 @@
+# Python dependencies for CAS parsing
+# Install with: pip install -r python-requirements.txt
+
+casparser>=0.7.0
