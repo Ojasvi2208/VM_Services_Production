@@ -6,18 +6,18 @@
 import nodemailer from 'nodemailer';
 
 // Email configuration - uses environment variables
-// Default to Zoho SMTP settings for vmfinancialservices.com
+// Zoho India SMTP with SSL on port 465
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.zoho.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true',
+  host: process.env.SMTP_HOST || 'smtppro.zoho.in',
+  port: parseInt(process.env.SMTP_PORT || '465'),
+  secure: true, // SSL on port 465
   auth: {
     user: process.env.SMTP_USER || 'support@vmfinancialservices.com',
     pass: process.env.SMTP_PASS,
   },
-  tls: {
-    rejectUnauthorized: false
-  }
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 30000,
 });
 
 const FROM_EMAIL = process.env.SMTP_FROM || 'support@vmfinancialservices.com';
