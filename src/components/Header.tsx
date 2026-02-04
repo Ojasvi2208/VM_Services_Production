@@ -63,13 +63,13 @@ export default function Header() {
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center focus-ring" aria-label="Vijay Malik Financial - Home">
               {/* Logo image - white bg with border on homepage, transparent PNG on other pages */}
-              <div className={`px-2 py-1 md:px-3 md:py-2 ${pathname === '/' ? 'bg-white rounded-lg shadow-md border-2 border-gray-200' : ''}`}>
+              <div className={`flex items-center justify-center ${pathname === '/' ? 'bg-white rounded-lg shadow-md border-2 border-gray-200 p-1 md:p-2' : 'p-1'}`}>
                 <Image 
                   src={pathname === '/' ? '/images/VM_Logo.jpg' : '/images/VM_Logo_no_bg.png'}
                   alt="Vijay Malik Financial Services Logo" 
                   width={320} 
                   height={80} 
-                  className="h-12 md:h-16 lg:h-20 w-auto" 
+                  className="h-8 sm:h-10 md:h-12 lg:h-14 w-auto object-contain max-w-[120px] sm:max-w-[160px] md:max-w-[200px] lg:max-w-[280px]" 
                   priority
                 />
               </div>

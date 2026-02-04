@@ -75,6 +75,18 @@ export async function initializeDatabase(): Promise<void> {
       )
     `);
     
+    // Add PAN/email/phone columns to users table for CAS data storage
+    // Using ALTER TABLE with IF NOT EXISTS pattern for safety
+    try {
+      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pan VARCHAR(20)`);
+      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cas_email VARCHAR(255)`);
+      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cas_phone VARCHAR(20)`);
+      console.log('✅ User CAS columns added/verified');
+    } catch (e) {
+      // Columns may already exist or table structure differs - that's okay
+      console.log('ℹ️ User CAS columns check completed');
+    }
+    
     console.log('✅ Database initialized successfully');
   } catch (error) {
     console.error('❌ Error initializing database:', error);

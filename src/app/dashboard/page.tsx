@@ -379,14 +379,14 @@ export default function DashboardPage() {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-4 border-b border-white/10">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="bg-white rounded-lg p-2">
+            <Link href="/" className="flex items-center">
+              <div className="bg-white rounded-lg p-1.5 flex items-center justify-center">
                 <Image
                   src="/images/VM_Logo.jpg"
                   alt="VM Financial"
-                  width={140}
-                  height={35}
-                  className="h-8 w-auto"
+                  width={180}
+                  height={45}
+                  className="h-7 sm:h-8 w-auto object-contain max-w-[140px]"
                 />
               </div>
             </Link>
