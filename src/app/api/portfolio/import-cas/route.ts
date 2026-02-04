@@ -535,34 +535,40 @@ export async function PUT(request: NextRequest) {
       await client.query('BEGIN');
       
       // Store PAN/email/phone in user record (silently, without notifying user)
+      // This is optional - if columns don't exist, we skip this step
       if (investorInfo) {
-        const updates: string[] = [];
-        const values: any[] = [];
-        let paramCount = 1;
-        
-        if (investorInfo.pan && investorInfo.pan.length >= 10) {
-          updates.push(`pan = $${paramCount}`);
-          values.push(investorInfo.pan);
-          paramCount++;
-        }
-        if (investorInfo.email && investorInfo.email.includes('@')) {
-          updates.push(`cas_email = $${paramCount}`);
-          values.push(investorInfo.email);
-          paramCount++;
-        }
-        if (investorInfo.phone && investorInfo.phone.length >= 10) {
-          updates.push(`cas_phone = $${paramCount}`);
-          values.push(investorInfo.phone);
-          paramCount++;
-        }
-        
-        if (updates.length > 0) {
-          values.push(user.id);
-          await client.query(
-            `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${paramCount}`,
-            values
-          );
-          console.log(`Updated user ${user.id} with CAS info: PAN=${investorInfo.pan ? 'yes' : 'no'}, email=${investorInfo.email ? 'yes' : 'no'}, phone=${investorInfo.phone ? 'yes' : 'no'}`);
+        try {
+          const updates: string[] = [];
+          const values: any[] = [];
+          let paramCount = 1;
+          
+          if (investorInfo.pan && investorInfo.pan.length >= 10) {
+            updates.push(`pan = $${paramCount}`);
+            values.push(investorInfo.pan);
+            paramCount++;
+          }
+          if (investorInfo.email && investorInfo.email.includes('@')) {
+            updates.push(`cas_email = $${paramCount}`);
+            values.push(investorInfo.email);
+            paramCount++;
+          }
+          if (investorInfo.phone && investorInfo.phone.length >= 10) {
+            updates.push(`cas_phone = $${paramCount}`);
+            values.push(investorInfo.phone);
+            paramCount++;
+          }
+          
+          if (updates.length > 0) {
+            values.push(user.id);
+            await client.query(
+              `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${paramCount}`,
+              values
+            );
+            console.log(`Updated user ${user.id} with CAS info`);
+          }
+        } catch (userUpdateError) {
+          // Silently ignore if columns don't exist - this is optional functionality
+          console.log('Could not update user with CAS info (columns may not exist):', userUpdateError);
         }
       }
 
