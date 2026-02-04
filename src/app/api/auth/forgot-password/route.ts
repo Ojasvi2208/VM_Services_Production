@@ -59,7 +59,11 @@ export async function POST(request: NextRequest) {
       );
 
       // Send OTP email
-      await sendPasswordResetOTP(user.email, user.full_name || 'User', otp);
+      const emailSent = await sendPasswordResetOTP(user.email, user.full_name || 'User', otp);
+      if (!emailSent) {
+        console.error('Failed to send OTP email to:', user.email);
+        // Still continue - don't reveal email issues to user for security
+      }
 
       // Mask email for security (e.g., oj***@outlook.com)
       const emailParts = user.email.split('@');
@@ -83,8 +87,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Forgot password error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ 
-      error: 'Failed to process request. Please try again.' 
+      error: `Failed to process request: ${errorMessage}` 
     }, { status: 500 });
   }
 }

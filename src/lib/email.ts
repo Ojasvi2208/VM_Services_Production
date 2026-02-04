@@ -32,16 +32,18 @@ interface EmailOptions {
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
   try {
-    await transporter.sendMail({
+    console.log(`Attempting to send email to ${options.to} via ${process.env.SMTP_HOST || 'smtp.zoho.com'}`);
+    const info = await transporter.sendMail({
       from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
       to: options.to,
       subject: options.subject,
       html: options.html,
       text: options.text || options.html.replace(/<[^>]*>/g, ''),
     });
-    console.log(`Email sent successfully to ${options.to}`);
+    console.log(`Email sent successfully to ${options.to}, messageId: ${info.messageId}`);
     return true;
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as Error;
     console.error('Failed to send email:', error);
     return false;
   }
