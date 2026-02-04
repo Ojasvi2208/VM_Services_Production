@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "update-nav": "npx tsx src/scripts/daily-nav-update.ts"
+    "update-nav": "npx tsx src/scripts/daily-nav-update.ts",
+    "postinstall": "pip3 install casparser || pip install casparser || echo 'Python casparser not installed - CAS parsing will use JS fallback'",
+    "install-python": "pip3 install casparser"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.932.0",
