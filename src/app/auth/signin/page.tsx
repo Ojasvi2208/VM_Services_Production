@@ -93,9 +93,9 @@ export default function SignInPage() {
                   <Image
                     src="/images/VM_Logo.jpg"
                     alt="VM Financial Services"
-                    width={180}
-                    height={45}
-                    className="h-10 w-auto object-contain"
+                    width={220}
+                    height={55}
+                    className="h-14 w-auto object-contain"
                   />
                 </div>
               </div>
