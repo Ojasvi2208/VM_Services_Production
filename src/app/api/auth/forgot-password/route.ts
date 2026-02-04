@@ -33,11 +33,23 @@ export async function POST(request: NextRequest) {
       const otp = generateOTP();
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
 
-      // Create password_reset_otp table if not exists
+      // Ensure password_reset_otp table exists with correct UUID type
+      // First check if table has wrong schema (INTEGER instead of UUID)
+      const columnCheck = await client.query(`
+        SELECT data_type FROM information_schema.columns 
+        WHERE table_name = 'password_reset_otp' AND column_name = 'user_id'
+      `);
+      
+      // If table exists with wrong type, drop it
+      if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type !== 'uuid') {
+        await client.query(`DROP TABLE IF EXISTS password_reset_otp CASCADE`);
+      }
+      
+      // Create table if not exists
       await client.query(`
         CREATE TABLE IF NOT EXISTS password_reset_otp (
           id SERIAL PRIMARY KEY,
-          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           otp VARCHAR(6) NOT NULL,
           expires_at TIMESTAMP NOT NULL,
           attempts INTEGER DEFAULT 0,
@@ -162,11 +174,20 @@ export async function PUT(request: NextRequest) {
         [otpRecord.id]
       );
 
-      // Create a temporary token for password reset
+      // Ensure password_reset_tokens table exists with correct UUID type
+      const tokenColumnCheck = await client.query(`
+        SELECT data_type FROM information_schema.columns 
+        WHERE table_name = 'password_reset_tokens' AND column_name = 'user_id'
+      `);
+      
+      if (tokenColumnCheck.rows.length > 0 && tokenColumnCheck.rows[0].data_type !== 'uuid') {
+        await client.query(`DROP TABLE IF EXISTS password_reset_tokens CASCADE`);
+      }
+      
       await client.query(`
         CREATE TABLE IF NOT EXISTS password_reset_tokens (
           id SERIAL PRIMARY KEY,
-          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           token VARCHAR(255) NOT NULL UNIQUE,
           expires_at TIMESTAMP NOT NULL,
           used BOOLEAN DEFAULT FALSE,
