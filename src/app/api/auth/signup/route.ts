@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { registerUser, createSession, SESSION_COOKIE_NAME } from '@/lib/auth';
 import { deobfuscateFromTransport } from '@/lib/encryption';
+import { sendWelcomeEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,6 +61,11 @@ export async function POST(request: NextRequest) {
     const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
     const userAgent = request.headers.get('user-agent') || '';
     const sessionToken = await createSession(result.userId!, ipAddress, userAgent);
+
+    // Send welcome email (async, don't wait for it)
+    sendWelcomeEmail(email, fullName).catch((err) => {
+      console.error('Failed to send welcome email:', err);
+    });
 
     // Set session cookie
     const response = NextResponse.json({
