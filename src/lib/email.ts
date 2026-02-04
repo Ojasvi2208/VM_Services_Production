@@ -6,14 +6,18 @@
 import nodemailer from 'nodemailer';
 
 // Email configuration - uses environment variables
-// Zoho India SMTP with SSL on port 465
+// Zoho India SMTP with TLS on port 587 (Railway blocks port 465)
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtppro.zoho.in',
-  port: parseInt(process.env.SMTP_PORT || '465'),
-  secure: true, // SSL on port 465
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: false, // TLS/STARTTLS on port 587
   auth: {
     user: process.env.SMTP_USER || 'support@vmfinancialservices.com',
     pass: process.env.SMTP_PASS,
+  },
+  tls: {
+    ciphers: 'SSLv3',
+    rejectUnauthorized: false
   },
   connectionTimeout: 30000,
   greetingTimeout: 30000,
