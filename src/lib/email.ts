@@ -6,18 +6,22 @@
 import nodemailer from 'nodemailer';
 
 // Email configuration - uses environment variables
+// Default to Zoho SMTP settings for vmfinancialservices.com
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  host: process.env.SMTP_HOST || 'smtp.zoho.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
   secure: process.env.SMTP_SECURE === 'true',
   auth: {
-    user: process.env.SMTP_USER,
+    user: process.env.SMTP_USER || 'support@vmfinancialservices.com',
     pass: process.env.SMTP_PASS,
   },
+  tls: {
+    rejectUnauthorized: false
+  }
 });
 
-const FROM_EMAIL = process.env.SMTP_FROM || 'noreply@vijaymalikfinancial.com';
-const FROM_NAME = 'Vijay Malik Financial Services';
+const FROM_EMAIL = process.env.SMTP_FROM || 'support@vmfinancialservices.com';
+const FROM_NAME = 'VM Financial Services';
 
 interface EmailOptions {
   to: string;
