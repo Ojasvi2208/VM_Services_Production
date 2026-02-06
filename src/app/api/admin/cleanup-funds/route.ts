@@ -35,7 +35,23 @@ export async function POST(request: NextRequest) {
     `);
     results.before.staleFunds = parseInt(staleBefore.rows[0].count);
 
-    // Step 2: Delete Plan A/B/C variants
+    // Step 2: Delete fund_returns for Plan A/B/C variants FIRST (foreign key)
+    const deleteReturnsPlanABC = await client.query(`
+      DELETE FROM fund_returns 
+      WHERE scheme_code IN (
+        SELECT scheme_code FROM funds
+        WHERE scheme_name ILIKE '%- Plan A -%'
+           OR scheme_name ILIKE '%- Plan B -%'
+           OR scheme_name ILIKE '%- Plan C -%'
+           OR scheme_name ILIKE '% Plan A %'
+           OR scheme_name ILIKE '% Plan B %'
+           OR scheme_name ILIKE '% Plan C %'
+      )
+      RETURNING scheme_code
+    `);
+    results.deleted.returnsPlanABC = deleteReturnsPlanABC.rowCount;
+
+    // Step 3: Delete Plan A/B/C fund variants
     const deletePlanABC = await client.query(`
       DELETE FROM funds 
       WHERE scheme_name ILIKE '%- Plan A -%'
@@ -48,7 +64,17 @@ export async function POST(request: NextRequest) {
     `);
     results.deleted.planABC = deletePlanABC.rowCount;
 
-    // Step 3: Delete stale funds (before 2020)
+    // Step 4: Delete fund_returns for stale funds FIRST
+    const deleteReturnsStale = await client.query(`
+      DELETE FROM fund_returns 
+      WHERE scheme_code IN (
+        SELECT scheme_code FROM funds WHERE latest_nav_date < '2020-01-01'
+      )
+      RETURNING scheme_code
+    `);
+    results.deleted.returnsStale = deleteReturnsStale.rowCount;
+
+    // Step 5: Delete stale funds (before 2020)
     const deleteStale = await client.query(`
       DELETE FROM funds 
       WHERE latest_nav_date < '2020-01-01'
@@ -56,7 +82,7 @@ export async function POST(request: NextRequest) {
     `);
     results.deleted.staleFunds = deleteStale.rowCount;
 
-    // Step 4: Clean orphaned fund_returns
+    // Step 6: Clean any remaining orphaned fund_returns
     const deleteOrphanedReturns = await client.query(`
       DELETE FROM fund_returns 
       WHERE scheme_code NOT IN (SELECT scheme_code FROM funds)
