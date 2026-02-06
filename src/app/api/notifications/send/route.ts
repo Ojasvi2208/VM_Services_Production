@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import { sendPushNotificationBatch, isFirebaseConfigured } from '@/lib/firebase-admin';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-// Firebase Cloud Messaging configuration
-const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY;
-const FCM_API_URL = 'https://fcm.googleapis.com/fcm/send';
-
 interface NotificationPayload {
   title: string;
   body: string;
   data?: Record<string, string>;
-  imageUrl?: string;
-  badge?: number;
-  sound?: string;
 }
 
 interface SendNotificationRequest {
@@ -26,64 +20,32 @@ interface SendNotificationRequest {
   notification: NotificationPayload;
 }
 
-// Send push notification via FCM
+// Send push notifications using Firebase Admin SDK
 async function sendFCMNotification(
   tokens: string[],
   notification: NotificationPayload
 ): Promise<{ success: number; failure: number }> {
-  if (!FCM_SERVER_KEY) {
-    console.log('FCM_SERVER_KEY not configured, skipping push notification');
+  if (!isFirebaseConfigured()) {
+    console.log('Firebase not configured, skipping push notification');
     return { success: 0, failure: tokens.length };
   }
 
-  let success = 0;
-  let failure = 0;
+  const result = await sendPushNotificationBatch(
+    tokens,
+    notification.title,
+    notification.body,
+    notification.data
+  );
 
-  // Send to each token (batch in production)
-  for (const token of tokens) {
-    try {
-      const response = await fetch(FCM_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `key=${FCM_SERVER_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: token,
-          notification: {
-            title: notification.title,
-            body: notification.body,
-            image: notification.imageUrl,
-            sound: notification.sound || 'default',
-            badge: notification.badge,
-          },
-          data: notification.data || {},
-          priority: 'high',
-          content_available: true,
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success === 1) {
-          success++;
-        } else {
-          failure++;
-          // Remove invalid tokens
-          if (result.results?.[0]?.error === 'NotRegistered') {
-            await pool.query('DELETE FROM device_tokens WHERE device_token = $1', [token]);
-          }
-        }
-      } else {
-        failure++;
-      }
-    } catch (error) {
-      console.error('FCM send error:', error);
-      failure++;
+  // Remove invalid tokens from database
+  if (result.invalidTokens.length > 0) {
+    for (const token of result.invalidTokens) {
+      await pool.query('DELETE FROM device_tokens WHERE device_token = $1', [token]);
     }
+    console.log(`Removed ${result.invalidTokens.length} invalid tokens`);
   }
 
-  return { success, failure };
+  return { success: result.success, failure: result.failure };
 }
 
 // Send notification endpoint

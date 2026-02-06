@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import { sendPushNotificationBatch, isFirebaseConfigured } from '@/lib/firebase-admin';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
-
-const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY;
-const FCM_API_URL = 'https://fcm.googleapis.com/fcm/send';
 
 // Verify cron secret
 function verifyCronSecret(request: NextRequest): boolean {
@@ -16,41 +14,22 @@ function verifyCronSecret(request: NextRequest): boolean {
   return authHeader === `Bearer ${cronSecret}`;
 }
 
-// Send FCM notification to multiple tokens
+// Send notifications using Firebase Admin SDK
 async function sendToTokens(tokens: string[], title: string, body: string, data?: Record<string, string>) {
-  if (!FCM_SERVER_KEY || tokens.length === 0) return { success: 0, failure: 0 };
+  if (!isFirebaseConfigured() || tokens.length === 0) {
+    return { success: 0, failure: 0 };
+  }
 
-  let success = 0;
-  let failure = 0;
-
-  for (const token of tokens) {
-    try {
-      const response = await fetch(FCM_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `key=${FCM_SERVER_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: token,
-          notification: { title, body, sound: 'default' },
-          data: data || {},
-          priority: 'high',
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        result.success === 1 ? success++ : failure++;
-      } else {
-        failure++;
-      }
-    } catch {
-      failure++;
+  const result = await sendPushNotificationBatch(tokens, title, body, data);
+  
+  // Clean up invalid tokens
+  if (result.invalidTokens.length > 0) {
+    for (const token of result.invalidTokens) {
+      await pool.query('DELETE FROM device_tokens WHERE device_token = $1', [token]);
     }
   }
 
-  return { success, failure };
+  return { success: result.success, failure: result.failure };
 }
 
 // Get tokens with specific preference enabled
