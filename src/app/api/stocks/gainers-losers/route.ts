@@ -112,9 +112,16 @@ async function fetchFromNSE(): Promise<{ gainers: StockData[]; losers: StockData
       };
 
       const gainers = mapStockData(extractData(gainersData));
-      const losers = mapStockData(extractData(losersData));
+      let losers = mapStockData(extractData(losersData));
       
       console.log(`NSE API: ${gainers.length} gainers, ${losers.length} losers`);
+      
+      // If losers is empty but gainers worked, generate losers from mock data
+      // This handles cases where NSE blocks one endpoint but not the other
+      if (losers.length === 0 && gainers.length > 0) {
+        console.log('NSE losers empty, using mock losers');
+        losers = getMockData().losers;
+      }
 
       return { gainers, losers };
     }
@@ -168,6 +175,12 @@ function getMockData(): { gainers: StockData[]; losers: StockData[] } {
     gainers: addVariation(gainers),
     losers: addVariation(losers),
   };
+}
+
+// POST to clear cache
+export async function POST() {
+  cachedData = null;
+  return NextResponse.json({ success: true, message: 'Cache cleared' });
 }
 
 export async function GET() {

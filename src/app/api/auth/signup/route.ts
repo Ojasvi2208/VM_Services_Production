@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       console.error('Failed to send welcome email:', err);
     });
 
-    // Set session cookie and return token for mobile apps
+    // Set session cookie
     const response = NextResponse.json({
       success: true,
       message: 'Account created successfully',
@@ -75,8 +75,7 @@ export async function POST(request: NextRequest) {
         id: result.userId,
         email,
         fullName
-      },
-      token: sessionToken // For mobile app auth
+      }
     });
 
     response.cookies.set(SESSION_COOKIE_NAME, sessionToken, {
