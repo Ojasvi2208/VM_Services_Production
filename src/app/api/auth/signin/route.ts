@@ -33,11 +33,12 @@ export async function POST(request: NextRequest) {
     const userAgent = request.headers.get('user-agent') || '';
     const sessionToken = await createSession(result.user.id, ipAddress, userAgent);
 
-    // Set session cookie
+    // Set session cookie and return token for mobile apps
     const response = NextResponse.json({
       success: true,
       message: 'Login successful',
-      user: result.user
+      user: result.user,
+      token: sessionToken // For mobile app auth
     });
 
     response.cookies.set(SESSION_COOKIE_NAME, sessionToken, {

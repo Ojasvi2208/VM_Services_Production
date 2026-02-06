@@ -23,10 +23,19 @@ interface StockData {
 interface NSEStockData {
   symbol: string;
   series?: string;
+  open_price?: number;
+  high_price?: number;
+  low_price?: number;
+  ltp?: number;
+  prev_price?: number;
+  pChange?: number;
+  change?: number;
+  traded_quantity?: number;
+  turnover_in_lakhs?: number;
+  // Alternative field names from different NSE endpoints
   openPrice?: number;
   highPrice?: number;
   lowPrice?: number;
-  ltp?: number;
   previousPrice?: number;
   netPrice?: number;
   tradedQuantity?: number;
@@ -73,20 +82,39 @@ async function fetchFromNSE(): Promise<{ gainers: StockData[]; losers: StockData
       const losersData = await losersResponse.json();
 
       const mapStockData = (data: NSEStockData[]): StockData[] => {
-        return data.slice(0, 10).map((stock) => ({
-          symbol: stock.symbol,
-          name: stock.symbol, // NSE doesn't return full name in this endpoint
-          price: stock.ltp || 0,
-          change: (stock.ltp || 0) - (stock.previousPrice || 0),
-          changePercent: stock.netPrice || 0,
-          volume: stock.tradedQuantity,
-          high: stock.highPrice,
-          low: stock.lowPrice,
-        }));
+        if (!Array.isArray(data)) return [];
+        return data.slice(0, 10).map((stock) => {
+          const price = stock.ltp || 0;
+          const prevPrice = stock.prev_price || stock.previousPrice || price;
+          const changePercent = stock.pChange || stock.netPrice || 0;
+          const change = stock.change || (price - prevPrice);
+          
+          return {
+            symbol: stock.symbol,
+            name: stock.symbol,
+            price: price,
+            change: change,
+            changePercent: changePercent,
+            volume: stock.traded_quantity || stock.tradedQuantity,
+            high: stock.high_price || stock.highPrice,
+            low: stock.low_price || stock.lowPrice,
+          };
+        });
       };
 
-      const gainers = mapStockData(gainersData?.NIFTY?.data || gainersData?.allSec || []);
-      const losers = mapStockData(losersData?.NIFTY?.data || losersData?.allSec || []);
+      // Try different response structures from NSE
+      const extractData = (response: any): NSEStockData[] => {
+        if (response?.NIFTY?.data) return response.NIFTY.data;
+        if (response?.allSec) return response.allSec;
+        if (response?.data) return response.data;
+        if (Array.isArray(response)) return response;
+        return [];
+      };
+
+      const gainers = mapStockData(extractData(gainersData));
+      const losers = mapStockData(extractData(losersData));
+      
+      console.log(`NSE API: ${gainers.length} gainers, ${losers.length} losers`);
 
       return { gainers, losers };
     }
