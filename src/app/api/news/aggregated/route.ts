@@ -250,17 +250,21 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch from multiple sources in parallel
+    // Fetch from multiple sources in parallel - ONLY financial/business news
     const [
       marketNews,
       mfNews,
       forexNews,
       taxNews,
+      stockNews,
+      investmentNews,
     ] = await Promise.all([
-      fetchGNews('indian stock market nifty sensex', 'Markets'),
-      fetchGNews('mutual funds india NAV', 'Mutual Funds'),
-      fetchGNews('forex USD INR currency', 'Forex'),
-      fetchGNews('income tax india budget', 'Tax'),
+      fetchGNews('NSE BSE nifty sensex stock market india', 'Markets'),
+      fetchGNews('mutual fund SIP NAV SEBI AMFI india', 'Mutual Funds'),
+      fetchGNews('forex rupee dollar RBI currency exchange', 'Forex'),
+      fetchGNews('income tax GST budget finance ministry india', 'Tax'),
+      fetchGNews('Reliance TCS Infosys HDFC earnings quarterly results', 'Stocks'),
+      fetchGNews('investment portfolio wealth management IPO FII DII', 'Economy'),
     ]);
 
     // Combine all news
@@ -270,6 +274,8 @@ export async function GET(request: NextRequest) {
       ...mfNews,
       ...forexNews,
       ...taxNews,
+      ...stockNews,
+      ...investmentNews,
     ];
 
     // Remove duplicates by title similarity
