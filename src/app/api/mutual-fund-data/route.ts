@@ -182,6 +182,15 @@ export async function GET() {
           AND f.scheme_name LIKE '%Growth%'
           AND f.latest_nav IS NOT NULL
           AND fr.return_1y IS NOT NULL
+          AND f.scheme_name NOT ILIKE '%segregated%'
+          AND f.scheme_name NOT ILIKE '%wind up%'
+          AND f.scheme_name NOT ILIKE '%interval%'
+          AND f.scheme_name NOT ILIKE '%fixed maturity%'
+          AND f.scheme_name NOT ILIKE '%FMP%'
+          AND f.scheme_name NOT ILIKE '%close ended%'
+          AND f.latest_nav > 1
+          AND fr.return_1y > 0
+          AND fr.return_1y < 200
         ORDER BY fr.return_1y DESC
         LIMIT 30
       `);

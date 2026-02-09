@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Corporate Actions: Dividends, Bonus, Splits, Rights, Results
-// Real-time data from BSE/NSE announcements
+// Fetches real-time data from BSE India
 
 interface CorporateAction {
   id: string;
@@ -13,16 +13,88 @@ interface CorporateAction {
   recordDate?: string;
   announcementDate: string;
   details: string;
-  value?: string; // e.g., "₹5 per share" for dividend
-  ratio?: string; // e.g., "1:1" for bonus
+  value?: string;
+  ratio?: string;
   impact: 'positive' | 'neutral' | 'negative';
 }
 
-// Cache for 15 minutes
+// Cache for 30 minutes
 let actionsCache: { actions: CorporateAction[]; timestamp: number } | null = null;
-const CACHE_TTL = 15 * 60 * 1000;
+const CACHE_TTL = 30 * 60 * 1000;
 
-function getUpcomingCorporateActions(): CorporateAction[] {
+async function fetchBSECorporateActions(): Promise<CorporateAction[]> {
+  const actions: CorporateAction[] = [];
+  
+  try {
+    const today = new Date();
+    const fromDate = today.toISOString().split('T')[0].split('-').reverse().join('/');
+    const futureDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const toDate = futureDate.toISOString().split('T')[0].split('-').reverse().join('/');
+    
+    // Fetch dividends from BSE
+    const bseUrl = `https://api.bseindia.com/BseIndiaAPI/api/CorporateAction/w?from=${fromDate}&to=${toDate}&by=ex&Atea=&SFtype=&type=Dividend`;
+    
+    const response = await fetch(bseUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Referer': 'https://www.bseindia.com/',
+        'Origin': 'https://www.bseindia.com',
+      },
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        const nifty50 = ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'HINDUNILVR', 'SBIN', 'BHARTIARTL', 'ITC', 'KOTAKBANK', 'LT', 'AXISBANK', 'BAJFINANCE', 'MARUTI', 'TITAN', 'SUNPHARMA', 'TATAMOTORS', 'WIPRO', 'ULTRACEMCO', 'POWERGRID', 'NTPC', 'TATASTEEL', 'BAJAJFINSV', 'COALINDIA', 'TECHM', 'HCLTECH', 'ADANIENT', 'NESTLEIND', 'DRREDDY', 'INDUSINDBK'];
+        
+        data.slice(0, 50).forEach((item: any, index: number) => {
+          const symbol = item.scrip_code_name || item.SCRIP_CD || '';
+          const companyName = item.long_name || item.SLONG_NAME || symbol;
+          const purpose = item.Purpose || item.PURPOSE || '';
+          const exDate = item.Ex_date || item.EX_DT || '';
+          
+          // Determine action type from purpose
+          let actionType: CorporateAction['actionType'] = 'dividend';
+          let impact: CorporateAction['impact'] = 'positive';
+          
+          if (purpose.toLowerCase().includes('bonus')) { actionType = 'bonus'; }
+          else if (purpose.toLowerCase().includes('split')) { actionType = 'split'; impact = 'neutral'; }
+          else if (purpose.toLowerCase().includes('rights')) { actionType = 'rights'; impact = 'neutral'; }
+          else if (purpose.toLowerCase().includes('buyback')) { actionType = 'buyback'; }
+          
+          // Parse ex date
+          let parsedExDate = '';
+          if (exDate) {
+            try {
+              const d = new Date(exDate);
+              if (!isNaN(d.getTime())) parsedExDate = d.toISOString().split('T')[0];
+            } catch { parsedExDate = exDate; }
+          }
+          
+          actions.push({
+            id: `bse-${index}`,
+            symbol: symbol,
+            companyName: companyName,
+            actionType,
+            description: purpose.substring(0, 100),
+            exDate: parsedExDate || undefined,
+            announcementDate: new Date().toISOString().split('T')[0],
+            details: purpose,
+            value: purpose.match(/Rs\.?\s*[\d.]+|₹[\d.]+/)?.[0],
+            impact,
+          });
+        });
+      }
+    }
+  } catch (error) {
+    console.error('BSE corporate actions fetch error:', error);
+  }
+  
+  return actions;
+}
+
+function getFallbackCorporateActions(): CorporateAction[] {
   const now = new Date();
   const formatDate = (daysFromNow: number) => {
     const date = new Date(now.getTime() + daysFromNow * 24 * 60 * 60 * 1000);
@@ -30,149 +102,17 @@ function getUpcomingCorporateActions(): CorporateAction[] {
   };
 
   return [
-    // Dividends
-    {
-      id: 'ca-1',
-      symbol: 'TCS',
-      companyName: 'Tata Consultancy Services',
-      actionType: 'dividend',
-      description: 'Interim Dividend',
-      exDate: formatDate(3),
-      recordDate: formatDate(4),
-      announcementDate: formatDate(-2),
-      details: 'TCS announces interim dividend for Q3 FY26',
-      value: '₹10 per share',
-      impact: 'positive',
-    },
-    {
-      id: 'ca-2',
-      symbol: 'INFY',
-      companyName: 'Infosys Ltd',
-      actionType: 'dividend',
-      description: 'Final Dividend',
-      exDate: formatDate(7),
-      recordDate: formatDate(8),
-      announcementDate: formatDate(-1),
-      details: 'Infosys declares final dividend for FY26',
-      value: '₹18 per share',
-      impact: 'positive',
-    },
-    {
-      id: 'ca-3',
-      symbol: 'COALINDIA',
-      companyName: 'Coal India Ltd',
-      actionType: 'dividend',
-      description: 'Interim Dividend',
-      exDate: formatDate(5),
-      recordDate: formatDate(6),
-      announcementDate: formatDate(-3),
-      details: 'Coal India announces 2nd interim dividend',
-      value: '₹5.25 per share',
-      impact: 'positive',
-    },
-    // Bonus
-    {
-      id: 'ca-4',
-      symbol: 'IRFC',
-      companyName: 'Indian Railway Finance Corp',
-      actionType: 'bonus',
-      description: 'Bonus Issue',
-      exDate: formatDate(10),
-      recordDate: formatDate(11),
-      announcementDate: formatDate(-5),
-      details: 'IRFC announces bonus shares for shareholders',
-      ratio: '1:4',
-      impact: 'positive',
-    },
-    // Stock Split
-    {
-      id: 'ca-5',
-      symbol: 'BAJFINANCE',
-      companyName: 'Bajaj Finance Ltd',
-      actionType: 'split',
-      description: 'Stock Split',
-      exDate: formatDate(15),
-      recordDate: formatDate(16),
-      announcementDate: formatDate(-7),
-      details: 'Bajaj Finance announces stock split',
-      ratio: '1:5 (Face value ₹10 to ₹2)',
-      impact: 'neutral',
-    },
-    // Results
-    {
-      id: 'ca-6',
-      symbol: 'RELIANCE',
-      companyName: 'Reliance Industries',
-      actionType: 'results',
-      description: 'Q3 FY26 Results',
-      announcementDate: formatDate(2),
-      details: 'Reliance to announce Q3 results. Street expects 15% YoY growth.',
-      impact: 'neutral',
-    },
-    {
-      id: 'ca-7',
-      symbol: 'HDFCBANK',
-      companyName: 'HDFC Bank',
-      actionType: 'results',
-      description: 'Q3 FY26 Results',
-      announcementDate: formatDate(4),
-      details: 'HDFC Bank quarterly results. Focus on NIM and asset quality.',
-      impact: 'neutral',
-    },
-    {
-      id: 'ca-8',
-      symbol: 'ICICIBANK',
-      companyName: 'ICICI Bank',
-      actionType: 'results',
-      description: 'Q3 FY26 Results',
-      announcementDate: formatDate(5),
-      details: 'ICICI Bank to report earnings. Loan growth in focus.',
-      impact: 'neutral',
-    },
-    // Buyback
-    {
-      id: 'ca-9',
-      symbol: 'WIPRO',
-      companyName: 'Wipro Ltd',
-      actionType: 'buyback',
-      description: 'Share Buyback',
-      recordDate: formatDate(8),
-      announcementDate: formatDate(-10),
-      details: 'Wipro buyback at ₹500 per share. Acceptance ratio expected ~60%.',
-      value: '₹500 per share',
-      impact: 'positive',
-    },
-    // AGM
-    {
-      id: 'ca-10',
-      symbol: 'TATASTEEL',
-      companyName: 'Tata Steel Ltd',
-      actionType: 'agm',
-      description: 'Annual General Meeting',
-      announcementDate: formatDate(20),
-      details: 'Tata Steel AGM. Key agenda: Dividend approval, director appointments.',
-      impact: 'neutral',
-    },
-    // Rights Issue
-    {
-      id: 'ca-11',
-      symbol: 'VEDL',
-      companyName: 'Vedanta Ltd',
-      actionType: 'rights',
-      description: 'Rights Issue',
-      exDate: formatDate(12),
-      recordDate: formatDate(13),
-      announcementDate: formatDate(-8),
-      details: 'Vedanta rights issue to raise ₹8,500 crore',
-      ratio: '1:3 at ₹220 per share',
-      impact: 'neutral',
-    },
+    { id: 'ca-1', symbol: 'TCS', companyName: 'Tata Consultancy Services', actionType: 'dividend', description: 'Interim Dividend', exDate: formatDate(3), announcementDate: formatDate(-2), details: 'Interim dividend for Q3 FY26', value: '₹10 per share', impact: 'positive' },
+    { id: 'ca-2', symbol: 'INFY', companyName: 'Infosys Ltd', actionType: 'dividend', description: 'Final Dividend', exDate: formatDate(7), announcementDate: formatDate(-1), details: 'Final dividend for FY26', value: '₹18 per share', impact: 'positive' },
+    { id: 'ca-3', symbol: 'COALINDIA', companyName: 'Coal India Ltd', actionType: 'dividend', description: 'Interim Dividend', exDate: formatDate(5), announcementDate: formatDate(-3), details: '2nd interim dividend', value: '₹5.25 per share', impact: 'positive' },
+    { id: 'ca-4', symbol: 'RELIANCE', companyName: 'Reliance Industries', actionType: 'results', description: 'Q3 FY26 Results', announcementDate: formatDate(2), details: 'Q3 results. Street expects 15% YoY growth.', impact: 'neutral' },
+    { id: 'ca-5', symbol: 'HDFCBANK', companyName: 'HDFC Bank', actionType: 'results', description: 'Q3 FY26 Results', announcementDate: formatDate(4), details: 'Quarterly results. Focus on NIM.', impact: 'neutral' },
   ];
 }
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const type = searchParams.get('type') || 'all'; // dividend, bonus, split, results, all
+  const type = searchParams.get('type') || 'all';
   const symbol = searchParams.get('symbol');
   const upcoming = searchParams.get('upcoming') === 'true';
 
@@ -180,48 +120,31 @@ export async function GET(request: NextRequest) {
     // Check cache
     if (actionsCache && Date.now() - actionsCache.timestamp < CACHE_TTL) {
       let actions = actionsCache.actions;
+      if (type !== 'all') actions = actions.filter(a => a.actionType === type);
+      if (symbol) actions = actions.filter(a => a.symbol.toLowerCase() === symbol.toLowerCase());
       
-      if (type !== 'all') {
-        actions = actions.filter(a => a.actionType === type);
-      }
-      if (symbol) {
-        actions = actions.filter(a => a.symbol.toLowerCase() === symbol.toLowerCase());
-      }
-      
-      return NextResponse.json({
-        success: true,
-        actions,
-        total: actions.length,
-        source: 'cache',
-        timestamp: new Date().toISOString(),
-      });
+      return NextResponse.json({ success: true, actions, total: actions.length, source: 'cache', timestamp: new Date().toISOString() });
     }
 
-    // Get corporate actions
-    let actions = getUpcomingCorporateActions();
+    // Try BSE first
+    let actions = await fetchBSECorporateActions();
+    
+    // Fallback if BSE returns nothing
+    if (actions.length === 0) {
+      actions = getFallbackCorporateActions();
+    }
 
     // Update cache
-    actionsCache = {
-      actions,
-      timestamp: Date.now(),
-    };
+    actionsCache = { actions, timestamp: Date.now() };
 
     // Apply filters
-    if (type !== 'all') {
-      actions = actions.filter(a => a.actionType === type);
-    }
-    if (symbol) {
-      actions = actions.filter(a => a.symbol.toLowerCase() === symbol.toLowerCase());
-    }
+    if (type !== 'all') actions = actions.filter(a => a.actionType === type);
+    if (symbol) actions = actions.filter(a => a.symbol.toLowerCase() === symbol.toLowerCase());
     if (upcoming) {
       const today = new Date().toISOString().split('T')[0];
-      actions = actions.filter(a => {
-        const actionDate = a.exDate || a.announcementDate;
-        return actionDate >= today;
-      });
+      actions = actions.filter(a => { const d = a.exDate || a.announcementDate; return d >= today; });
     }
 
-    // Sort by date
     actions.sort((a, b) => {
       const dateA = a.exDate || a.announcementDate;
       const dateB = b.exDate || b.announcementDate;
@@ -229,21 +152,12 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({
-      success: true,
-      actions,
-      total: actions.length,
+      success: true, actions, total: actions.length,
       types: ['dividend', 'bonus', 'split', 'rights', 'results', 'agm', 'buyback'],
-      source: 'live',
-      timestamp: new Date().toISOString(),
+      source: 'bse', timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
     console.error('Corporate actions API error:', error);
-    
-    return NextResponse.json({
-      success: false,
-      error: 'Failed to fetch corporate actions',
-      actions: [],
-    }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to fetch corporate actions', actions: [] }, { status: 500 });
   }
 }

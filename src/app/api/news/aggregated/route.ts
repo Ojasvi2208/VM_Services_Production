@@ -16,15 +16,15 @@ interface NewsArticle {
   isBreaking?: boolean;
 }
 
-// Cache for 5 minutes
+// Cache for 30 minutes
 let newsCache: { articles: NewsArticle[]; timestamp: number } | null = null;
-const CACHE_TTL = 5 * 60 * 1000;
+const CACHE_TTL = 30 * 60 * 1000;
 
 // Free news API sources
 const NEWS_SOURCES = {
   gnews: {
     baseUrl: 'https://gnews.io/api/v4/search',
-    apiKey: process.env.GNEWS_API_KEY,
+    apiKey: process.env.GNEWS_API_KEY || '8876ed46171022e2b1d2a1bb2099fe67',
   },
   newsdata: {
     baseUrl: 'https://newsdata.io/api/1/news',
@@ -267,9 +267,8 @@ export async function GET(request: NextRequest) {
       fetchGNews('investment portfolio wealth management IPO FII DII', 'Economy'),
     ]);
 
-    // Combine all news
-    let allArticles: NewsArticle[] = [
-      ...getCuratedNews(),
+    // Combine all live news
+    let liveArticles: NewsArticle[] = [
       ...marketNews,
       ...mfNews,
       ...forexNews,
@@ -277,6 +276,11 @@ export async function GET(request: NextRequest) {
       ...stockNews,
       ...investmentNews,
     ];
+
+    // Only use curated news as fallback if GNews returned nothing
+    let allArticles: NewsArticle[] = liveArticles.length > 0
+      ? liveArticles
+      : getCuratedNews();
 
     // Remove duplicates by title similarity
     const seen = new Set<string>();
