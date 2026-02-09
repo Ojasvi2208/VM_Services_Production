@@ -404,16 +404,17 @@ export async function GET(request: NextRequest) {
     const fiftyTwoWeekLow = meta.fiftyTwoWeekLow || Math.min(...dailyCandles.map(c => c.low));
     const currentPrice = meta.regularMarketPrice || dailyCloses[dailyCloses.length - 1];
     // Use meta.previousClose if available; otherwise derive from second-to-last daily candle
+    // NO fallback to 0 — if we can't determine previousClose, leave change as null
     const previousClose = meta.previousClose
-      || (dailyCandles.length >= 2 ? dailyCandles[dailyCandles.length - 2].close : meta.chartPreviousClose)
-      || 0;
-    const dayChange = currentPrice - previousClose;
-    const dayChangePercent = previousClose ? (dayChange / previousClose) * 100 : 0;
+      || (dailyCandles.length >= 2 ? dailyCandles[dailyCandles.length - 2].close : null);
+    const dayChange = previousClose != null ? currentPrice - previousClose : null;
+    const dayChangePercent = (previousClose != null && previousClose !== 0)
+      ? ((currentPrice - previousClose) / previousClose) * 100 : null;
 
-    // Where in 52-week range
-    const rangePosition = fiftyTwoWeekHigh !== fiftyTwoWeekLow
+    // Where in 52-week range — null if data is invalid
+    const rangePosition = (fiftyTwoWeekHigh > fiftyTwoWeekLow)
       ? ((currentPrice - fiftyTwoWeekLow) / (fiftyTwoWeekHigh - fiftyTwoWeekLow)) * 100
-      : 50;
+      : null;
 
     // Generate technical signals
     const signals = generateSignals(dailyCloses, dma50, dma100, dma200, rsi, macd);
@@ -446,12 +447,12 @@ export async function GET(request: NextRequest) {
       name: mapping.name,
       exchange: mapping.exchange,
       currentPrice: Number(currentPrice.toFixed(2)),
-      previousClose: Number(previousClose.toFixed(2)),
-      dayChange: Number(dayChange.toFixed(2)),
-      dayChangePercent: Number(dayChangePercent.toFixed(2)),
+      previousClose: previousClose != null ? Number(previousClose.toFixed(2)) : null,
+      dayChange: dayChange != null ? Number(dayChange.toFixed(2)) : null,
+      dayChangePercent: dayChangePercent != null ? Number(dayChangePercent.toFixed(2)) : null,
       fiftyTwoWeekHigh: Number(fiftyTwoWeekHigh.toFixed(2)),
       fiftyTwoWeekLow: Number(fiftyTwoWeekLow.toFixed(2)),
-      fiftyTwoWeekRangePosition: Number(rangePosition.toFixed(1)),
+      fiftyTwoWeekRangePosition: rangePosition != null ? Number(rangePosition.toFixed(1)) : null,
       isMarketOpen: meta.marketState === 'REGULAR',
       range,
       interval: rangeConfig.interval,
