@@ -199,6 +199,11 @@ export async function GET() {
           AND f.scheme_name NOT ILIKE '%Nifty%'
           AND f.scheme_name NOT ILIKE '%Sensex%'
           AND f.scheme_name NOT ILIKE '%Index%'
+          AND f.scheme_name NOT ILIKE '%Series%'
+          AND f.scheme_name NOT ILIKE '%Payout%'
+          AND f.scheme_name NOT ILIKE '%ayout of I%'
+          AND f.scheme_name NOT ILIKE '%Long Term Advantage%'
+          AND f.scheme_name NOT ILIKE '%Principal%'
           AND f.latest_nav > 5
           AND fr.return_1y > 0
           AND fr.return_1y < 100
