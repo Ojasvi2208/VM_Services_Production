@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Live financial news aggregation — NO fake/curated fallback
-// GNews free tier: 100 req/day → 2 queries per refresh, 4hr cache = ~12 queries/day max
+// Live financial news via Google News RSS — completely free, no API key, no rate limits
+// Cache: 1 hour. Concurrent requests share one in-flight fetch (no thundering herd).
 
 interface NewsArticle {
   id: string;
@@ -15,14 +15,15 @@ interface NewsArticle {
   isBreaking?: boolean;
 }
 
-// Cache for 4 hours (conserves GNews quota: 100 req/day free tier)
+// ─── Cache (1 hour) ─────────────────────────────────────────────────────────
 let newsCache: { articles: NewsArticle[]; timestamp: number } | null = null;
-const CACHE_TTL = 4 * 60 * 60 * 1000;
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
-const GNEWS_API_KEY = process.env.GNEWS_API_KEY || '8876ed46171022e2b1d2a1bb2099fe67';
+// ─── In-flight lock (prevents duplicate fetches from concurrent requests) ───
+let inflightPromise: Promise<NewsArticle[]> | null = null;
 
-// Helper: fetch with timeout
-async function fetchWithTimeout(url: string, timeoutMs = 10000): Promise<Response> {
+// ─── Fetch with timeout ─────────────────────────────────────────────────────
+async function fetchWithTimeout(url: string, timeoutMs = 12000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -32,7 +33,7 @@ async function fetchWithTimeout(url: string, timeoutMs = 10000): Promise<Respons
   }
 }
 
-// Categorize articles by keywords in title/description
+// ─── Categorize by keywords ─────────────────────────────────────────────────
 function categorizeArticle(title: string, description: string): string {
   const text = `${title} ${description}`.toLowerCase();
   if (text.match(/mutual fund|sip |nav |amfi|sebi.*fund|amc |nfo |new fund/)) return 'Mutual Funds';
@@ -40,131 +41,164 @@ function categorizeArticle(title: string, description: string): string {
   if (text.match(/tax|gst|budget|fiscal|income tax|ltcg|stcg/)) return 'Tax';
   if (text.match(/ipo |listing|nfo |new fund offer/)) return 'NFO';
   if (text.match(/gdp|rbi|inflation|repo rate|monetary policy|economy/)) return 'Economy';
-  if (text.match(/earnings|quarterly|results|revenue|profit|q[1-4]|revenue/)) return 'Stocks';
+  if (text.match(/earnings|quarterly|results|revenue|profit|q[1-4]/)) return 'Stocks';
   if (text.match(/global|fed |china|us market|wall street|nasdaq|s&p|dow/)) return 'Global';
   return 'Markets';
 }
 
-async function fetchGNews(query: string, maxArticles = 10): Promise<NewsArticle[]> {
-  if (!GNEWS_API_KEY) return [];
+// ─── Minimal XML parser (no external deps) ──────────────────────────────────
+function parseRSSItems(xml: string): { title: string; link: string; pubDate: string; source: string; description: string }[] {
+  const items: { title: string; link: string; pubDate: string; source: string; description: string }[] = [];
+  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+  let match;
 
+  while ((match = itemRegex.exec(xml)) !== null) {
+    const block = match[1];
+    const getTag = (tag: string) => {
+      const m = block.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));
+      return (m?.[1] || m?.[2] || '').trim();
+    };
+
+    const title = getTag('title');
+    const link = getTag('link');
+    const pubDate = getTag('pubDate');
+    const source = getTag('source');
+    const description = getTag('description');
+
+    if (title && link) {
+      items.push({ title, link, pubDate, source, description });
+    }
+  }
+  return items;
+}
+
+// ─── Fetch one Google News RSS feed ─────────────────────────────────────────
+async function fetchGoogleNewsRSS(query: string): Promise<NewsArticle[]> {
   try {
-    const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=en&country=in&max=${maxArticles}&sortby=publishedAt&apikey=${GNEWS_API_KEY}`;
+    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`;
     const response = await fetchWithTimeout(url);
 
     if (!response.ok) {
-      console.error('GNews error:', response.status, await response.text().catch(() => ''));
+      console.error('Google News RSS error:', response.status);
       return [];
     }
 
-    const data = await response.json();
-    return (data.articles || []).map((article: any, index: number) => ({
-      id: `gnews-${index}-${Date.now()}`,
-      title: article.title || '',
-      description: article.description || '',
-      url: article.url || '',
-      source: article.source?.name || 'News',
-      publishedAt: article.publishedAt || new Date().toISOString(),
-      category: categorizeArticle(article.title || '', article.description || ''),
-      imageUrl: article.image || undefined,
-    }));
+    const xml = await response.text();
+    const items = parseRSSItems(xml);
+
+    return items.map((item, index) => {
+      // Clean title: Google News appends " - Source" at the end
+      const titleParts = item.title.split(' - ');
+      const sourceName = item.source || (titleParts.length > 1 ? titleParts.pop()! : 'News');
+      const cleanTitle = item.source ? item.title : titleParts.join(' - ');
+
+      return {
+        id: `gn-${index}-${Date.now()}`,
+        title: cleanTitle,
+        description: item.description.replace(/<[^>]*>/g, '').substring(0, 200),
+        url: item.link,
+        source: sourceName,
+        publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
+        category: categorizeArticle(cleanTitle, item.description),
+      };
+    });
   } catch (error: any) {
-    console.error('GNews fetch error:', error?.name === 'AbortError' ? 'timeout' : error?.message);
+    console.error('Google News RSS fetch error:', error?.name === 'AbortError' ? 'timeout' : error?.message);
     return [];
   }
 }
 
+// ─── Core fetch: runs 3 parallel queries, deduplicates, sorts ───────────────
+async function fetchAllNews(): Promise<NewsArticle[]> {
+  const [marketNews, mfNews, economyNews] = await Promise.all([
+    fetchGoogleNewsRSS('India stock market Nifty Sensex'),
+    fetchGoogleNewsRSS('India mutual fund SIP SEBI AMFI'),
+    fetchGoogleNewsRSS('India economy RBI investment finance'),
+  ]);
+
+  let allArticles: NewsArticle[] = [...marketNews, ...mfNews, ...economyNews];
+
+  // Deduplicate by title prefix
+  const seen = new Set<string>();
+  allArticles = allArticles.filter(article => {
+    const key = article.title.toLowerCase().substring(0, 50);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Sort newest first
+  allArticles.sort((a, b) =>
+    new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+  );
+
+  return allArticles;
+}
+
+// ─── Guarded fetch: prevents thundering herd ────────────────────────────────
+async function getArticles(): Promise<NewsArticle[]> {
+  // Serve from cache if fresh
+  if (newsCache && Date.now() - newsCache.timestamp < CACHE_TTL) {
+    return newsCache.articles;
+  }
+
+  // If a fetch is already in-flight, piggyback on it
+  if (inflightPromise) {
+    return inflightPromise;
+  }
+
+  // Start a new fetch
+  inflightPromise = fetchAllNews()
+    .then(articles => {
+      newsCache = { articles, timestamp: Date.now() };
+      console.log(`News: cached ${articles.length} articles from Google News RSS`);
+      return articles;
+    })
+    .catch(error => {
+      console.error('News fetch failed:', error);
+      // Return stale cache if available
+      return newsCache?.articles || [];
+    })
+    .finally(() => {
+      inflightPromise = null;
+    });
+
+  return inflightPromise;
+}
+
+// ─── API handler ────────────────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const category = searchParams.get('category') || 'all';
   const limit = parseInt(searchParams.get('limit') || '20');
 
   try {
-    // Check cache
-    if (newsCache && Date.now() - newsCache.timestamp < CACHE_TTL) {
-      let articles = newsCache.articles;
+    const allArticles = await getArticles();
 
-      if (category !== 'all') {
-        articles = articles.filter(a => a.category.toLowerCase() === category.toLowerCase());
-      }
-
-      return NextResponse.json({
-        success: true,
-        articles: articles.slice(0, limit),
-        total: articles.length,
-        source: 'cache',
-        categories: ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Tax', 'NFO', 'Global'],
-        timestamp: new Date(newsCache.timestamp).toISOString(),
-      });
-    }
-
-    // 2 focused queries to conserve GNews quota (100 req/day)
-    const [marketNews, financeNews] = await Promise.all([
-      fetchGNews('India stock market Nifty Sensex BSE NSE', 10),
-      fetchGNews('India mutual fund RBI SEBI economy investment', 10),
-    ]);
-
-    let allArticles: NewsArticle[] = [...marketNews, ...financeNews];
-
-    // Remove duplicates by title similarity
-    const seen = new Set<string>();
-    allArticles = allArticles.filter(article => {
-      const key = article.title.toLowerCase().substring(0, 50);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-    // Sort by date (newest first)
-    allArticles.sort((a, b) =>
-      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
-    );
-
-    // Update cache
-    newsCache = { articles: allArticles, timestamp: Date.now() };
-
-    console.log(`News: fetched ${allArticles.length} articles from GNews`);
-
-    // Filter by category if specified
     let filtered = allArticles;
     if (category !== 'all') {
       filtered = filtered.filter(a => a.category.toLowerCase() === category.toLowerCase());
     }
 
+    const isCached = newsCache ? (Date.now() - newsCache.timestamp < CACHE_TTL) : false;
+
     return NextResponse.json({
       success: true,
       articles: filtered.slice(0, limit),
       total: filtered.length,
-      source: 'live',
+      source: isCached ? 'cache' : 'live',
       categories: ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Tax', 'NFO', 'Global'],
-      timestamp: new Date().toISOString(),
+      timestamp: newsCache ? new Date(newsCache.timestamp).toISOString() : new Date().toISOString(),
     });
 
   } catch (error) {
     console.error('News aggregation error:', error);
 
-    // If we have stale cache, return it rather than nothing
-    if (newsCache) {
-      let articles = newsCache.articles;
-      if (category !== 'all') {
-        articles = articles.filter(a => a.category.toLowerCase() === category.toLowerCase());
-      }
-      return NextResponse.json({
-        success: true,
-        articles: articles.slice(0, limit),
-        total: articles.length,
-        source: 'stale-cache',
-        categories: ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Tax', 'NFO', 'Global'],
-        timestamp: new Date(newsCache.timestamp).toISOString(),
-      });
-    }
-
-    // Truly no data available
     return NextResponse.json({
       success: true,
-      articles: [],
-      total: 0,
-      source: 'unavailable',
+      articles: newsCache?.articles?.slice(0, limit) || [],
+      total: newsCache?.articles?.length || 0,
+      source: newsCache ? 'stale-cache' : 'unavailable',
       categories: ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Tax', 'NFO', 'Global'],
       timestamp: new Date().toISOString(),
     });
