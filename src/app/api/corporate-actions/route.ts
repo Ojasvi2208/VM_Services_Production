@@ -88,22 +88,25 @@ async function fetchCorporateActions(): Promise<CorporateAction[]> {
 
     const data = await response.json();
     const quotes = data?.quoteResponse?.result || [];
-    const now = Date.now();
     const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
     let idx = 0;
+
+    // Start of today (midnight UTC)
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const todayMs = todayStart.getTime();
 
     for (const quote of quotes) {
       const nseSymbol = (quote.symbol || '').replace('.NS', '');
       const stockInfo = TRACKED_STOCKS.find(s => s.symbol === nseSymbol);
       const companyName = stockInfo?.name || quote.shortName || nseSymbol;
 
-      // Dividend event
+      // Dividend event — ONLY if ex-date is today or in the future (truly upcoming)
       const exDivEpoch = quote.exDividendDate;
       if (exDivEpoch) {
         const exDivMs = exDivEpoch * 1000;
-        if (exDivMs > now - 7 * 24 * 60 * 60 * 1000 && exDivMs < now + sixtyDaysMs) {
+        if (exDivMs >= todayMs && exDivMs < todayMs + sixtyDaysMs) {
           const exDate = new Date(exDivMs).toISOString().split('T')[0];
-          const divRate = quote.trailingAnnualDividendRate;
           const divDateEpoch = quote.dividendDate;
           const payDate = divDateEpoch ? new Date(divDateEpoch * 1000).toISOString().split('T')[0] : undefined;
 
@@ -112,22 +115,21 @@ async function fetchCorporateActions(): Promise<CorporateAction[]> {
             symbol: nseSymbol,
             companyName,
             actionType: 'dividend',
-            description: divRate ? `Dividend Rs ${divRate.toFixed(2)}/share` : 'Dividend',
+            description: 'Dividend declared',
             exDate,
             recordDate: payDate,
             announcementDate: new Date().toISOString().split('T')[0],
             details: payDate ? `Ex-Date: ${exDate}. Payment: ${payDate}.` : `Ex-Date: ${exDate}.`,
-            value: divRate ? `Rs ${divRate.toFixed(2)}/share` : undefined,
             impact: 'positive',
           });
         }
       }
 
-      // Earnings / Results event
+      // Earnings / Results event — ONLY if date is today or in the future
       const earningsEpoch = quote.earningsTimestamp || quote.earningsTimestampStart;
       if (earningsEpoch) {
         const earningsMs = earningsEpoch * 1000;
-        if (earningsMs > now - 3 * 24 * 60 * 60 * 1000 && earningsMs < now + sixtyDaysMs) {
+        if (earningsMs >= todayMs && earningsMs < todayMs + sixtyDaysMs) {
           const earningsDate = new Date(earningsMs).toISOString().split('T')[0];
           const endEpoch = quote.earningsTimestampEnd;
           const rangeEnd = endEpoch ? new Date(endEpoch * 1000).toISOString().split('T')[0] : undefined;
