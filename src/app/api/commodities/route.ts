@@ -29,10 +29,6 @@ const COMMODITY_SYMBOLS = [
   { yahoo: 'SI=F',  name: 'Silver',           unit: '/oz',     exchange: 'COMEX',  flag: '🥈', currency: 'USD' },
   { yahoo: 'NG=F',  name: 'Natural Gas',      unit: '/MMBtu',  exchange: 'NYMEX',  flag: '🔥', currency: 'USD' },
   { yahoo: 'HG=F',  name: 'Copper',           unit: '/lb',     exchange: 'COMEX',  flag: '🔶', currency: 'USD' },
-  // MCX India (INR)
-  { yahoo: 'GOLDM.NS',   name: 'Gold MCX',       unit: '/10g',    exchange: 'MCX', flag: '🥇', currency: 'INR' },
-  { yahoo: 'SILVERM.NS',  name: 'Silver MCX',     unit: '/kg',     exchange: 'MCX', flag: '🥈', currency: 'INR' },
-  { yahoo: 'CRUDEOILM.NS', name: 'Crude Oil MCX', unit: '/barrel', exchange: 'MCX', flag: '🛢️', currency: 'INR' },
 ];
 
 let commodityCache: { commodities: CommodityData[]; usdInr: number; timestamp: number } | null = null;
