@@ -38,6 +38,7 @@ function categorizeArticle(title: string, description: string): string {
   const text = `${title} ${description}`.toLowerCase();
   if (text.match(/mutual fund|sip |nav |amfi|sebi.*fund|amc |nfo |new fund/)) return 'Mutual Funds';
   if (text.match(/rupee|dollar|forex|currency|exchange rate|usd.inr|eur.inr/)) return 'Forex';
+  if (text.match(/gold|silver|crude oil|natural gas|copper|commodity|mcx |metal/)) return 'Commodities';
   if (text.match(/tax|gst|budget|fiscal|income tax|ltcg|stcg/)) return 'Tax';
   if (text.match(/ipo |listing|nfo |new fund offer/)) return 'NFO';
   if (text.match(/gdp|rbi|inflation|repo rate|monetary policy|economy/)) return 'Economy';
@@ -108,15 +109,18 @@ async function fetchGoogleNewsRSS(query: string): Promise<NewsArticle[]> {
   }
 }
 
-// ─── Core fetch: runs 3 parallel queries, deduplicates, sorts ───────────────
+// ─── Core fetch: runs 6 parallel queries, deduplicates, sorts ───────────────
 async function fetchAllNews(): Promise<NewsArticle[]> {
-  const [marketNews, mfNews, economyNews] = await Promise.all([
+  const [marketNews, mfNews, economyNews, forexNews, commodityNews, resultsNews] = await Promise.all([
     fetchGoogleNewsRSS('India stock market Nifty Sensex'),
     fetchGoogleNewsRSS('India mutual fund SIP SEBI AMFI'),
     fetchGoogleNewsRSS('India economy RBI investment finance'),
+    fetchGoogleNewsRSS('India rupee dollar forex currency exchange rate'),
+    fetchGoogleNewsRSS('India gold silver crude oil commodity MCX metals'),
+    fetchGoogleNewsRSS('India quarterly results earnings financial results company'),
   ]);
 
-  let allArticles: NewsArticle[] = [...marketNews, ...mfNews, ...economyNews];
+  let allArticles: NewsArticle[] = [...marketNews, ...mfNews, ...economyNews, ...forexNews, ...commodityNews, ...resultsNews];
 
   // Deduplicate by title prefix
   const seen = new Set<string>();
