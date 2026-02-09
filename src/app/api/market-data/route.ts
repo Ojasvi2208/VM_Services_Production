@@ -40,7 +40,7 @@ const SYMBOL_MAP: Record<string, { yahoo: string; name: string; exchange: string
   'BSE500':           { yahoo: 'BSE-500.BO',            name: 'BSE 500',             exchange: 'BSE' },
   'BSEMIDCAP':        { yahoo: 'BSE-MIDCAP.BO',        name: 'BSE MIDCAP',          exchange: 'BSE' },
   'BSESMALLCAP':      { yahoo: 'BSE-SMLCAP.BO',        name: 'BSE SMALLCAP',        exchange: 'BSE' },
-  'BSEBANKEX':        { yahoo: 'BANKEX.BO',             name: 'BSE BANKEX',          exchange: 'BSE' },
+  'BSEFMCG':           { yahoo: 'BSE-FMCG.BO',           name: 'BSE FMCG',            exchange: 'BSE' },
   'BSEIT':            { yahoo: 'BSE-IT.BO',             name: 'BSE IT',              exchange: 'BSE' },
   'BSEHEALTHCARE':    { yahoo: 'BSE-HC.BO',             name: 'BSE HEALTHCARE',      exchange: 'BSE' },
   'BSEAUTO':          { yahoo: 'BSE-AUTO.BO',           name: 'BSE AUTO',            exchange: 'BSE' },
@@ -128,9 +128,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch all symbols in parallel via CF relay
-    const results = await Promise.all(symbols.map(s => fetchSymbol(s)));
-    const valid = results.filter(Boolean) as MarketDataItem[];
+    // Fetch in batches of 8 to avoid overwhelming CF relay
+    const BATCH_SIZE = 8;
+    const valid: MarketDataItem[] = [];
+    for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+      const batch = symbols.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(batch.map(s => fetchSymbol(s)));
+      valid.push(...results.filter(Boolean) as MarketDataItem[]);
+    }
 
     // Update cache (merge with existing)
     const cacheMap = marketCache?.data ? new Map(marketCache.data) : new Map<string, MarketDataItem>();
