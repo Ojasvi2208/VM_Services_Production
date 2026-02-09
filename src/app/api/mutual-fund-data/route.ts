@@ -204,6 +204,19 @@ export async function GET() {
           AND f.scheme_name NOT ILIKE '%ayout of I%'
           AND f.scheme_name NOT ILIKE '%Long Term Advantage%'
           AND f.scheme_name NOT ILIKE '%Principal%'
+          AND f.scheme_name NOT ILIKE '%Offshore%'
+          AND f.scheme_name NOT ILIKE '%Taiwan%'
+          AND f.scheme_name NOT ILIKE '%Brazil%'
+          AND f.scheme_name NOT ILIKE '%China%'
+          AND f.scheme_name NOT ILIKE '%Japan%'
+          AND f.scheme_name NOT ILIKE '%Asia%'
+          AND f.scheme_name NOT ILIKE '%Europe%'
+          AND f.scheme_name NOT ILIKE '%US %'
+          AND f.scheme_name NOT ILIKE '%US Tech%'
+          AND f.scheme_name NOT ILIKE '%Emerging Markets%'
+          AND f.scheme_name NOT ILIKE '%International%'
+          AND f.scheme_name NOT ILIKE '%HSBC%'
+          AND f.scheme_name NOT ILIKE '%Franklin Asian%'
           AND f.latest_nav > 5
           AND fr.return_1y > 0
           AND fr.return_1y < 100
