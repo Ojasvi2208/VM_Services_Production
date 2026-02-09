@@ -217,6 +217,12 @@ export async function GET() {
           AND f.scheme_name NOT ILIKE '%International%'
           AND f.scheme_name NOT ILIKE '%HSBC%'
           AND f.scheme_name NOT ILIKE '%Franklin Asian%'
+          AND f.scheme_name NOT ILIKE '%1126D%'
+          AND f.scheme_name NOT ILIKE '%Opp Fund - II%'
+          AND f.scheme_name NOT ILIKE '%- II -%'
+          AND f.scheme_name NOT ILIKE '%- III -%'
+          AND f.scheme_name NOT ILIKE '%- IV -%'
+          AND f.scheme_name NOT ILIKE '%- V -%'
           AND f.latest_nav > 5
           AND fr.return_1y > 0
           AND fr.return_1y < 100
