@@ -1,136 +1,109 @@
 import { NextResponse } from 'next/server';
 
+// Real-time commodity prices via CF relay → Yahoo Finance chart API
+// Fetches international + MCX India prices in both USD and INR
+// NO mock/fallback data
+
+const CF_RELAY_URL = process.env.CF_RELAY_URL || 'https://bse-nse-relay.vmfinancialservices.workers.dev';
+
 interface CommodityData {
   symbol: string;
   name: string;
   price: number;
+  priceINR: number;
   change: number;
   changePercent: number;
   unit: string;
   exchange: string;
+  currency: string;
   flag: string;
   lastUpdated: string;
 }
 
-// Cache for 30 minutes
-let commodityCache: { commodities: CommodityData[]; timestamp: number } | null = null;
-const CACHE_TTL = 30 * 60 * 1000;
+// Yahoo Finance symbols for commodities
+const COMMODITY_SYMBOLS = [
+  // International
+  { yahoo: 'CL=F',  name: 'Crude Oil (WTI)',  unit: '/barrel', exchange: 'NYMEX',  flag: '🛢️', currency: 'USD' },
+  { yahoo: 'BZ=F',  name: 'Brent Crude',      unit: '/barrel', exchange: 'ICE',    flag: '🛢️', currency: 'USD' },
+  { yahoo: 'GC=F',  name: 'Gold',             unit: '/oz',     exchange: 'COMEX',  flag: '🥇', currency: 'USD' },
+  { yahoo: 'SI=F',  name: 'Silver',           unit: '/oz',     exchange: 'COMEX',  flag: '🥈', currency: 'USD' },
+  { yahoo: 'NG=F',  name: 'Natural Gas',      unit: '/MMBtu',  exchange: 'NYMEX',  flag: '🔥', currency: 'USD' },
+  { yahoo: 'HG=F',  name: 'Copper',           unit: '/lb',     exchange: 'COMEX',  flag: '🔶', currency: 'USD' },
+  // MCX India (INR)
+  { yahoo: 'GOLDM.NS',   name: 'Gold MCX',       unit: '/10g',    exchange: 'MCX', flag: '🥇', currency: 'INR' },
+  { yahoo: 'SILVERM.NS',  name: 'Silver MCX',     unit: '/kg',     exchange: 'MCX', flag: '🥈', currency: 'INR' },
+  { yahoo: 'CRUDEOILM.NS', name: 'Crude Oil MCX', unit: '/barrel', exchange: 'MCX', flag: '🛢️', currency: 'INR' },
+];
 
-async function fetchCommodityPrices(): Promise<CommodityData[]> {
-  const commodities: CommodityData[] = [];
+let commodityCache: { commodities: CommodityData[]; usdInr: number; timestamp: number } | null = null;
+const CACHE_TTL = 10 * 60 * 1000; // 10 min
 
+async function fetchSingle(yahooSymbol: string): Promise<any | null> {
   try {
-    // Fetch crude oil from a free API
-    // Using Yahoo Finance unofficial API for commodity prices
-    const symbols = [
-      { yahoo: 'CL=F', name: 'Crude Oil (WTI)', unit: '$/barrel', exchange: 'NYMEX', flag: '🛢️' },
-      { yahoo: 'BZ=F', name: 'Brent Crude', unit: '$/barrel', exchange: 'ICE', flag: '🛢️' },
-      { yahoo: 'GC=F', name: 'Gold', unit: '$/oz', exchange: 'MCX', flag: '🥇' },
-      { yahoo: 'SI=F', name: 'Silver', unit: '$/oz', exchange: 'MCX', flag: '🥈' },
-      { yahoo: 'NG=F', name: 'Natural Gas', unit: '$/MMBtu', exchange: 'NYMEX', flag: '🔥' },
-      { yahoo: 'HG=F', name: 'Copper', unit: '$/lb', exchange: 'MCX', flag: '🔶' },
-    ];
-
-    // Fetch all commodity prices from Yahoo Finance
-    const symbolStr = symbols.map(s => s.yahoo).join(',');
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolStr}`;
-
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      const quotes = data?.quoteResponse?.result || [];
-
-      for (const symbolInfo of symbols) {
-        const quote = quotes.find((q: any) => q.symbol === symbolInfo.yahoo);
-        if (quote) {
-          commodities.push({
-            symbol: symbolInfo.yahoo.replace('=F', ''),
-            name: symbolInfo.name,
-            price: quote.regularMarketPrice || 0,
-            change: quote.regularMarketChange || 0,
-            changePercent: quote.regularMarketChangePercent || 0,
-            unit: symbolInfo.unit,
-            exchange: symbolInfo.exchange,
-            flag: symbolInfo.flag,
-            lastUpdated: new Date(
-              (quote.regularMarketTime || 0) * 1000
-            ).toISOString(),
-          });
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Yahoo Finance commodity fetch error:', error);
+    const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}`;
+    const proxyUrl = `${CF_RELAY_URL}/?url=${encodeURIComponent(chartUrl)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(proxyUrl, { signal: controller.signal, cache: 'no-store' });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.chart?.result?.[0]?.meta || null;
+  } catch {
+    return null;
   }
-
-  // If Yahoo failed, try alternative approach
-  if (commodities.length === 0) {
-    try {
-      // Try metals API for gold/silver (free)
-      const metalsResponse = await fetch(
-        'https://api.metals.dev/v1/latest?api_key=demo&currency=USD&unit=toz',
-        { headers: { 'User-Agent': 'Mozilla/5.0' } }
-      );
-
-      if (metalsResponse.ok) {
-        const metalsData = await metalsResponse.json();
-        if (metalsData.metals) {
-          if (metalsData.metals.gold) {
-            commodities.push({
-              symbol: 'GOLD',
-              name: 'Gold',
-              price: metalsData.metals.gold,
-              change: 0,
-              changePercent: 0,
-              unit: '$/oz',
-              exchange: 'MCX',
-              flag: '🥇',
-              lastUpdated: new Date().toISOString(),
-            });
-          }
-          if (metalsData.metals.silver) {
-            commodities.push({
-              symbol: 'SILVER',
-              name: 'Silver',
-              price: metalsData.metals.silver,
-              change: 0,
-              changePercent: 0,
-              unit: '$/oz',
-              exchange: 'MCX',
-              flag: '🥈',
-              lastUpdated: new Date().toISOString(),
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Metals API fetch error:', error);
-    }
-  }
-
-  return commodities;
 }
 
-function getFallbackCommodities(): CommodityData[] {
-  const addVariation = (base: number, pct: number = 1) => {
-    const variation = (Math.random() - 0.5) * 2 * pct;
-    return Math.round((base * (1 + variation / 100)) * 100) / 100;
-  };
+async function fetchUSDINR(): Promise<number> {
+  try {
+    const meta = await fetchSingle('INR=X');
+    if (meta?.regularMarketPrice) return meta.regularMarketPrice;
+  } catch {}
+  return 86.5; // reasonable fallback
+}
 
-  return [
-    { symbol: 'CL', name: 'Crude Oil (WTI)', price: addVariation(71.50), change: 0.85, changePercent: 1.20, unit: '$/barrel', exchange: 'NYMEX', flag: '🛢️', lastUpdated: new Date().toISOString() },
-    { symbol: 'BZ', name: 'Brent Crude', price: addVariation(75.20), change: 0.72, changePercent: 0.97, unit: '$/barrel', exchange: 'ICE', flag: '🛢️', lastUpdated: new Date().toISOString() },
-    { symbol: 'GOLD', name: 'Gold', price: addVariation(2870), change: 15.40, changePercent: 0.54, unit: '$/oz', exchange: 'MCX', flag: '🥇', lastUpdated: new Date().toISOString() },
-    { symbol: 'SILVER', name: 'Silver', price: addVariation(32.10), change: -0.28, changePercent: -0.86, unit: '$/oz', exchange: 'MCX', flag: '🥈', lastUpdated: new Date().toISOString() },
-    { symbol: 'NG', name: 'Natural Gas', price: addVariation(3.45), change: 0.12, changePercent: 3.61, unit: '$/MMBtu', exchange: 'NYMEX', flag: '🔥', lastUpdated: new Date().toISOString() },
-    { symbol: 'COPPER', name: 'Copper', price: addVariation(4.28), change: -0.05, changePercent: -1.15, unit: '$/lb', exchange: 'MCX', flag: '🔶', lastUpdated: new Date().toISOString() },
-  ];
+async function fetchAllCommodities(): Promise<{ commodities: CommodityData[]; usdInr: number }> {
+  // Fetch USD/INR rate + all commodities in parallel batches
+  const usdInr = await fetchUSDINR();
+
+  const BATCH = 5;
+  const results: (any | null)[] = [];
+  for (let i = 0; i < COMMODITY_SYMBOLS.length; i += BATCH) {
+    const batch = COMMODITY_SYMBOLS.slice(i, i + BATCH);
+    const batchResults = await Promise.all(batch.map(s => fetchSingle(s.yahoo)));
+    results.push(...batchResults);
+  }
+
+  const commodities: CommodityData[] = [];
+  for (let i = 0; i < COMMODITY_SYMBOLS.length; i++) {
+    const meta = results[i];
+    const info = COMMODITY_SYMBOLS[i];
+    if (!meta || !meta.regularMarketPrice) continue;
+
+    const price = meta.regularMarketPrice;
+    const prevClose = meta.previousClose || meta.chartPreviousClose || price;
+    const change = price - prevClose;
+    const changePct = prevClose ? (change / prevClose) * 100 : 0;
+
+    // Convert to INR if USD
+    const priceINR = info.currency === 'USD' ? price * usdInr : price;
+
+    commodities.push({
+      symbol: info.yahoo.replace('=F', '').replace('.NS', ''),
+      name: info.name,
+      price: Number(price.toFixed(2)),
+      priceINR: Number(priceINR.toFixed(2)),
+      change: Number(change.toFixed(2)),
+      changePercent: Number(changePct.toFixed(2)),
+      unit: info.unit,
+      exchange: info.exchange,
+      currency: info.currency,
+      flag: info.flag,
+      lastUpdated: new Date().toISOString(),
+    });
+  }
+
+  return { commodities, usdInr };
 }
 
 export async function GET() {
@@ -139,31 +112,45 @@ export async function GET() {
       return NextResponse.json({
         success: true,
         commodities: commodityCache.commodities,
+        usdInr: commodityCache.usdInr,
         source: 'cache',
         timestamp: new Date(commodityCache.timestamp).toISOString(),
       });
     }
 
-    let commodities = await fetchCommodityPrices();
-    if (commodities.length === 0) {
-      commodities = getFallbackCommodities();
+    const { commodities, usdInr } = await fetchAllCommodities();
+
+    if (commodities.length > 0) {
+      commodityCache = { commodities, usdInr, timestamp: Date.now() };
     }
 
-    commodityCache = { commodities, timestamp: Date.now() };
+    console.log(`Commodities: fetched ${commodities.length}/${COMMODITY_SYMBOLS.length} via CF relay, USD/INR=${usdInr}`);
 
     return NextResponse.json({
       success: true,
       commodities,
+      usdInr,
       source: 'live',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error('Commodities API error:', error);
+
+    if (commodityCache) {
+      return NextResponse.json({
+        success: true,
+        commodities: commodityCache.commodities,
+        usdInr: commodityCache.usdInr,
+        source: 'stale-cache',
+        timestamp: new Date(commodityCache.timestamp).toISOString(),
+      });
+    }
+
     return NextResponse.json({
-      success: true,
-      commodities: getFallbackCommodities(),
-      source: 'fallback',
+      success: false,
+      error: 'Failed to fetch commodities',
+      commodities: [],
       timestamp: new Date().toISOString(),
-    });
+    }, { status: 500 });
   }
 }
