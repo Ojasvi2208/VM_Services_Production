@@ -13,27 +13,42 @@ interface MarketDataItem {
   changePercent: number;
   lastUpdated: string;
   isMarketOpen: boolean;
+  exchange: string;
 }
 
 // ─── Symbol map: our key → { Yahoo Finance symbol, display name } ───────────
-const SYMBOL_MAP: Record<string, { yahoo: string; name: string }> = {
-  'NIFTY':            { yahoo: '^NSEI',                 name: 'NIFTY 50' },
-  'SENSEX':           { yahoo: '^BSESN',                name: 'SENSEX' },
-  'BANKNIFTY':        { yahoo: '^NSEBANK',              name: 'BANK NIFTY' },
-  'NIFTYIT':          { yahoo: '^CNXIT',                name: 'NIFTY IT' },
-  'NIFTYNEXT50':      { yahoo: '^NSMIDCP',              name: 'NIFTY NEXT 50' },
-  'NIFTYMIDCAP150':   { yahoo: 'NIFTY_MIDCAP_150.NS',  name: 'NIFTY MIDCAP 150' },
-  'NIFTYSMALLCAP100': { yahoo: 'NIFTY_SMLCAP_100.NS',  name: 'NIFTY SMALLCAP 100' },
-  'NIFTYPHARMA':      { yahoo: '^CNXPHARMA',            name: 'NIFTY PHARMA' },
-  'NIFTYAUTO':        { yahoo: '^CNXAUTO',              name: 'NIFTY AUTO' },
-  'NIFTYFMCG':        { yahoo: '^CNXFMCG',              name: 'NIFTY FMCG' },
-  'NIFTYMETAL':       { yahoo: '^CNXMETAL',             name: 'NIFTY METAL' },
-  'NIFTYREALTY':      { yahoo: '^CNXREALTY',            name: 'NIFTY REALTY' },
-  'NIFTYENERGY':      { yahoo: '^CNXENERGY',            name: 'NIFTY ENERGY' },
-  'NIFTYINFRA':       { yahoo: '^CNXINFRA',             name: 'NIFTY INFRA' },
-  'NIFTYPSE':         { yahoo: '^CNXPSE',               name: 'NIFTY PSE' },
-  'NIFTYFINSERVICE':  { yahoo: 'NIFTY_FIN_SERVICE.NS',  name: 'NIFTY FIN SERVICE' },
-  'NIFTYPVTBANK':     { yahoo: 'NIFTY_PVT_BANK.NS',    name: 'NIFTY PVT BANK' },
+const SYMBOL_MAP: Record<string, { yahoo: string; name: string; exchange: string }> = {
+  // ─── NSE Indices ───
+  'NIFTY':            { yahoo: '^NSEI',                 name: 'NIFTY 50',            exchange: 'NSE' },
+  'BANKNIFTY':        { yahoo: '^NSEBANK',              name: 'BANK NIFTY',          exchange: 'NSE' },
+  'NIFTYIT':          { yahoo: '^CNXIT',                name: 'NIFTY IT',            exchange: 'NSE' },
+  'NIFTYNEXT50':      { yahoo: '^NSMIDCP',              name: 'NIFTY NEXT 50',       exchange: 'NSE' },
+  'NIFTYMIDCAP150':   { yahoo: 'NIFTY_MIDCAP_150.NS',  name: 'NIFTY MIDCAP 150',    exchange: 'NSE' },
+  'NIFTYSMALLCAP100': { yahoo: 'NIFTY_SMLCAP_100.NS',  name: 'NIFTY SMALLCAP 100',  exchange: 'NSE' },
+  'NIFTYPHARMA':      { yahoo: '^CNXPHARMA',            name: 'NIFTY PHARMA',        exchange: 'NSE' },
+  'NIFTYAUTO':        { yahoo: '^CNXAUTO',              name: 'NIFTY AUTO',          exchange: 'NSE' },
+  'NIFTYFMCG':        { yahoo: '^CNXFMCG',              name: 'NIFTY FMCG',          exchange: 'NSE' },
+  'NIFTYMETAL':       { yahoo: '^CNXMETAL',             name: 'NIFTY METAL',         exchange: 'NSE' },
+  'NIFTYREALTY':      { yahoo: '^CNXREALTY',            name: 'NIFTY REALTY',        exchange: 'NSE' },
+  'NIFTYENERGY':      { yahoo: '^CNXENERGY',            name: 'NIFTY ENERGY',        exchange: 'NSE' },
+  'NIFTYINFRA':       { yahoo: '^CNXINFRA',             name: 'NIFTY INFRA',         exchange: 'NSE' },
+  'NIFTYPSE':         { yahoo: '^CNXPSE',               name: 'NIFTY PSE',           exchange: 'NSE' },
+  'NIFTYFINSERVICE':  { yahoo: 'NIFTY_FIN_SERVICE.NS',  name: 'NIFTY FIN SERVICE',   exchange: 'NSE' },
+  'NIFTYPVTBANK':     { yahoo: 'NIFTY_PVT_BANK.NS',    name: 'NIFTY PVT BANK',      exchange: 'NSE' },
+  // ─── BSE Indices ───
+  'SENSEX':           { yahoo: '^BSESN',                name: 'SENSEX',              exchange: 'BSE' },
+  'BSE500':           { yahoo: 'BSE-500.BO',            name: 'BSE 500',             exchange: 'BSE' },
+  'BSEMIDCAP':        { yahoo: 'BSE-MIDCAP.BO',        name: 'BSE MIDCAP',          exchange: 'BSE' },
+  'BSESMALLCAP':      { yahoo: 'BSE-SMLCAP.BO',        name: 'BSE SMALLCAP',        exchange: 'BSE' },
+  'BSEBANKEX':        { yahoo: 'BANKEX.BO',             name: 'BSE BANKEX',          exchange: 'BSE' },
+  'BSEIT':            { yahoo: 'BSE-IT.BO',             name: 'BSE IT',              exchange: 'BSE' },
+  'BSEHEALTHCARE':    { yahoo: 'BSE-HC.BO',             name: 'BSE HEALTHCARE',      exchange: 'BSE' },
+  'BSEAUTO':          { yahoo: 'BSE-AUTO.BO',           name: 'BSE AUTO',            exchange: 'BSE' },
+  'BSEMETAL':         { yahoo: 'BSE-METAL.BO',          name: 'BSE METAL',           exchange: 'BSE' },
+  'BSEOILGAS':        { yahoo: 'BSE-OILGAS.BO',         name: 'BSE OIL & GAS',       exchange: 'BSE' },
+  'BSEREALTY':        { yahoo: 'BSE-REALTY.BO',         name: 'BSE REALTY',          exchange: 'BSE' },
+  'BSECG':            { yahoo: 'BSE-CG.BO',             name: 'BSE CAPITAL GOODS',   exchange: 'BSE' },
+  'BSEPOWER':         { yahoo: 'BSE-POWER.BO',          name: 'BSE POWER',           exchange: 'BSE' },
 };
 
 // ─── Cache (5 minutes) ──────────────────────────────────────────────────────
@@ -74,6 +89,7 @@ async function fetchSymbol(symbol: string): Promise<MarketDataItem | null> {
       changePercent: Number(changePercent.toFixed(2)),
       lastUpdated: new Date().toISOString(),
       isMarketOpen: meta.marketState === 'REGULAR',
+      exchange: mapping.exchange,
     };
   } catch (error: any) {
     console.error(`Market fetch error for ${symbol}:`, error?.name === 'AbortError' ? 'timeout' : error?.message);
