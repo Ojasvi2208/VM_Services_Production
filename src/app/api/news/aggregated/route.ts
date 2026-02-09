@@ -16,9 +16,9 @@ interface NewsArticle {
   isBreaking?: boolean;
 }
 
-// Cache for 30 minutes
+// Cache for 2 hours (GNews free tier: 100 req/day, 6 queries per refresh = ~16 max refreshes)
 let newsCache: { articles: NewsArticle[]; timestamp: number } | null = null;
-const CACHE_TTL = 30 * 60 * 1000;
+const CACHE_TTL = 2 * 60 * 60 * 1000;
 
 // Free news API sources
 const NEWS_SOURCES = {
