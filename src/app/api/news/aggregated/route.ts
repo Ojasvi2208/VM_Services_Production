@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Comprehensive news aggregation from multiple sources
-// Categories: Markets, Mutual Funds, Stocks, Economy, Forex, Tax, IPO/NFO, Global, Personal Finance
+// Live financial news aggregation — NO fake/curated fallback
+// GNews free tier: 100 req/day → 2 queries per refresh, 4hr cache = ~12 queries/day max
 
 interface NewsArticle {
   id: string;
@@ -9,221 +9,69 @@ interface NewsArticle {
   description: string;
   url: string;
   source: string;
-  sourceIcon?: string;
   publishedAt: string;
   category: string;
   imageUrl?: string;
   isBreaking?: boolean;
 }
 
-// Cache for 2 hours (GNews free tier: 100 req/day, 6 queries per refresh = ~16 max refreshes)
+// Cache for 4 hours (conserves GNews quota: 100 req/day free tier)
 let newsCache: { articles: NewsArticle[]; timestamp: number } | null = null;
-const CACHE_TTL = 2 * 60 * 60 * 1000;
+const CACHE_TTL = 4 * 60 * 60 * 1000;
 
-// Free news API sources
-const NEWS_SOURCES = {
-  gnews: {
-    baseUrl: 'https://gnews.io/api/v4/search',
-    apiKey: process.env.GNEWS_API_KEY || '8876ed46171022e2b1d2a1bb2099fe67',
-  },
-  newsdata: {
-    baseUrl: 'https://newsdata.io/api/1/news',
-    apiKey: process.env.NEWSDATA_API_KEY,
-  },
-};
+const GNEWS_API_KEY = process.env.GNEWS_API_KEY || '8876ed46171022e2b1d2a1bb2099fe67';
 
-async function fetchGNews(query: string, category: string): Promise<NewsArticle[]> {
-  if (!NEWS_SOURCES.gnews.apiKey) return [];
-  
+// Helper: fetch with timeout
+async function fetchWithTimeout(url: string, timeoutMs = 10000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const url = `${NEWS_SOURCES.gnews.baseUrl}?q=${encodeURIComponent(query)}&lang=en&country=in,us&max=10&apikey=${NEWS_SOURCES.gnews.apiKey}`;
-    const response = await fetch(url, { next: { revalidate: 300 } });
-    
-    if (!response.ok) return [];
-    
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Categorize articles by keywords in title/description
+function categorizeArticle(title: string, description: string): string {
+  const text = `${title} ${description}`.toLowerCase();
+  if (text.match(/mutual fund|sip |nav |amfi|sebi.*fund|amc |nfo |new fund/)) return 'Mutual Funds';
+  if (text.match(/rupee|dollar|forex|currency|exchange rate|usd.inr|eur.inr/)) return 'Forex';
+  if (text.match(/tax|gst|budget|fiscal|income tax|ltcg|stcg/)) return 'Tax';
+  if (text.match(/ipo |listing|nfo |new fund offer/)) return 'NFO';
+  if (text.match(/gdp|rbi|inflation|repo rate|monetary policy|economy/)) return 'Economy';
+  if (text.match(/earnings|quarterly|results|revenue|profit|q[1-4]|revenue/)) return 'Stocks';
+  if (text.match(/global|fed |china|us market|wall street|nasdaq|s&p|dow/)) return 'Global';
+  return 'Markets';
+}
+
+async function fetchGNews(query: string, maxArticles = 10): Promise<NewsArticle[]> {
+  if (!GNEWS_API_KEY) return [];
+
+  try {
+    const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=en&country=in&max=${maxArticles}&sortby=publishedAt&apikey=${GNEWS_API_KEY}`;
+    const response = await fetchWithTimeout(url);
+
+    if (!response.ok) {
+      console.error('GNews error:', response.status, await response.text().catch(() => ''));
+      return [];
+    }
+
     const data = await response.json();
     return (data.articles || []).map((article: any, index: number) => ({
-      id: `gnews-${category}-${index}-${Date.now()}`,
-      title: article.title,
+      id: `gnews-${index}-${Date.now()}`,
+      title: article.title || '',
       description: article.description || '',
-      url: article.url,
-      source: article.source?.name || 'GNews',
-      publishedAt: article.publishedAt,
-      category,
-      imageUrl: article.image,
+      url: article.url || '',
+      source: article.source?.name || 'News',
+      publishedAt: article.publishedAt || new Date().toISOString(),
+      category: categorizeArticle(article.title || '', article.description || ''),
+      imageUrl: article.image || undefined,
     }));
-  } catch (error) {
-    console.error('GNews fetch error:', error);
+  } catch (error: any) {
+    console.error('GNews fetch error:', error?.name === 'AbortError' ? 'timeout' : error?.message);
     return [];
   }
-}
-
-async function fetchNewsData(query: string, category: string): Promise<NewsArticle[]> {
-  if (!NEWS_SOURCES.newsdata.apiKey) return [];
-  
-  try {
-    const url = `${NEWS_SOURCES.newsdata.baseUrl}?apikey=${NEWS_SOURCES.newsdata.apiKey}&q=${encodeURIComponent(query)}&language=en&country=in,us`;
-    const response = await fetch(url, { next: { revalidate: 300 } });
-    
-    if (!response.ok) return [];
-    
-    const data = await response.json();
-    return (data.results || []).slice(0, 10).map((article: any, index: number) => ({
-      id: `newsdata-${category}-${index}-${Date.now()}`,
-      title: article.title,
-      description: article.description || '',
-      url: article.link,
-      source: article.source_id || 'NewsData',
-      publishedAt: article.pubDate,
-      category,
-      imageUrl: article.image_url,
-    }));
-  } catch (error) {
-    console.error('NewsData fetch error:', error);
-    return [];
-  }
-}
-
-// Curated financial news sources (RSS-like approach with fallback)
-function getCuratedNews(): NewsArticle[] {
-  const now = new Date();
-  const formatTime = (hoursAgo: number) => {
-    const date = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000);
-    return date.toISOString();
-  };
-
-  return [
-    // Breaking/Important
-    {
-      id: 'curated-1',
-      title: 'RBI Monetary Policy: Key Takeaways for Investors',
-      description: 'Reserve Bank maintains repo rate, signals cautious stance on inflation. What it means for your investments.',
-      url: 'https://www.rbi.org.in',
-      source: 'RBI',
-      sourceIcon: '🏦',
-      publishedAt: formatTime(1),
-      category: 'Economy',
-      isBreaking: true,
-    },
-    {
-      id: 'curated-2',
-      title: 'Nifty 50 Hits New All-Time High Amid Global Rally',
-      description: 'Indian markets surge as FIIs turn net buyers. Banking and IT stocks lead the charge.',
-      url: '#',
-      source: 'Market Update',
-      sourceIcon: '📈',
-      publishedAt: formatTime(2),
-      category: 'Markets',
-      isBreaking: true,
-    },
-    // Mutual Funds
-    {
-      id: 'curated-3',
-      title: 'Top 5 Small Cap Funds Delivering 40%+ Returns',
-      description: 'Small cap category continues to outperform. Here are the top performers of the year.',
-      url: '#',
-      source: 'MF Analysis',
-      sourceIcon: '💰',
-      publishedAt: formatTime(3),
-      category: 'Mutual Funds',
-    },
-    {
-      id: 'curated-4',
-      title: 'SEBI Proposes New Rules for Mutual Fund Expense Ratios',
-      description: 'Regulator aims to bring more transparency in fund costs. Industry reacts.',
-      url: '#',
-      source: 'SEBI',
-      sourceIcon: '⚖️',
-      publishedAt: formatTime(4),
-      category: 'Mutual Funds',
-    },
-    // Forex
-    {
-      id: 'curated-5',
-      title: 'USD/INR: Rupee Strengthens on Dollar Weakness',
-      description: 'Indian rupee gains 15 paise against the US dollar. RBI intervention suspected.',
-      url: '#',
-      source: 'Forex Desk',
-      sourceIcon: '💱',
-      publishedAt: formatTime(2),
-      category: 'Forex',
-    },
-    // Tax
-    {
-      id: 'curated-6',
-      title: 'New Tax Rules for Mutual Fund Redemptions from April 2026',
-      description: 'LTCG and STCG changes you need to know before financial year end.',
-      url: '#',
-      source: 'Tax Update',
-      sourceIcon: '📋',
-      publishedAt: formatTime(5),
-      category: 'Tax',
-    },
-    // Global
-    {
-      id: 'curated-7',
-      title: 'Fed Signals Rate Cuts: Impact on Indian Markets',
-      description: 'US Federal Reserve hints at potential rate cuts. How it affects your portfolio.',
-      url: '#',
-      source: 'Global Markets',
-      sourceIcon: '🌍',
-      publishedAt: formatTime(3),
-      category: 'Global',
-    },
-    {
-      id: 'curated-8',
-      title: 'China Economic Data Disappoints, Asian Markets Mixed',
-      description: 'Weak manufacturing PMI raises concerns. India seen as beneficiary.',
-      url: '#',
-      source: 'Asia Watch',
-      sourceIcon: '🌏',
-      publishedAt: formatTime(4),
-      category: 'Global',
-    },
-    // IPO/NFO
-    {
-      id: 'curated-9',
-      title: '3 New NFOs Opening This Week: Should You Invest?',
-      description: 'Analysis of upcoming NFOs from HDFC, ICICI, and Axis. Expert recommendations.',
-      url: '#',
-      source: 'NFO Tracker',
-      sourceIcon: '⭐',
-      publishedAt: formatTime(1),
-      category: 'NFO',
-    },
-    // Personal Finance
-    {
-      id: 'curated-10',
-      title: 'SIP vs Lumpsum: Which Strategy Works Better in 2026?',
-      description: 'Market volatility makes this decision crucial. Data-driven analysis inside.',
-      url: '#',
-      source: 'Personal Finance',
-      sourceIcon: '💡',
-      publishedAt: formatTime(6),
-      category: 'Personal Finance',
-    },
-    // Stocks
-    {
-      id: 'curated-11',
-      title: 'Reliance Q3 Results: Revenue Beats Estimates',
-      description: 'Jio and retail segments drive growth. Stock up 3% in early trade.',
-      url: '#',
-      source: 'Earnings',
-      sourceIcon: '📊',
-      publishedAt: formatTime(2),
-      category: 'Stocks',
-    },
-    {
-      id: 'curated-12',
-      title: 'IT Sector Outlook: TCS, Infosys Guidance for FY27',
-      description: 'Tech giants share cautious outlook amid global uncertainty.',
-      url: '#',
-      source: 'Sector Watch',
-      sourceIcon: '💻',
-      publishedAt: formatTime(5),
-      category: 'Stocks',
-    },
-  ];
 }
 
 export async function GET(request: NextRequest) {
@@ -235,52 +83,28 @@ export async function GET(request: NextRequest) {
     // Check cache
     if (newsCache && Date.now() - newsCache.timestamp < CACHE_TTL) {
       let articles = newsCache.articles;
-      
+
       if (category !== 'all') {
         articles = articles.filter(a => a.category.toLowerCase() === category.toLowerCase());
       }
-      
+
       return NextResponse.json({
         success: true,
         articles: articles.slice(0, limit),
         total: articles.length,
         source: 'cache',
-        categories: ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Tax', 'NFO', 'Global', 'Personal Finance'],
-        timestamp: new Date().toISOString(),
+        categories: ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Tax', 'NFO', 'Global'],
+        timestamp: new Date(newsCache.timestamp).toISOString(),
       });
     }
 
-    // Fetch from multiple sources in parallel - ONLY financial/business news
-    const [
-      marketNews,
-      mfNews,
-      forexNews,
-      taxNews,
-      stockNews,
-      investmentNews,
-    ] = await Promise.all([
-      fetchGNews('NSE BSE nifty sensex stock market india', 'Markets'),
-      fetchGNews('mutual fund SIP NAV SEBI AMFI india', 'Mutual Funds'),
-      fetchGNews('forex rupee dollar RBI currency exchange', 'Forex'),
-      fetchGNews('income tax GST budget finance ministry india', 'Tax'),
-      fetchGNews('Reliance TCS Infosys HDFC earnings quarterly results', 'Stocks'),
-      fetchGNews('investment portfolio wealth management IPO FII DII', 'Economy'),
+    // 2 focused queries to conserve GNews quota (100 req/day)
+    const [marketNews, financeNews] = await Promise.all([
+      fetchGNews('India stock market Nifty Sensex BSE NSE', 10),
+      fetchGNews('India mutual fund RBI SEBI economy investment', 10),
     ]);
 
-    // Combine all live news
-    let liveArticles: NewsArticle[] = [
-      ...marketNews,
-      ...mfNews,
-      ...forexNews,
-      ...taxNews,
-      ...stockNews,
-      ...investmentNews,
-    ];
-
-    // Only use curated news as fallback if GNews returned nothing
-    let allArticles: NewsArticle[] = liveArticles.length > 0
-      ? liveArticles
-      : getCuratedNews();
+    let allArticles: NewsArticle[] = [...marketNews, ...financeNews];
 
     // Remove duplicates by title similarity
     const seen = new Set<string>();
@@ -292,44 +116,56 @@ export async function GET(request: NextRequest) {
     });
 
     // Sort by date (newest first)
-    allArticles.sort((a, b) => 
+    allArticles.sort((a, b) =>
       new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
     );
 
     // Update cache
-    newsCache = {
-      articles: allArticles,
-      timestamp: Date.now(),
-    };
+    newsCache = { articles: allArticles, timestamp: Date.now() };
+
+    console.log(`News: fetched ${allArticles.length} articles from GNews`);
 
     // Filter by category if specified
+    let filtered = allArticles;
     if (category !== 'all') {
-      allArticles = allArticles.filter(a => 
-        a.category.toLowerCase() === category.toLowerCase()
-      );
+      filtered = filtered.filter(a => a.category.toLowerCase() === category.toLowerCase());
     }
 
     return NextResponse.json({
       success: true,
-      articles: allArticles.slice(0, limit),
-      total: allArticles.length,
+      articles: filtered.slice(0, limit),
+      total: filtered.length,
       source: 'live',
-      categories: ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Tax', 'NFO', 'Global', 'Personal Finance'],
+      categories: ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Tax', 'NFO', 'Global'],
       timestamp: new Date().toISOString(),
     });
 
   } catch (error) {
     console.error('News aggregation error:', error);
-    
-    // Return curated news as fallback
-    const curatedNews = getCuratedNews();
-    
+
+    // If we have stale cache, return it rather than nothing
+    if (newsCache) {
+      let articles = newsCache.articles;
+      if (category !== 'all') {
+        articles = articles.filter(a => a.category.toLowerCase() === category.toLowerCase());
+      }
+      return NextResponse.json({
+        success: true,
+        articles: articles.slice(0, limit),
+        total: articles.length,
+        source: 'stale-cache',
+        categories: ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Tax', 'NFO', 'Global'],
+        timestamp: new Date(newsCache.timestamp).toISOString(),
+      });
+    }
+
+    // Truly no data available
     return NextResponse.json({
       success: true,
-      articles: curatedNews.slice(0, limit),
-      total: curatedNews.length,
-      source: 'curated',
-      categories: ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Tax', 'NFO', 'Global', 'Personal Finance'],
+      articles: [],
+      total: 0,
+      source: 'unavailable',
+      categories: ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Tax', 'NFO', 'Global'],
       timestamp: new Date().toISOString(),
     });
   }
