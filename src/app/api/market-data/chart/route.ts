@@ -403,7 +403,10 @@ export async function GET(request: NextRequest) {
     const fiftyTwoWeekHigh = meta.fiftyTwoWeekHigh || Math.max(...dailyCandles.map(c => c.high));
     const fiftyTwoWeekLow = meta.fiftyTwoWeekLow || Math.min(...dailyCandles.map(c => c.low));
     const currentPrice = meta.regularMarketPrice || dailyCloses[dailyCloses.length - 1];
-    const previousClose = meta.previousClose || meta.chartPreviousClose || 0;
+    // Use meta.previousClose if available; otherwise derive from second-to-last daily candle
+    const previousClose = meta.previousClose
+      || (dailyCandles.length >= 2 ? dailyCandles[dailyCandles.length - 2].close : meta.chartPreviousClose)
+      || 0;
     const dayChange = currentPrice - previousClose;
     const dayChangePercent = previousClose ? (dayChange / previousClose) * 100 : 0;
 
