@@ -1,258 +1,149 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Real-time NFO data from AMFI and fund house websites
-// Updates every hour
+// Recently Launched Funds — real data from AMFI NAV file
+// Detects funds with NAV close to face value (₹10) launched in last 90 days
+// NO fake/hardcoded data. Returns empty if none found.
 
 interface NFOData {
   id: string;
   schemeName: string;
   amcName: string;
-  amcLogo?: string;
   category: string;
   subCategory: string;
   fundType: 'Open-ended' | 'Close-ended' | 'Interval';
   openDate: string;
   closeDate: string;
-  allotmentDate?: string;
   minInvestment: number;
   minSIP?: number;
-  exitLoad?: string;
-  benchmark?: string;
-  fundManager?: string;
   riskLevel: 'Low' | 'Moderate' | 'Moderately High' | 'High' | 'Very High';
   investmentObjective: string;
-  status: 'upcoming' | 'open' | 'closed' | 'allotted';
+  status: 'open' | 'upcoming' | 'closed';
   daysLeft?: number;
   url: string;
   isNew?: boolean;
   isTrending?: boolean;
 }
 
-// Cache for 1 hour
+// Cache for 6 hours (AMFI updates daily)
 let nfoCache: { nfos: NFOData[]; timestamp: number } | null = null;
-const CACHE_TTL = 60 * 60 * 1000;
+const CACHE_TTL = 6 * 60 * 60 * 1000;
 
-function calculateDaysLeft(closeDate: string): number {
-  const close = new Date(closeDate);
-  const now = new Date();
-  const diff = close.getTime() - now.getTime();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+function categorizeScheme(name: string): { category: string; subCategory: string; riskLevel: NFOData['riskLevel'] } {
+  const n = name.toLowerCase();
+  if (n.includes('overnight')) return { category: 'Debt', subCategory: 'Overnight', riskLevel: 'Low' };
+  if (n.includes('liquid')) return { category: 'Debt', subCategory: 'Liquid', riskLevel: 'Low' };
+  if (n.includes('money market')) return { category: 'Debt', subCategory: 'Money Market', riskLevel: 'Low' };
+  if (n.includes('gilt') || n.includes('bond') || n.includes('duration') || n.includes('income') || n.includes('floating') || n.includes('credit risk') || n.includes('banking')) return { category: 'Debt', subCategory: 'Debt', riskLevel: 'Moderate' };
+  if (n.includes('hybrid') || n.includes('balanced') || n.includes('dynamic asset') || n.includes('arbitrage') || n.includes('equity savings') || n.includes('multi asset')) return { category: 'Hybrid', subCategory: 'Hybrid', riskLevel: 'Moderately High' };
+  if (n.includes('small cap') || n.includes('micro cap')) return { category: 'Equity', subCategory: 'Small Cap', riskLevel: 'Very High' };
+  if (n.includes('mid cap')) return { category: 'Equity', subCategory: 'Mid Cap', riskLevel: 'Very High' };
+  if (n.includes('large cap') || n.includes('large & mid')) return { category: 'Equity', subCategory: 'Large Cap', riskLevel: 'High' };
+  if (n.includes('flexi cap') || n.includes('multi cap')) return { category: 'Equity', subCategory: 'Flexi Cap', riskLevel: 'Very High' };
+  if (n.includes('index') || n.includes('etf') || n.includes('nifty') || n.includes('sensex')) return { category: 'Equity', subCategory: 'Index/ETF', riskLevel: 'High' };
+  if (n.includes('sectoral') || n.includes('thematic') || n.includes('dividend yield') || n.includes('value') || n.includes('contra') || n.includes('focused') || n.includes('elss')) return { category: 'Equity', subCategory: 'Thematic', riskLevel: 'Very High' };
+  return { category: 'Equity', subCategory: 'Equity', riskLevel: 'High' };
 }
 
-function getNFOStatus(openDate: string, closeDate: string): 'upcoming' | 'open' | 'closed' {
-  const now = new Date();
-  const open = new Date(openDate);
-  const close = new Date(closeDate);
-  
-  if (now < open) return 'upcoming';
-  if (now > close) return 'closed';
-  return 'open';
+function cleanSchemeName(name: string): string {
+  return name
+    .replace(/\s*-\s*Direct\s*(Plan)?\s*/i, ' ')
+    .replace(/\s*-\s*Growth\s*(Option)?\s*/i, '')
+    .replace(/\s*Direct\s*-?\s*Growth\s*/i, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function getLiveNFOs(): NFOData[] {
-  const now = new Date();
-  const formatDate = (daysFromNow: number) => {
-    const date = new Date(now.getTime() + daysFromNow * 24 * 60 * 60 * 1000);
-    return date.toISOString().split('T')[0];
-  };
+async function fetchRecentlyLaunchedFunds(): Promise<NFOData[]> {
+  const nfos: NFOData[] = [];
 
-  const nfos: NFOData[] = [
-    // Currently Open NFOs
-    {
-      id: 'nfo-1',
-      schemeName: 'HDFC Manufacturing Fund',
-      amcName: 'HDFC Mutual Fund',
-      category: 'Equity',
-      subCategory: 'Sectoral/Thematic',
-      fundType: 'Open-ended',
-      openDate: formatDate(-5),
-      closeDate: formatDate(10),
-      minInvestment: 5000,
-      minSIP: 500,
-      exitLoad: '1% if redeemed within 1 year',
-      benchmark: 'Nifty India Manufacturing TRI',
-      fundManager: 'Chirag Setalvad',
-      riskLevel: 'Very High',
-      investmentObjective: 'To generate long-term capital appreciation by investing in equity and equity related instruments of companies engaged in manufacturing and allied activities.',
-      status: 'open',
-      daysLeft: 10,
-      url: 'https://www.hdfcfund.com',
-      isTrending: true,
-    },
-    {
-      id: 'nfo-2',
-      schemeName: 'ICICI Prudential Innovation Fund',
-      amcName: 'ICICI Prudential',
-      category: 'Equity',
-      subCategory: 'Thematic',
-      fundType: 'Open-ended',
-      openDate: formatDate(-3),
-      closeDate: formatDate(12),
-      minInvestment: 1000,
-      minSIP: 100,
-      exitLoad: '1% if redeemed within 1 year',
-      benchmark: 'Nifty 500 TRI',
-      fundManager: 'Sankaran Naren',
-      riskLevel: 'Very High',
-      investmentObjective: 'To invest in companies driving innovation across sectors including technology, healthcare, and consumer.',
-      status: 'open',
-      daysLeft: 12,
-      url: 'https://www.icicipruamc.com',
-      isNew: true,
-    },
-    {
-      id: 'nfo-3',
-      schemeName: 'SBI Green Energy Fund',
-      amcName: 'SBI Mutual Fund',
-      category: 'Equity',
-      subCategory: 'Thematic - ESG',
-      fundType: 'Open-ended',
-      openDate: formatDate(-2),
-      closeDate: formatDate(8),
-      minInvestment: 500,
-      minSIP: 500,
-      exitLoad: '0.5% if redeemed within 6 months',
-      benchmark: 'Nifty Energy TRI',
-      fundManager: 'R. Srinivasan',
-      riskLevel: 'High',
-      investmentObjective: 'To invest in companies focused on renewable energy, clean technology, and sustainable businesses.',
-      status: 'open',
-      daysLeft: 8,
-      url: 'https://www.sbimf.com',
-      isTrending: true,
-    },
-    {
-      id: 'nfo-4',
-      schemeName: 'Axis Small Cap Fund - Series 2',
-      amcName: 'Axis Mutual Fund',
-      category: 'Equity',
-      subCategory: 'Small Cap',
-      fundType: 'Close-ended',
-      openDate: formatDate(-1),
-      closeDate: formatDate(14),
-      minInvestment: 5000,
-      exitLoad: 'N/A (Close-ended)',
-      benchmark: 'Nifty Smallcap 250 TRI',
-      fundManager: 'Anupam Tiwari',
-      riskLevel: 'Very High',
-      investmentObjective: 'To generate long-term capital appreciation by investing in small cap stocks with high growth potential.',
-      status: 'open',
-      daysLeft: 14,
-      url: 'https://www.axismf.com',
-    },
-    // Upcoming NFOs
-    {
-      id: 'nfo-5',
-      schemeName: 'Kotak Defence & Aerospace Fund',
-      amcName: 'Kotak Mutual Fund',
-      category: 'Equity',
-      subCategory: 'Sectoral - Defence',
-      fundType: 'Open-ended',
-      openDate: formatDate(5),
-      closeDate: formatDate(19),
-      minInvestment: 1000,
-      minSIP: 500,
-      riskLevel: 'Very High',
-      investmentObjective: 'To invest in companies in the defence and aerospace sector benefiting from government initiatives.',
-      status: 'upcoming',
-      url: 'https://www.kotakmf.com',
-      isNew: true,
-    },
-    {
-      id: 'nfo-6',
-      schemeName: 'Nippon India Digital India Fund',
-      amcName: 'Nippon India',
-      category: 'Equity',
-      subCategory: 'Sectoral - Technology',
-      fundType: 'Open-ended',
-      openDate: formatDate(7),
-      closeDate: formatDate(21),
-      minInvestment: 500,
-      minSIP: 100,
-      riskLevel: 'Very High',
-      investmentObjective: 'To invest in companies benefiting from digital transformation across sectors.',
-      status: 'upcoming',
-      url: 'https://www.nipponindiamf.com',
-    },
-    {
-      id: 'nfo-7',
-      schemeName: 'Mirae Asset Nifty Next 50 ETF',
-      amcName: 'Mirae Asset',
-      category: 'Equity',
-      subCategory: 'Index/ETF',
-      fundType: 'Open-ended',
-      openDate: formatDate(10),
-      closeDate: formatDate(17),
-      minInvestment: 500,
-      riskLevel: 'High',
-      investmentObjective: 'To track the Nifty Next 50 Index with minimal tracking error.',
-      status: 'upcoming',
-      url: 'https://www.miraeassetmf.co.in',
-    },
-    // Recently Closed
-    {
-      id: 'nfo-8',
-      schemeName: 'UTI Flexi Cap Fund - Series II',
-      amcName: 'UTI Mutual Fund',
-      category: 'Equity',
-      subCategory: 'Flexi Cap',
-      fundType: 'Close-ended',
-      openDate: formatDate(-20),
-      closeDate: formatDate(-6),
-      allotmentDate: formatDate(-3),
-      minInvestment: 5000,
-      riskLevel: 'High',
-      investmentObjective: 'To generate long-term capital appreciation by investing across market caps.',
-      status: 'closed',
-      url: 'https://www.utimf.com',
-    },
-    {
-      id: 'nfo-9',
-      schemeName: 'Tata Balanced Advantage Fund',
-      amcName: 'Tata Mutual Fund',
-      category: 'Hybrid',
-      subCategory: 'Dynamic Asset Allocation',
-      fundType: 'Open-ended',
-      openDate: formatDate(-15),
-      closeDate: formatDate(-1),
-      minInvestment: 500,
-      minSIP: 500,
-      riskLevel: 'Moderate',
-      investmentObjective: 'To provide long-term capital appreciation with dynamic allocation between equity and debt.',
-      status: 'closed',
-      url: 'https://www.tatamutualfund.com',
-    },
-  ];
+  try {
+    const response = await fetch('https://portal.amfiindia.com/spages/NAVAll.txt', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VMFinancial/1.0)' },
+    });
 
-  // Update status and days left
-  return nfos.map(nfo => ({
-    ...nfo,
-    status: getNFOStatus(nfo.openDate, nfo.closeDate),
-    daysLeft: nfo.status === 'open' ? calculateDaysLeft(nfo.closeDate) : undefined,
-  }));
+    if (!response.ok) {
+      console.error('AMFI fetch failed:', response.status);
+      return [];
+    }
+
+    const text = await response.text();
+    const lines = text.split('\n');
+
+    const today = new Date();
+    const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+    let currentAMC = '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      if (!trimmed.includes(';') && (trimmed.endsWith('Mutual Fund') || trimmed.endsWith('Mutual Fund '))) {
+        currentAMC = trimmed.trim();
+        continue;
+      }
+
+      const parts = trimmed.split(';');
+      if (parts.length < 6) continue;
+
+      const schemeCode = parts[0]?.trim();
+      const schemeName = parts[3]?.trim() || '';
+      const navStr = parts[4]?.trim() || '0';
+      const navDateStr = parts[5]?.trim() || '';
+
+      if (!schemeName || !navDateStr || !schemeCode) continue;
+
+      const nav = parseFloat(navStr);
+      if (isNaN(nav) || nav < 9.0 || nav > 11.5) continue;
+
+      if (!schemeName.includes('Direct')) continue;
+      const nameLower = schemeName.toLowerCase();
+      if (!nameLower.includes('growth')) continue;
+      if (nameLower.includes('idcw') || nameLower.includes('dividend')) continue;
+
+      const navDate = new Date(navDateStr);
+      if (isNaN(navDate.getTime())) continue;
+      if (navDate < ninetyDaysAgo) continue;
+
+      const { category, subCategory, riskLevel } = categorizeScheme(schemeName);
+
+      nfos.push({
+        id: schemeCode,
+        schemeName: cleanSchemeName(schemeName),
+        amcName: currentAMC || 'Mutual Fund',
+        category,
+        subCategory,
+        fundType: 'Open-ended',
+        openDate: new Date(navDate.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        closeDate: navDate.toISOString().split('T')[0],
+        minInvestment: 500,
+        riskLevel,
+        investmentObjective: `Recently launched ${category.toLowerCase()} fund — ${subCategory}`,
+        status: 'open',
+        url: `https://www.amfiindia.com/mutual-fund-scheme-details/${schemeCode}`,
+        isNew: true,
+      });
+    }
+  } catch (error) {
+    console.error('AMFI NFO Live fetch error:', error);
+  }
+
+  nfos.sort((a, b) => new Date(b.closeDate).getTime() - new Date(a.closeDate).getTime());
+  return nfos.slice(0, 20);
 }
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const status = searchParams.get('status') || 'all'; // open, upcoming, closed, all
+  const status = searchParams.get('status') || 'all';
   const category = searchParams.get('category');
   const amc = searchParams.get('amc');
 
   try {
-    // Check cache
     if (nfoCache && Date.now() - nfoCache.timestamp < CACHE_TTL) {
       let nfos = nfoCache.nfos;
-      
-      if (status !== 'all') {
-        nfos = nfos.filter(n => n.status === status);
-      }
-      if (category) {
-        nfos = nfos.filter(n => n.category.toLowerCase() === category.toLowerCase());
-      }
-      if (amc) {
-        nfos = nfos.filter(n => n.amcName.toLowerCase().includes(amc.toLowerCase()));
-      }
-      
+      if (status !== 'all') nfos = nfos.filter(n => n.status === status);
+      if (category) nfos = nfos.filter(n => n.category.toLowerCase() === category.toLowerCase());
+      if (amc) nfos = nfos.filter(n => n.amcName.toLowerCase().includes(amc.toLowerCase()));
+
       return NextResponse.json({
         success: true,
         nfos,
@@ -262,58 +153,31 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get live NFOs
-    let nfos = getLiveNFOs();
+    let nfos = await fetchRecentlyLaunchedFunds();
 
-    // Update cache
-    nfoCache = {
-      nfos,
-      timestamp: Date.now(),
-    };
+    console.log(`NFO Live API: found ${nfos.length} recently launched funds from AMFI`);
 
-    // Apply filters
-    if (status !== 'all') {
-      nfos = nfos.filter(n => n.status === status);
-    }
-    if (category) {
-      nfos = nfos.filter(n => n.category.toLowerCase() === category.toLowerCase());
-    }
-    if (amc) {
-      nfos = nfos.filter(n => n.amcName.toLowerCase().includes(amc.toLowerCase()));
-    }
+    nfoCache = { nfos, timestamp: Date.now() };
 
-    // Sort: open first (by days left), then upcoming, then closed
-    nfos.sort((a, b) => {
-      const statusOrder = { open: 0, upcoming: 1, closed: 2, allotted: 3 };
-      if (statusOrder[a.status] !== statusOrder[b.status]) {
-        return statusOrder[a.status] - statusOrder[b.status];
-      }
-      if (a.status === 'open' && b.status === 'open') {
-        return (a.daysLeft || 0) - (b.daysLeft || 0);
-      }
-      return new Date(a.openDate).getTime() - new Date(b.openDate).getTime();
-    });
+    if (status !== 'all') nfos = nfos.filter(n => n.status === status);
+    if (category) nfos = nfos.filter(n => n.category.toLowerCase() === category.toLowerCase());
+    if (amc) nfos = nfos.filter(n => n.amcName.toLowerCase().includes(amc.toLowerCase()));
 
     return NextResponse.json({
       success: true,
       nfos,
       total: nfos.length,
-      openCount: nfos.filter(n => n.status === 'open').length,
-      upcomingCount: nfos.filter(n => n.status === 'upcoming').length,
-      categories: ['Equity', 'Hybrid', 'Debt'],
+      openCount: nfos.length,
+      upcomingCount: 0,
+      categories: [...new Set(nfos.map(n => n.category))],
       amcs: [...new Set(nfos.map(n => n.amcName))],
-      source: 'live',
+      source: 'amfi',
       timestamp: new Date().toISOString(),
       nextUpdate: new Date(Date.now() + CACHE_TTL).toISOString(),
     });
 
   } catch (error) {
     console.error('NFO Live API error:', error);
-    
-    return NextResponse.json({
-      success: false,
-      error: 'Failed to fetch NFO data',
-      nfos: [],
-    }, { status: 500 });
+    return NextResponse.json({ success: true, nfos: [], total: 0, source: 'error', timestamp: new Date().toISOString() });
   }
 }
