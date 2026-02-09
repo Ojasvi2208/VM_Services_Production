@@ -188,9 +188,20 @@ export async function GET() {
           AND f.scheme_name NOT ILIKE '%fixed maturity%'
           AND f.scheme_name NOT ILIKE '%FMP%'
           AND f.scheme_name NOT ILIKE '%close ended%'
-          AND f.latest_nav > 1
+          AND f.scheme_name NOT ILIKE '%ETF%'
+          AND f.scheme_name NOT ILIKE '%Fund of Fund%'
+          AND f.scheme_name NOT ILIKE '%FOF%'
+          AND f.scheme_name NOT ILIKE '%Gold%'
+          AND f.scheme_name NOT ILIKE '%Silver%'
+          AND f.scheme_name NOT ILIKE '%Overseas%'
+          AND f.scheme_name NOT ILIKE '%World%'
+          AND f.scheme_name NOT ILIKE '%Global%'
+          AND f.scheme_name NOT ILIKE '%Nifty%'
+          AND f.scheme_name NOT ILIKE '%Sensex%'
+          AND f.scheme_name NOT ILIKE '%Index%'
+          AND f.latest_nav > 5
           AND fr.return_1y > 0
-          AND fr.return_1y < 200
+          AND fr.return_1y < 100
         ORDER BY fr.return_1y DESC
         LIMIT 30
       `);
