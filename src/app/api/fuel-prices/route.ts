@@ -1,80 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getFuelCache, setFuelCache, isCacheFresh, type FuelStatePrice, type FuelCacheData } from '@/lib/fuel-cache';
 
-// Fuel prices in India with central + state tax breakdown
-// Data sources: IOCL/BPCL published rates + government gazette tax rates
-// Prices updated daily at 6 AM IST
-
-interface FuelTaxBreakdown {
-  basePrice: number;       // Refinery price
-  exciseDuty: number;      // Central govt
-  dealerCommission: number;
-  vatPercent: number;       // State govt VAT %
-  vatAmount: number;        // Calculated VAT amount
-  additionalCess: number;   // State-specific cess/surcharge
-  retailPrice: number;      // Final pump price
-}
-
-interface FuelPriceData {
-  state: string;
-  city: string;
-  petrol: FuelTaxBreakdown;
-  diesel: FuelTaxBreakdown;
-  lastUpdated: string;
-}
-
-// ── Central Government Taxes (same across India) ──
-// As of Feb 2026 (latest gazette notification)
+// ── Central Government Taxes (same across India, gazette-notified) ──
 const CENTRAL_EXCISE_PETROL = 19.90;  // ₹/litre
 const CENTRAL_EXCISE_DIESEL = 15.80;  // ₹/litre
-const DEALER_COMMISSION = 3.69;        // Average dealer margin
+const DEALER_COMMISSION = 3.69;        // Average dealer margin ₹/litre
 
-// ── Base Refinery Price (changes daily, approximate current) ──
-const BASE_PETROL = 57.30;  // ₹/litre (avg refinery gate price)
-const BASE_DIESEL = 56.20;  // ₹/litre
-
-// ── State-wise VAT rates on Petrol and Diesel ──
-// Source: State government notifications (latest available)
-const STATE_TAXES: Record<string, { petrolVat: number; dieselVat: number; petrolCess: number; dieselCess: number }> = {
-  'Andhra Pradesh':       { petrolVat: 31.0, dieselVat: 22.25, petrolCess: 4.0, dieselCess: 4.0 },
-  'Arunachal Pradesh':    { petrolVat: 20.0, dieselVat: 12.5,  petrolCess: 0,   dieselCess: 0 },
-  'Assam':                { petrolVat: 32.66, dieselVat: 23.66, petrolCess: 0,   dieselCess: 0 },
-  'Bihar':                { petrolVat: 30.0, dieselVat: 24.0,  petrolCess: 0,   dieselCess: 0 },
-  'Chhattisgarh':         { petrolVat: 25.0, dieselVat: 25.0,  petrolCess: 2.0, dieselCess: 1.0 },
-  'Delhi':                { petrolVat: 19.40, dieselVat: 16.75, petrolCess: 0,   dieselCess: 0 },
-  'Goa':                  { petrolVat: 25.0, dieselVat: 22.0,  petrolCess: 1.0, dieselCess: 0.5 },
-  'Gujarat':              { petrolVat: 20.1, dieselVat: 20.2,  petrolCess: 4.0, dieselCess: 4.0 },
-  'Haryana':              { petrolVat: 25.0, dieselVat: 16.40, petrolCess: 0,   dieselCess: 0 },
-  'Himachal Pradesh':     { petrolVat: 25.0, dieselVat: 14.0,  petrolCess: 2.0, dieselCess: 2.0 },
-  'Jharkhand':            { petrolVat: 22.0, dieselVat: 22.0,  petrolCess: 1.0, dieselCess: 1.0 },
-  'Karnataka':            { petrolVat: 25.92, dieselVat: 14.34, petrolCess: 5.18, dieselCess: 3.02 },
-  'Kerala':               { petrolVat: 30.08, dieselVat: 22.76, petrolCess: 1.0, dieselCess: 1.0 },
-  'Madhya Pradesh':       { petrolVat: 29.0, dieselVat: 22.0,  petrolCess: 4.5, dieselCess: 3.0 },
-  'Maharashtra':          { petrolVat: 25.0, dieselVat: 21.0,  petrolCess: 5.12, dieselCess: 3.0 },
-  'Manipur':              { petrolVat: 24.50, dieselVat: 14.50, petrolCess: 0,   dieselCess: 0 },
-  'Meghalaya':            { petrolVat: 20.0, dieselVat: 12.5,  petrolCess: 2.0, dieselCess: 2.0 },
-  'Mizoram':              { petrolVat: 20.0, dieselVat: 12.5,  petrolCess: 0,   dieselCess: 0 },
-  'Nagaland':             { petrolVat: 25.0, dieselVat: 16.50, petrolCess: 2.0, dieselCess: 2.0 },
-  'Odisha':               { petrolVat: 28.0, dieselVat: 24.0,  petrolCess: 0,   dieselCess: 0 },
-  'Punjab':               { petrolVat: 27.20, dieselVat: 16.30, petrolCess: 0,   dieselCess: 0 },
-  'Rajasthan':            { petrolVat: 26.0, dieselVat: 17.60, petrolCess: 4.0, dieselCess: 2.0 },
-  'Sikkim':               { petrolVat: 22.25, dieselVat: 14.25, petrolCess: 0,   dieselCess: 0 },
-  'Tamil Nadu':           { petrolVat: 15.0, dieselVat: 11.0,  petrolCess: 13.02, dieselCess: 9.62 },
-  'Telangana':            { petrolVat: 35.20, dieselVat: 27.0,  petrolCess: 0,   dieselCess: 0 },
-  'Tripura':              { petrolVat: 20.0, dieselVat: 12.5,  petrolCess: 3.0, dieselCess: 2.0 },
-  'Uttar Pradesh':        { petrolVat: 19.36, dieselVat: 15.10, petrolCess: 2.0, dieselCess: 2.0 },
-  'Uttarakhand':          { petrolVat: 25.0, dieselVat: 17.48, petrolCess: 0,   dieselCess: 0 },
-  'West Bengal':          { petrolVat: 25.0, dieselVat: 17.0,  petrolCess: 2.0, dieselCess: 2.0 },
-  // Union Territories
-  'Chandigarh':           { petrolVat: 17.0, dieselVat: 12.25, petrolCess: 0,   dieselCess: 0 },
-  'Puducherry':           { petrolVat: 17.78, dieselVat: 14.03, petrolCess: 6.0, dieselCess: 5.0 },
-  'Jammu & Kashmir':      { petrolVat: 24.0, dieselVat: 16.0,  petrolCess: 0,   dieselCess: 0 },
-  'Ladakh':               { petrolVat: 20.0, dieselVat: 12.0,  petrolCess: 0,   dieselCess: 0 },
-  'Andaman & Nicobar':    { petrolVat: 6.0,  dieselVat: 6.0,   petrolCess: 0,   dieselCess: 0 },
-  'Dadra & Nagar Haveli': { petrolVat: 15.0, dieselVat: 15.0,  petrolCess: 0,   dieselCess: 0 },
-  'Lakshadweep':          { petrolVat: 0,    dieselVat: 0,     petrolCess: 0,   dieselCess: 0 },
+// ── State-wise VAT rates (% applied on base+excise+dealer) + cess ──
+const STATE_VAT: Record<string, { pVat: number; dVat: number; pCess: number; dCess: number }> = {
+  'Andaman And Nicobar':      { pVat: 6.0,   dVat: 6.0,   pCess: 0,    dCess: 0 },
+  'Andhra Pradesh':           { pVat: 31.0,  dVat: 22.25, pCess: 4.0,  dCess: 4.0 },
+  'Arunachal Pradesh':        { pVat: 20.0,  dVat: 12.5,  pCess: 0,    dCess: 0 },
+  'Assam':                    { pVat: 32.66, dVat: 23.66, pCess: 0,    dCess: 0 },
+  'Bihar':                    { pVat: 30.0,  dVat: 24.0,  pCess: 0,    dCess: 0 },
+  'Chandigarh':               { pVat: 17.0,  dVat: 12.25, pCess: 0,    dCess: 0 },
+  'Chhattisgarh':             { pVat: 25.0,  dVat: 25.0,  pCess: 2.0,  dCess: 1.0 },
+  'Dadra And Nagar Haveli':   { pVat: 15.0,  dVat: 15.0,  pCess: 0,    dCess: 0 },
+  'Daman And Diu':            { pVat: 15.0,  dVat: 15.0,  pCess: 0,    dCess: 0 },
+  'Delhi':                    { pVat: 19.40, dVat: 16.75, pCess: 0,    dCess: 0 },
+  'Goa':                      { pVat: 25.0,  dVat: 22.0,  pCess: 1.0,  dCess: 0.5 },
+  'Gujarat':                  { pVat: 20.1,  dVat: 20.2,  pCess: 4.0,  dCess: 4.0 },
+  'Haryana':                  { pVat: 25.0,  dVat: 16.40, pCess: 0,    dCess: 0 },
+  'Himachal Pradesh':         { pVat: 25.0,  dVat: 14.0,  pCess: 2.0,  dCess: 2.0 },
+  'Jammu And Kashmir':        { pVat: 24.0,  dVat: 16.0,  pCess: 0,    dCess: 0 },
+  'Jharkhand':                { pVat: 22.0,  dVat: 22.0,  pCess: 1.0,  dCess: 1.0 },
+  'Karnataka':                { pVat: 25.92, dVat: 14.34, pCess: 5.18, dCess: 3.02 },
+  'Kerala':                   { pVat: 30.08, dVat: 22.76, pCess: 1.0,  dCess: 1.0 },
+  'Madhya Pradesh':           { pVat: 29.0,  dVat: 22.0,  pCess: 4.5,  dCess: 3.0 },
+  'Maharashtra':              { pVat: 25.0,  dVat: 21.0,  pCess: 5.12, dCess: 3.0 },
+  'Manipur':                  { pVat: 24.50, dVat: 14.50, pCess: 0,    dCess: 0 },
+  'Meghalaya':                { pVat: 20.0,  dVat: 12.5,  pCess: 2.0,  dCess: 2.0 },
+  'Mizoram':                  { pVat: 20.0,  dVat: 12.5,  pCess: 0,    dCess: 0 },
+  'Nagaland':                 { pVat: 25.0,  dVat: 16.50, pCess: 2.0,  dCess: 2.0 },
+  'Odisha':                   { pVat: 28.0,  dVat: 24.0,  pCess: 0,    dCess: 0 },
+  'Pondicherry':              { pVat: 17.78, dVat: 14.03, pCess: 6.0,  dCess: 5.0 },
+  'Puducherry':               { pVat: 17.78, dVat: 14.03, pCess: 6.0,  dCess: 5.0 },
+  'Punjab':                   { pVat: 27.20, dVat: 16.30, pCess: 0,    dCess: 0 },
+  'Rajasthan':                { pVat: 26.0,  dVat: 17.60, pCess: 4.0,  dCess: 2.0 },
+  'Sikkim':                   { pVat: 22.25, dVat: 14.25, pCess: 0,    dCess: 0 },
+  'Tamil Nadu':               { pVat: 15.0,  dVat: 11.0,  pCess: 13.02, dCess: 9.62 },
+  'Telangana':                { pVat: 35.20, dVat: 27.0,  pCess: 0,    dCess: 0 },
+  'Tripura':                  { pVat: 20.0,  dVat: 12.5,  pCess: 3.0,  dCess: 2.0 },
+  'Uttar Pradesh':            { pVat: 19.36, dVat: 15.10, pCess: 2.0,  dCess: 2.0 },
+  'Uttarakhand':              { pVat: 25.0,  dVat: 17.48, pCess: 0,    dCess: 0 },
+  'West Bengal':              { pVat: 25.0,  dVat: 17.0,  pCess: 2.0,  dCess: 2.0 },
 };
 
-// Map common city names to states
+// City → state mapping for location-based lookups
 const CITY_STATE_MAP: Record<string, string> = {
   'mumbai': 'Maharashtra', 'pune': 'Maharashtra', 'nagpur': 'Maharashtra', 'thane': 'Maharashtra',
   'delhi': 'Delhi', 'new delhi': 'Delhi', 'noida': 'Uttar Pradesh', 'gurgaon': 'Haryana', 'gurugram': 'Haryana',
@@ -96,120 +68,203 @@ const CITY_STATE_MAP: Record<string, string> = {
   'thiruvananthapuram': 'Kerala', 'kochi': 'Kerala', 'kozhikode': 'Kerala',
   'panaji': 'Goa', 'margao': 'Goa',
   'shimla': 'Himachal Pradesh', 'manali': 'Himachal Pradesh',
-  'srinagar': 'Jammu & Kashmir', 'jammu': 'Jammu & Kashmir',
+  'srinagar': 'Jammu And Kashmir', 'jammu': 'Jammu And Kashmir',
   'imphal': 'Manipur', 'shillong': 'Meghalaya', 'aizawl': 'Mizoram', 'kohima': 'Nagaland',
   'agartala': 'Tripura', 'itanagar': 'Arunachal Pradesh', 'gangtok': 'Sikkim',
   'visakhapatnam': 'Andhra Pradesh', 'vijayawada': 'Andhra Pradesh', 'tirupati': 'Andhra Pradesh',
   'puducherry': 'Puducherry', 'pondicherry': 'Puducherry',
 };
 
-function calculateFuelPrice(state: string): { petrol: FuelTaxBreakdown; diesel: FuelTaxBreakdown } | null {
-  const taxes = STATE_TAXES[state];
-  if (!taxes) return null;
+const FUEL_API_BASE = 'https://fuel.indianapi.in/live_fuel_price';
+const FUEL_API_KEY = process.env.INDIANAPI_KEY || 'sk-live-Ne03Yxzf71nIfvbXTUrjZ5W1PGqkz75472pJRFTA';
 
-  // Petrol calculation
-  const petrolBeforeVAT = BASE_PETROL + CENTRAL_EXCISE_PETROL + DEALER_COMMISSION;
-  const petrolVAT = (petrolBeforeVAT * taxes.petrolVat) / 100;
-  const petrolRetail = petrolBeforeVAT + petrolVAT + taxes.petrolCess;
+// ── Live fetch from indianapi.in (only when cache is stale) ──
+async function fetchAndCacheLive(): Promise<FuelCacheData | null> {
+  try {
+    const [petrolRes, dieselRes] = await Promise.all([
+      fetch(`${FUEL_API_BASE}?fuel_type=petrol&location_type=state`, {
+        headers: { 'x-api-key': FUEL_API_KEY }, cache: 'no-store',
+      }),
+      fetch(`${FUEL_API_BASE}?fuel_type=diesel&location_type=state`, {
+        headers: { 'x-api-key': FUEL_API_KEY }, cache: 'no-store',
+      }),
+    ]);
+    if (!petrolRes.ok || !dieselRes.ok) return null;
 
-  // Diesel calculation
-  const dieselBeforeVAT = BASE_DIESEL + CENTRAL_EXCISE_DIESEL + DEALER_COMMISSION;
-  const dieselVAT = (dieselBeforeVAT * taxes.dieselVat) / 100;
-  const dieselRetail = dieselBeforeVAT + dieselVAT + taxes.dieselCess;
+    const petrolData: { city: string; price: string; change: string }[] = await petrolRes.json();
+    const dieselData: { city: string; price: string; change: string }[] = await dieselRes.json();
+
+    const dieselMap = new Map(dieselData.map(d => [d.city, d]));
+    const prices: FuelStatePrice[] = petrolData.map(p => {
+      const d = dieselMap.get(p.city);
+      return {
+        state: p.city,
+        petrolPrice: parseFloat(p.price) || 0,
+        petrolChange: parseFloat(p.change) || 0,
+        dieselPrice: d ? parseFloat(d.price) || 0 : 0,
+        dieselChange: d ? parseFloat(d.change) || 0 : 0,
+      };
+    });
+
+    const cacheData: FuelCacheData = { prices, fetchedAt: new Date().toISOString(), source: 'indianapi.in' };
+    setFuelCache(cacheData);
+
+    // Persist to /tmp for cold-start recovery
+    try {
+      const fs = await import('fs');
+      fs.writeFileSync('/tmp/fuel-cache.json', JSON.stringify(cacheData));
+    } catch { /* non-critical */ }
+
+    return cacheData;
+  } catch (err) {
+    console.error('Live fuel fetch failed:', err);
+    return null;
+  }
+}
+
+// ── Ensure we have data (memory → /tmp → live fetch) ──
+async function ensureCache(): Promise<FuelCacheData | null> {
+  // 1. Memory cache
+  if (isCacheFresh()) return getFuelCache();
+
+  // 2. Try /tmp file (survives some cold starts on Vercel)
+  try {
+    const fs = await import('fs');
+    if (fs.existsSync('/tmp/fuel-cache.json')) {
+      const raw = fs.readFileSync('/tmp/fuel-cache.json', 'utf-8');
+      const data: FuelCacheData = JSON.parse(raw);
+      const age = Date.now() - new Date(data.fetchedAt).getTime();
+      if (age < 25 * 60 * 60 * 1000) {
+        setFuelCache(data);
+        return data;
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 3. Live fetch as last resort
+  return await fetchAndCacheLive();
+}
+
+// ── Build tax breakdown from real retail price + known VAT rates ──
+function buildBreakdown(retailPrice: number, vatPct: number, cess: number, excise: number) {
+  // retailPrice = basePrice + excise + dealer + VAT(basePrice+excise+dealer) + cess
+  // retailPrice - cess = (base + excise + dealer) * (1 + vatPct/100)
+  // base = (retailPrice - cess) / (1 + vatPct/100) - excise - dealer
+  const multiplier = 1 + vatPct / 100;
+  const beforeVATTotal = (retailPrice - cess) / multiplier;
+  const basePrice = Math.max(beforeVATTotal - excise - DEALER_COMMISSION, 0);
+  const vatAmount = beforeVATTotal * vatPct / 100;
 
   return {
-    petrol: {
-      basePrice: Number(BASE_PETROL.toFixed(2)),
-      exciseDuty: Number(CENTRAL_EXCISE_PETROL.toFixed(2)),
-      dealerCommission: Number(DEALER_COMMISSION.toFixed(2)),
-      vatPercent: taxes.petrolVat,
-      vatAmount: Number(petrolVAT.toFixed(2)),
-      additionalCess: taxes.petrolCess,
-      retailPrice: Number(petrolRetail.toFixed(2)),
-    },
-    diesel: {
-      basePrice: Number(BASE_DIESEL.toFixed(2)),
-      exciseDuty: Number(CENTRAL_EXCISE_DIESEL.toFixed(2)),
-      dealerCommission: Number(DEALER_COMMISSION.toFixed(2)),
-      vatPercent: taxes.dieselVat,
-      vatAmount: Number(dieselVAT.toFixed(2)),
-      additionalCess: taxes.dieselCess,
-      retailPrice: Number(dieselRetail.toFixed(2)),
-    },
+    basePrice: round2(basePrice),
+    exciseDuty: round2(excise),
+    dealerCommission: round2(DEALER_COMMISSION),
+    vatPercent: vatPct,
+    vatAmount: round2(vatAmount),
+    additionalCess: cess,
+    retailPrice: round2(retailPrice),
   };
+}
+
+function round2(n: number) { return Math.round(n * 100) / 100; }
+
+// ── Find state entry (fuzzy match) ──
+function findState(query: string, prices: FuelStatePrice[]): FuelStatePrice | undefined {
+  const q = query.toLowerCase();
+  return prices.find(p => p.state.toLowerCase() === q)
+    || prices.find(p => p.state.toLowerCase().includes(q))
+    || prices.find(p => q.includes(p.state.toLowerCase()));
 }
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const stateParam = searchParams.get('state')?.trim();
-    const cityParam = searchParams.get('city')?.trim().toLowerCase();
+    let stateParam = searchParams.get('state')?.trim() || '';
+    const cityParam = searchParams.get('city')?.trim().toLowerCase() || '';
+    const allStates = searchParams.get('all') === 'true';
 
-    // Resolve state from city if needed
-    let state = stateParam || '';
-    let city = cityParam || '';
-
-    if (city && !state) {
-      state = CITY_STATE_MAP[city] || '';
+    // Resolve state from city
+    if (cityParam && !stateParam) {
+      stateParam = CITY_STATE_MAP[cityParam] || '';
     }
-    if (!state && !city) {
-      state = 'Delhi'; // default
-      city = 'delhi';
+    if (!stateParam && !cityParam && !allStates) {
+      stateParam = 'Delhi';
     }
 
-    // Validate state
-    if (!STATE_TAXES[state]) {
-      // Try to find by partial match
-      const found = Object.keys(STATE_TAXES).find(s => s.toLowerCase().includes(state.toLowerCase()));
-      if (found) state = found;
+    const cache = await ensureCache();
+    if (!cache || cache.prices.length === 0) {
+      return NextResponse.json({ success: false, error: 'Fuel price data unavailable. Try again later.' }, { status: 503 });
     }
 
-    const prices = calculateFuelPrice(state);
-    if (!prices) {
+    // ── Return all states ──
+    if (allStates) {
+      const allData = cache.prices.map(p => {
+        const vat = STATE_VAT[p.state];
+        return {
+          state: p.state,
+          petrolPrice: p.petrolPrice,
+          petrolChange: p.petrolChange,
+          dieselPrice: p.dieselPrice,
+          dieselChange: p.dieselChange,
+          petrolVatPercent: vat?.pVat ?? null,
+          dieselVatPercent: vat?.dVat ?? null,
+        };
+      });
+      return NextResponse.json({
+        success: true,
+        states: allData,
+        lastUpdated: cache.fetchedAt,
+        source: cache.source,
+      });
+    }
+
+    // ── Single state with full breakdown ──
+    const entry = findState(stateParam, cache.prices);
+    if (!entry) {
       return NextResponse.json({
         success: false,
-        error: `No fuel price data for state: ${state}`,
-        availableStates: Object.keys(STATE_TAXES).sort(),
+        error: `No fuel price data for: ${stateParam}`,
+        availableStates: cache.prices.map(p => p.state).sort(),
       }, { status: 404 });
     }
 
-    // Calculate tax percentages
-    const petrolTotalTax = prices.petrol.exciseDuty + prices.petrol.vatAmount + prices.petrol.additionalCess;
-    const dieselTotalTax = prices.diesel.exciseDuty + prices.diesel.vatAmount + prices.diesel.additionalCess;
-    const petrolTaxPct = (petrolTotalTax / prices.petrol.retailPrice) * 100;
-    const dieselTaxPct = (dieselTotalTax / prices.diesel.retailPrice) * 100;
+    const vat = STATE_VAT[entry.state] || { pVat: 15, dVat: 12, pCess: 0, dCess: 0 };
+    const petrol = buildBreakdown(entry.petrolPrice, vat.pVat, vat.pCess, CENTRAL_EXCISE_PETROL);
+    const diesel = buildBreakdown(entry.dieselPrice, vat.dVat, vat.dCess, CENTRAL_EXCISE_DIESEL);
 
-    const petrolCentralPct = (prices.petrol.exciseDuty / prices.petrol.retailPrice) * 100;
-    const petrolStatePct = ((prices.petrol.vatAmount + prices.petrol.additionalCess) / prices.petrol.retailPrice) * 100;
-    const dieselCentralPct = (prices.diesel.exciseDuty / prices.diesel.retailPrice) * 100;
-    const dieselStatePct = ((prices.diesel.vatAmount + prices.diesel.additionalCess) / prices.diesel.retailPrice) * 100;
+    // Tax summary percentages
+    const petrolTotalTax = petrol.exciseDuty + petrol.vatAmount + petrol.additionalCess;
+    const dieselTotalTax = diesel.exciseDuty + diesel.vatAmount + diesel.additionalCess;
 
     return NextResponse.json({
       success: true,
-      state,
-      city: city || state.toLowerCase(),
-      petrol: prices.petrol,
-      diesel: prices.diesel,
+      state: entry.state,
+      city: cityParam || entry.state.toLowerCase(),
+      petrol,
+      diesel,
+      petrolChange: entry.petrolChange,
+      dieselChange: entry.dieselChange,
       summary: {
         petrol: {
-          retailPrice: prices.petrol.retailPrice,
-          totalTax: Number(petrolTotalTax.toFixed(2)),
-          totalTaxPercent: Number(petrolTaxPct.toFixed(1)),
-          centralTaxPercent: Number(petrolCentralPct.toFixed(1)),
-          stateTaxPercent: Number(petrolStatePct.toFixed(1)),
+          retailPrice: petrol.retailPrice,
+          totalTax: round2(petrolTotalTax),
+          totalTaxPercent: round2((petrolTotalTax / petrol.retailPrice) * 100),
+          centralTaxPercent: round2((petrol.exciseDuty / petrol.retailPrice) * 100),
+          stateTaxPercent: round2(((petrol.vatAmount + petrol.additionalCess) / petrol.retailPrice) * 100),
         },
         diesel: {
-          retailPrice: prices.diesel.retailPrice,
-          totalTax: Number(dieselTotalTax.toFixed(2)),
-          totalTaxPercent: Number(dieselTaxPct.toFixed(1)),
-          centralTaxPercent: Number(dieselCentralPct.toFixed(1)),
-          stateTaxPercent: Number(dieselStatePct.toFixed(1)),
+          retailPrice: diesel.retailPrice,
+          totalTax: round2(dieselTotalTax),
+          totalTaxPercent: round2((dieselTotalTax / diesel.retailPrice) * 100),
+          centralTaxPercent: round2((diesel.exciseDuty / diesel.retailPrice) * 100),
+          stateTaxPercent: round2(((diesel.vatAmount + diesel.additionalCess) / diesel.retailPrice) * 100),
         },
       },
-      lastUpdated: new Date().toISOString(),
+      lastUpdated: cache.fetchedAt,
+      source: cache.source,
     });
   } catch (error) {
     console.error('Fuel prices API error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to calculate fuel prices' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to get fuel prices' }, { status: 500 });
   }
 }
