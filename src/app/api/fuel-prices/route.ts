@@ -219,8 +219,22 @@ export async function GET(request: NextRequest) {
     }
 
     // ── Single state with full breakdown ──
+    // Accept actual retail prices from the app (RapidAPI city-level prices)
+    // so the breakdown matches exactly what the user sees on the card.
+    const petrolPriceParam = parseFloat(searchParams.get('petrolPrice') || '0');
+    const dieselPriceParam = parseFloat(searchParams.get('dieselPrice') || '0');
+
+    // Try to find the state in cache for fallback prices and state name resolution
     const entry = findState(stateParam, cache.prices);
-    if (!entry) {
+    const resolvedState = entry?.state || stateParam;
+
+    const vat = STATE_VAT[resolvedState] || { pVat: 15, dVat: 12, pCess: 0, dCess: 0 };
+
+    // Use app-provided RapidAPI prices if available, otherwise fall back to cache
+    const petrolRetail = petrolPriceParam > 0 ? petrolPriceParam : (entry?.petrolPrice || 0);
+    const dieselRetail = dieselPriceParam > 0 ? dieselPriceParam : (entry?.dieselPrice || 0);
+
+    if (petrolRetail === 0 && dieselRetail === 0 && !entry) {
       return NextResponse.json({
         success: false,
         error: `No fuel price data for: ${stateParam}`,
@@ -228,9 +242,8 @@ export async function GET(request: NextRequest) {
       }, { status: 404 });
     }
 
-    const vat = STATE_VAT[entry.state] || { pVat: 15, dVat: 12, pCess: 0, dCess: 0 };
-    const petrol = buildBreakdown(entry.petrolPrice, vat.pVat, vat.pCess, CENTRAL_EXCISE_PETROL);
-    const diesel = buildBreakdown(entry.dieselPrice, vat.dVat, vat.dCess, CENTRAL_EXCISE_DIESEL);
+    const petrol = buildBreakdown(petrolRetail, vat.pVat, vat.pCess, CENTRAL_EXCISE_PETROL);
+    const diesel = buildBreakdown(dieselRetail, vat.dVat, vat.dCess, CENTRAL_EXCISE_DIESEL);
 
     // Tax summary percentages
     const petrolTotalTax = petrol.exciseDuty + petrol.vatAmount + petrol.additionalCess;
@@ -238,12 +251,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      state: entry.state,
-      city: cityParam || entry.state.toLowerCase(),
+      state: resolvedState,
+      city: cityParam || resolvedState.toLowerCase(),
       petrol,
       diesel,
-      petrolChange: entry.petrolChange,
-      dieselChange: entry.dieselChange,
+      petrolChange: entry?.petrolChange ?? 0,
+      dieselChange: entry?.dieselChange ?? 0,
       summary: {
         petrol: {
           retailPrice: petrol.retailPrice,
