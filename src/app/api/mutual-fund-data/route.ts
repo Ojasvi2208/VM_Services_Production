@@ -210,6 +210,19 @@ export async function GET() {
             AND f.scheme_name NOT ILIKE '%Series%'
             AND f.scheme_name NOT ILIKE '%close ended%'
             AND f.scheme_name NOT ILIKE '%FMP%'
+            AND f.scheme_name NOT ILIKE '%fixed maturity%'
+            AND f.scheme_name NOT ILIKE '%Taiwan%'
+            AND f.scheme_name NOT ILIKE '%Brazil%'
+            AND f.scheme_name NOT ILIKE '%China%'
+            AND f.scheme_name NOT ILIKE '%Japan%'
+            AND f.scheme_name NOT ILIKE '%Asia%'
+            AND f.scheme_name NOT ILIKE '%Europe%'
+            AND f.scheme_name NOT ILIKE '%US %'
+            AND f.scheme_name NOT ILIKE '%Emerging Markets%'
+            AND f.scheme_name NOT ILIKE '%Offshore%'
+            AND f.scheme_name NOT ILIKE '%Principal%'
+            AND f.scheme_name NOT ILIKE '%HSBC%'
+            AND f.scheme_name NOT ILIKE '%World%'
           ORDER BY fr.return_1y DESC
           LIMIT 30
         `);

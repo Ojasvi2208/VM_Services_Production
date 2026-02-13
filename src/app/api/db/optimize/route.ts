@@ -105,7 +105,6 @@ export async function GET(request: NextRequest) {
           AND f.scheme_name LIKE '%Growth%'
           AND f.latest_nav IS NOT NULL AND f.latest_nav > 5
           AND fr.return_1y IS NOT NULL AND fr.return_1y > 0 AND fr.return_1y < 100
-          AND fr.sharpe_ratio_1y IS NOT NULL
           AND f.scheme_name NOT ILIKE '%segregated%'
           AND f.scheme_name NOT ILIKE '%wind up%'
           AND f.scheme_name NOT ILIKE '%ETF%'
@@ -123,6 +122,18 @@ export async function GET(request: NextRequest) {
           AND f.scheme_name NOT ILIKE '%close ended%'
           AND f.scheme_name NOT ILIKE '%FMP%'
           AND f.scheme_name NOT ILIKE '%fixed maturity%'
+          AND f.scheme_name NOT ILIKE '%Taiwan%'
+          AND f.scheme_name NOT ILIKE '%Brazil%'
+          AND f.scheme_name NOT ILIKE '%China%'
+          AND f.scheme_name NOT ILIKE '%Japan%'
+          AND f.scheme_name NOT ILIKE '%Asia%'
+          AND f.scheme_name NOT ILIKE '%Europe%'
+          AND f.scheme_name NOT ILIKE '%US %'
+          AND f.scheme_name NOT ILIKE '%Emerging Markets%'
+          AND f.scheme_name NOT ILIKE '%Offshore%'
+          AND f.scheme_name NOT ILIKE '%Principal%'
+          AND f.scheme_name NOT ILIKE '%HSBC%'
+          AND f.scheme_name NOT ILIKE '%World%'
       )
       SELECT
         scheme_code,
