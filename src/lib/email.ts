@@ -35,8 +35,44 @@ interface EmailOptions {
 }
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
+  // Try Resend API first (reliable on Vercel serverless)
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (resendApiKey) {
+    try {
+      console.log(`Sending email to ${options.to} via Resend API`);
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: `${FROM_NAME} <${FROM_EMAIL}>`,
+          to: [options.to],
+          subject: options.subject,
+          html: options.html,
+          text: options.text || options.html.replace(/<[^>]*>/g, ''),
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`Email sent via Resend to ${options.to}, id: ${data.id}`);
+        return true;
+      }
+
+      const errorData = await response.text();
+      console.error(`Resend API failed (${response.status}):`, errorData);
+      // Fall through to SMTP
+    } catch (error) {
+      console.error('Resend API error:', error);
+      // Fall through to SMTP
+    }
+  }
+
+  // Fallback to SMTP (nodemailer)
   try {
-    console.log(`Attempting to send email to ${options.to} via ${process.env.SMTP_HOST || 'smtp.zoho.com'}`);
+    console.log(`Attempting to send email to ${options.to} via SMTP ${process.env.SMTP_HOST || 'smtppro.zoho.in'}`);
     const info = await transporter.sendMail({
       from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
       to: options.to,
@@ -44,11 +80,10 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       html: options.html,
       text: options.text || options.html.replace(/<[^>]*>/g, ''),
     });
-    console.log(`Email sent successfully to ${options.to}, messageId: ${info.messageId}`);
+    console.log(`Email sent via SMTP to ${options.to}, messageId: ${info.messageId}`);
     return true;
   } catch (error: unknown) {
-    const err = error as Error;
-    console.error('Failed to send email:', error);
+    console.error('SMTP send failed:', error);
     return false;
   }
 }

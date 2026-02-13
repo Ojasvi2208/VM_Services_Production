@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Rate limiting - max 3 OTPs per email per 10 minutes
-    if (otpStore.isRateLimited(email)) {
+    if (await otpStore.isRateLimited(email)) {
       return NextResponse.json(
         { success: false, error: 'Too many OTP requests. Please try again later.' },
         { status: 429 }
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     const otp = generateOTP();
 
     // Store OTP (10 minute expiry)
-    otpStore.set(email, otp, 10);
+    await otpStore.set(email, otp, 10);
 
     // Send OTP email
     const userName = existingUser[0]?.full_name || 'User';

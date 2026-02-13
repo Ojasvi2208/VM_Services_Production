@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import pool from './postgres-db';
 import crypto from 'crypto';
 
@@ -56,17 +56,56 @@ export async function getUserFromSession(token: string): Promise<any | null> {
   return result.rows[0];
 }
 
-// Get current user from cookies
+// Verify JWT token (from verify-otp endpoint, used by mobile app)
+function verifyJWT(token: string): { userId: number; email: string } | null {
+  try {
+    const JWT_SECRET = process.env.JWT_SECRET || 'vm-financial-secret-key-change-in-production';
+    const [header, body, signature] = token.split('.');
+    if (!header || !body || !signature) return null;
+    const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+    if (signature !== expectedSig) return null;
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
+    if (payload.exp < Date.now()) return null;
+    return { userId: payload.userId, email: payload.email };
+  } catch {
+    return null;
+  }
+}
+
+// Get user from JWT token (mobile app auth)
+async function getUserFromJWT(token: string): Promise<any | null> {
+  const payload = verifyJWT(token);
+  if (!payload) return null;
+  const result = await pool.query(
+    'SELECT id, email, full_name, phone, created_at, email_verified FROM users WHERE id = $1 AND is_active = true',
+    [payload.userId]
+  );
+  return result.rows.length > 0 ? result.rows[0] : null;
+}
+
+// Get current user from cookies (website) OR Authorization header (mobile app)
 export async function getCurrentUser(): Promise<any | null> {
   try {
+    // Try cookie first (website)
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
-    
-    if (!sessionCookie?.value) {
-      return null;
+    if (sessionCookie?.value) {
+      return await getUserFromSession(sessionCookie.value);
     }
 
-    return await getUserFromSession(sessionCookie.value);
+    // Try Authorization: Bearer header (mobile app)
+    const headerStore = await headers();
+    const authHeader = headerStore.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      // Try as session token first
+      const sessionUser = await getUserFromSession(token);
+      if (sessionUser) return sessionUser;
+      // Try as JWT token (from verify-otp)
+      return await getUserFromJWT(token);
+    }
+
+    return null;
   } catch (error) {
     return null;
   }
