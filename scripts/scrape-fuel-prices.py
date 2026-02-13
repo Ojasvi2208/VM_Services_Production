@@ -136,22 +136,129 @@ def parse_city_page(scraper, slug, fuel_type):
         return None
 
 
+def parse_cng_main(scraper):
+    """Scrape CNG main page for metro cities + state prices."""
+    url = f"{BASE_URL}/cng-price.html"
+    r = scraper.get(url, timeout=20)
+    if r.status_code != 200:
+        print(f"  ❌ CNG main page: HTTP {r.status_code}")
+        return {}, {}
+
+    soup = BeautifulSoup(r.content, "html.parser")
+    tables = soup.find_all("table")
+    cities = {}
+    states = {}
+
+    for i, table in enumerate(tables[:2]):  # table 0 = cities, table 1 = states
+        target = cities if i == 0 else states
+        for row in table.find_all("tr"):
+            cols = row.find_all("td")
+            if len(cols) >= 3:
+                name = cols[0].get_text(strip=True)
+                price_text = cols[1].get_text(strip=True).replace("₹", "").replace(" ", "").replace(",", "")
+                try:
+                    target[name] = float(price_text)
+                except ValueError:
+                    pass
+
+    print(f"  ✅ CNG main: {len(cities)} metro cities, {len(states)} states")
+    return cities, states
+
+
+def parse_lpg_main(scraper):
+    """Scrape LPG main page for metro cities + state domestic prices."""
+    url = f"{BASE_URL}/lpg-price.html"
+    r = scraper.get(url, timeout=20)
+    if r.status_code != 200:
+        print(f"  ❌ LPG main page: HTTP {r.status_code}")
+        return {}, {}
+
+    soup = BeautifulSoup(r.content, "html.parser")
+    tables = soup.find_all("table")
+    cities = {}
+    states = {}
+
+    for i, table in enumerate(tables[:2]):
+        target = cities if i == 0 else states
+        for row in table.find_all("tr"):
+            cols = row.find_all("td")
+            if len(cols) >= 2:
+                name = cols[0].get_text(strip=True)
+                # Domestic price is in col 1, may have "( 0.00 )" change suffix
+                raw = cols[1].get_text(strip=True).replace("₹", "").replace(",", "")
+                # Extract just the price number before any parenthetical
+                import re
+                m = re.match(r"([\d.]+)", raw)
+                if m:
+                    try:
+                        target[name] = float(m.group(1))
+                    except ValueError:
+                        pass
+
+    print(f"  ✅ LPG main: {len(cities)} metro cities, {len(states)} states")
+    return cities, states
+
+
+def parse_cng_city_page(scraper, slug):
+    """Get CNG price from city-specific page (title fallback)."""
+    url = f"{BASE_URL}/cng-price-in-{slug}.html"
+    try:
+        r = scraper.get(url, timeout=15)
+        if r.status_code != 200:
+            return None
+        soup = BeautifulSoup(r.content, "html.parser")
+        title = soup.find("title")
+        if title:
+            import re
+            m = re.search(r"Rs\.?\s*([\d.]+)", title.get_text(strip=True))
+            if m:
+                return float(m.group(1))
+        return None
+    except Exception:
+        return None
+
+
+def parse_lpg_city_page(scraper, slug):
+    """Get LPG domestic price from city-specific page."""
+    url = f"{BASE_URL}/lpg-price-in-{slug}.html"
+    try:
+        r = scraper.get(url, timeout=15)
+        if r.status_code != 200:
+            return None
+        soup = BeautifulSoup(r.content, "html.parser")
+        title = soup.find("title")
+        if title:
+            import re
+            m = re.search(r"Rs\.?\s*([\d.]+)", title.get_text(strip=True))
+            if m:
+                return float(m.group(1))
+        return None
+    except Exception:
+        return None
+
+
 def scrape_all():
-    """Full scrape: metro cities, states, and specific city pages."""
+    """Full scrape: metro cities, states, specific cities — petrol, diesel, CNG, LPG."""
     scraper = create_scraper()
     result = {
-        "cities": {},       # slug/name → {petrol, diesel, petrolChange, dieselChange}
-        "states": {},       # state name → {petrol, diesel, petrolChange, dieselChange}
+        "cities": {},       # slug → {name, petrol, diesel, cng, lpg, ...}
+        "states": {},       # state name → {petrol, diesel, cng, lpg, ...}
         "fetchedAt": datetime.utcnow().isoformat() + "Z",
         "source": "goodreturns.in",
     }
 
-    print("📊 Scraping main pages...")
+    # ── Petrol + Diesel ──
+    print("📊 Scraping petrol + diesel main pages...")
     petrol_cities, petrol_states = parse_main_page(scraper, "petrol")
     diesel_cities, diesel_states = parse_main_page(scraper, "diesel")
 
-    # Merge metro cities
-    all_city_names = set(petrol_cities.keys()) | set(diesel_cities.keys())
+    # ── CNG + LPG ──
+    print("⛽ Scraping CNG + LPG main pages...")
+    cng_cities, cng_states = parse_cng_main(scraper)
+    lpg_cities, lpg_states = parse_lpg_main(scraper)
+
+    # Merge metro cities (petrol + diesel + cng + lpg)
+    all_city_names = set(petrol_cities.keys()) | set(diesel_cities.keys()) | set(cng_cities.keys()) | set(lpg_cities.keys())
     for name in all_city_names:
         p = petrol_cities.get(name, {})
         d = diesel_cities.get(name, {})
@@ -162,10 +269,12 @@ def scrape_all():
             "diesel": d.get("price", 0),
             "petrolChange": p.get("change", "0.00"),
             "dieselChange": d.get("change", "0.00"),
+            "cng": cng_cities.get(name, 0),
+            "lpg": lpg_cities.get(name, 0),
         }
 
     # Merge states
-    all_state_names = set(petrol_states.keys()) | set(diesel_states.keys())
+    all_state_names = set(petrol_states.keys()) | set(diesel_states.keys()) | set(cng_states.keys()) | set(lpg_states.keys())
     for name in all_state_names:
         p = petrol_states.get(name, {})
         d = diesel_states.get(name, {})
@@ -174,17 +283,27 @@ def scrape_all():
             "diesel": d.get("price", 0),
             "petrolChange": p.get("change", "0.00"),
             "dieselChange": d.get("change", "0.00"),
+            "cng": cng_states.get(name, 0),
+            "lpg": lpg_states.get(name, 0),
         }
 
-    # Scrape individual city pages
+    # Scrape individual city pages (petrol + diesel + CNG + LPG)
     print(f"\n🏙️  Scraping {len(CITY_SLUGS)} city-specific pages...")
     for slug, display_name in CITY_SLUGS.items():
-        if slug in result["cities"]:
-            print(f"  ⏭️  {display_name} already from metro list")
+        existing = result["cities"].get(slug)
+        if existing and existing.get("petrol", 0) > 0:
+            # Already have petrol/diesel from metro list, just add CNG/LPG
+            if existing.get("cng", 0) == 0:
+                existing["cng"] = parse_cng_city_page(scraper, slug) or 0
+            if existing.get("lpg", 0) == 0:
+                existing["lpg"] = parse_lpg_city_page(scraper, slug) or 0
+            print(f"  ⏭️  {display_name} already in metro, added CNG={existing['cng']} LPG={existing['lpg']}")
             continue
 
         petrol_data = parse_city_page(scraper, slug, "petrol")
         diesel_data = parse_city_page(scraper, slug, "diesel")
+        cng_price = parse_cng_city_page(scraper, slug) or 0
+        lpg_price = parse_lpg_city_page(scraper, slug) or 0
 
         if petrol_data or diesel_data:
             result["cities"][slug] = {
@@ -193,8 +312,10 @@ def scrape_all():
                 "diesel": diesel_data["price"] if diesel_data else 0,
                 "petrolChange": petrol_data.get("change", "0.00") if petrol_data else "0.00",
                 "dieselChange": diesel_data.get("change", "0.00") if diesel_data else "0.00",
+                "cng": cng_price,
+                "lpg": lpg_price,
             }
-            print(f"  ✅ {display_name}: P₹{result['cities'][slug]['petrol']} D₹{result['cities'][slug]['diesel']}")
+            print(f"  ✅ {display_name}: P₹{result['cities'][slug]['petrol']} D₹{result['cities'][slug]['diesel']} CNG₹{cng_price} LPG₹{lpg_price}")
         else:
             print(f"  ❌ {display_name}: no data found")
 
@@ -235,7 +356,7 @@ def main():
     for slug in ["sas-nagar", "new-delhi", "chandigarh"]:
         city = data["cities"].get(slug)
         if city:
-            print(f"   {city['name']}: Petrol ₹{city['petrol']}, Diesel ₹{city['diesel']}")
+            print(f"   {city['name']}: P₹{city['petrol']} D₹{city['diesel']} CNG₹{city.get('cng',0)} LPG₹{city.get('lpg',0)}")
 
     # Save locally for debugging
     with open("/tmp/akshaya-fuel-scraped.json", "w") as f:

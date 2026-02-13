@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getFuelCache, setFuelCache, isCacheFresh, type FuelStatePrice, type FuelCacheData } from '@/lib/fuel-cache';
 import { getScrapedFuelCache, setScrapedFuelCache, isScrapedCacheFresh, type ScrapedFuelData, type ScrapedCityPrice } from '@/lib/fuel-cache';
 
 // ── Central Government Taxes (same across India, gazette-notified) ──
@@ -99,54 +98,7 @@ const CITY_STATE_MAP: Record<string, string> = {
   'puducherry': 'Puducherry', 'pondicherry': 'Puducherry',
 };
 
-const FUEL_API_BASE = 'https://fuel.indianapi.in/live_fuel_price';
-const FUEL_API_KEY = process.env.INDIANAPI_KEY || 'sk-live-Ne03Yxzf71nIfvbXTUrjZ5W1PGqkz75472pJRFTA';
-
-// ── Live fetch from indianapi.in (only when cache is stale) ──
-async function fetchAndCacheLive(): Promise<FuelCacheData | null> {
-  try {
-    const [petrolRes, dieselRes] = await Promise.all([
-      fetch(`${FUEL_API_BASE}?fuel_type=petrol&location_type=state`, {
-        headers: { 'x-api-key': FUEL_API_KEY }, cache: 'no-store',
-      }),
-      fetch(`${FUEL_API_BASE}?fuel_type=diesel&location_type=state`, {
-        headers: { 'x-api-key': FUEL_API_KEY }, cache: 'no-store',
-      }),
-    ]);
-    if (!petrolRes.ok || !dieselRes.ok) return null;
-
-    const petrolData: { city: string; price: string; change: string }[] = await petrolRes.json();
-    const dieselData: { city: string; price: string; change: string }[] = await dieselRes.json();
-
-    const dieselMap = new Map(dieselData.map(d => [d.city, d]));
-    const prices: FuelStatePrice[] = petrolData.map(p => {
-      const d = dieselMap.get(p.city);
-      return {
-        state: p.city,
-        petrolPrice: parseFloat(p.price) || 0,
-        petrolChange: parseFloat(p.change) || 0,
-        dieselPrice: d ? parseFloat(d.price) || 0 : 0,
-        dieselChange: d ? parseFloat(d.change) || 0 : 0,
-      };
-    });
-
-    const cacheData: FuelCacheData = { prices, fetchedAt: new Date().toISOString(), source: 'indianapi.in' };
-    setFuelCache(cacheData);
-
-    // Persist to /tmp for cold-start recovery
-    try {
-      const fs = await import('fs');
-      fs.writeFileSync('/tmp/fuel-cache.json', JSON.stringify(cacheData));
-    } catch { /* non-critical */ }
-
-    return cacheData;
-  } catch (err) {
-    console.error('Live fuel fetch failed:', err);
-    return null;
-  }
-}
-
-// ── Ensure scraped city cache (memory → /tmp) ──
+// ── Ensure scraped cache (memory → /tmp). No external API calls — all from scraped cache. ──
 async function ensureScrapedCache(): Promise<ScrapedFuelData | null> {
   if (isScrapedCacheFresh()) return getScrapedFuelCache();
 
@@ -187,27 +139,16 @@ function findScrapedCity(cityName: string, scraped: ScrapedFuelData): { slug: st
   return null;
 }
 
-// ── Ensure we have data (memory → /tmp → live fetch) ──
-async function ensureCache(): Promise<FuelCacheData | null> {
-  // 1. Memory cache
-  if (isCacheFresh()) return getFuelCache();
-
-  // 2. Try /tmp file (survives some cold starts on Vercel)
-  try {
-    const fs = await import('fs');
-    if (fs.existsSync('/tmp/fuel-cache.json')) {
-      const raw = fs.readFileSync('/tmp/fuel-cache.json', 'utf-8');
-      const data: FuelCacheData = JSON.parse(raw);
-      const age = Date.now() - new Date(data.fetchedAt).getTime();
-      if (age < 25 * 60 * 60 * 1000) {
-        setFuelCache(data);
-        return data;
-      }
+// ── Fallback: find any scraped city in the same state ──
+function findCityInSameState(stateName: string, scraped: ScrapedFuelData): ScrapedCityPrice | null {
+  const stateKey = stateName.toLowerCase();
+  for (const [, city] of Object.entries(scraped.cities)) {
+    const cityState = CITY_STATE_MAP[city.name.toLowerCase()];
+    if (cityState && cityState.toLowerCase() === stateKey) {
+      return city;
     }
-  } catch { /* ignore */ }
-
-  // 3. Live fetch as last resort
-  return await fetchAndCacheLive();
+  }
+  return null;
 }
 
 // ── Build tax breakdown from real retail price + known VAT rates ──
@@ -233,13 +174,6 @@ function buildBreakdown(retailPrice: number, vatPct: number, cess: number, excis
 
 function round2(n: number) { return Math.round(n * 100) / 100; }
 
-// ── Find state entry (fuzzy match) ──
-function findState(query: string, prices: FuelStatePrice[]): FuelStatePrice | undefined {
-  const q = query.toLowerCase();
-  return prices.find(p => p.state.toLowerCase() === q)
-    || prices.find(p => p.state.toLowerCase().includes(q))
-    || prices.find(p => q.includes(p.state.toLowerCase()));
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -256,66 +190,71 @@ export async function GET(request: NextRequest) {
       stateParam = 'Delhi';
     }
 
-    const cache = await ensureCache();
     const scraped = await ensureScrapedCache();
 
-    if ((!cache || cache.prices.length === 0) && !scraped) {
-      return NextResponse.json({ success: false, error: 'Fuel price data unavailable. Try again later.' }, { status: 503 });
+    if (!scraped) {
+      return NextResponse.json({ success: false, error: 'Fuel price data unavailable. Scraped cache not yet populated.' }, { status: 503 });
     }
 
     // ── Return all states ──
     if (allStates) {
-      // Prefer scraped state data if available, merge with indianapi.in
-      const stateData: Record<string, { petrolPrice: number; petrolChange: number; dieselPrice: number; dieselChange: number; petrolVatPercent: number | null; dieselVatPercent: number | null }> = {};
-
-      // Base from indianapi.in cache
-      if (cache) {
-        for (const p of cache.prices) {
-          const vat = STATE_VAT[p.state];
-          stateData[p.state] = {
-            petrolPrice: p.petrolPrice,
-            petrolChange: p.petrolChange,
-            dieselPrice: p.dieselPrice,
-            dieselChange: p.dieselChange,
-            petrolVatPercent: vat?.pVat ?? null,
-            dieselVatPercent: vat?.dVat ?? null,
-          };
-        }
-      }
-
-      // Override with scraped state data (fresher)
-      if (scraped) {
-        for (const [state, data] of Object.entries(scraped.states)) {
-          const vat = STATE_VAT[state];
-          if (data.petrol > 0) {
-            stateData[state] = {
-              petrolPrice: data.petrol,
-              petrolChange: parseFloat(data.petrolChange) || 0,
-              dieselPrice: data.diesel,
-              dieselChange: parseFloat(data.dieselChange) || 0,
-              petrolVatPercent: vat?.pVat ?? null,
-              dieselVatPercent: vat?.dVat ?? null,
-            };
-          }
-        }
-      }
+      const allData = Object.entries(scraped.states).map(([state, data]) => {
+        const vat = STATE_VAT[state];
+        return {
+          state,
+          petrolPrice: data.petrol,
+          petrolChange: parseFloat(data.petrolChange) || 0,
+          dieselPrice: data.diesel,
+          dieselChange: parseFloat(data.dieselChange) || 0,
+          cngPrice: data.cng || null,
+          lpgPrice: data.lpg || null,
+          petrolVatPercent: vat?.pVat ?? null,
+          dieselVatPercent: vat?.dVat ?? null,
+        };
+      });
 
       return NextResponse.json({
         success: true,
-        states: Object.entries(stateData).map(([state, d]) => ({ state, ...d })),
-        lastUpdated: scraped?.fetchedAt || cache?.fetchedAt,
-        source: scraped ? scraped.source : cache?.source,
+        states: allData,
+        lastUpdated: scraped.fetchedAt,
+        source: scraped.source,
       });
     }
 
     // ── Single city/state with full breakdown ──
+    // Accept optional app-provided prices for backward compat
     const petrolPriceParam = parseFloat(searchParams.get('petrolPrice') || '0');
     const dieselPriceParam = parseFloat(searchParams.get('dieselPrice') || '0');
 
-    // Try scraped city data first (most accurate, daily-updated from OMC)
-    let scrapedCity: ScrapedCityPrice | null = null;
+    // Resolve state name (fuzzy match against scraped states)
+    let resolvedState = stateParam;
+    const stateQ = stateParam.toLowerCase();
+    for (const s of Object.keys(scraped.states)) {
+      if (s.toLowerCase() === stateQ || s.toLowerCase().includes(stateQ) || stateQ.includes(s.toLowerCase())) {
+        resolvedState = s;
+        break;
+      }
+    }
+    // Also resolve via CITY_STATE_MAP + goodreturns state name matching
+    if (cityParam && !resolvedState) {
+      resolvedState = CITY_STATE_MAP[cityParam] || 'Delhi';
+    }
+
+    const vat = STATE_VAT[resolvedState] || { pVat: 15, dVat: 12, pCess: 0, dCess: 0 };
+
+    // Priority chain: 1) scraped city, 2) app-provided price, 3) nearest city in same state, 4) scraped state
+    let petrolRetail = 0;
+    let dieselRetail = 0;
+    let petrolChange = 0;
+    let dieselChange = 0;
+    let cngPrice: number | null = null;
+    let lpgPrice: number | null = null;
     let resolvedCityName = '';
-    if (scraped && cityParam) {
+    let dataSource = scraped.source;
+
+    // Try 1: scraped city match
+    let scrapedCity: ScrapedCityPrice | null = null;
+    if (cityParam) {
       const found = findScrapedCity(cityParam, scraped);
       if (found) {
         scrapedCity = found.data;
@@ -323,49 +262,55 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Find state in indianapi.in cache for fallback + state name resolution
-    const entry = cache ? findState(stateParam, cache.prices) : undefined;
-    const resolvedState = entry?.state || stateParam;
-
-    const vat = STATE_VAT[resolvedState] || { pVat: 15, dVat: 12, pCess: 0, dCess: 0 };
-
-    // Priority: 1) scraped city price, 2) app-provided price, 3) scraped state price, 4) indianapi.in state
-    let petrolRetail = 0;
-    let dieselRetail = 0;
-    let petrolChange = 0;
-    let dieselChange = 0;
-    let dataSource = cache?.source || 'unknown';
-
     if (scrapedCity && scrapedCity.petrol > 0) {
       petrolRetail = scrapedCity.petrol;
       dieselRetail = scrapedCity.diesel;
       petrolChange = parseFloat(scrapedCity.petrolChange) || 0;
       dieselChange = parseFloat(scrapedCity.dieselChange) || 0;
-      dataSource = scraped!.source;
+      cngPrice = scrapedCity.cng || null;
+      lpgPrice = scrapedCity.lpg || null;
     } else if (petrolPriceParam > 0) {
+      // Try 2: app-provided prices (backward compat)
       petrolRetail = petrolPriceParam;
       dieselRetail = dieselPriceParam;
-      petrolChange = entry?.petrolChange ?? 0;
-      dieselChange = entry?.dieselChange ?? 0;
-    } else if (scraped && scraped.states[resolvedState]?.petrol > 0) {
+    } else {
+      // Try 3: nearest city in same state
+      const nearestCity = findCityInSameState(resolvedState, scraped);
+      if (nearestCity && nearestCity.petrol > 0) {
+        petrolRetail = nearestCity.petrol;
+        dieselRetail = nearestCity.diesel;
+        petrolChange = parseFloat(nearestCity.petrolChange) || 0;
+        dieselChange = parseFloat(nearestCity.dieselChange) || 0;
+        cngPrice = nearestCity.cng || null;
+        lpgPrice = nearestCity.lpg || null;
+        resolvedCityName = nearestCity.name;
+      }
+    }
+
+    // Try 4: scraped state-level price as final fallback
+    if (petrolRetail === 0 && scraped.states[resolvedState]?.petrol > 0) {
       const scrapedState = scraped.states[resolvedState];
       petrolRetail = scrapedState.petrol;
       dieselRetail = scrapedState.diesel;
       petrolChange = parseFloat(scrapedState.petrolChange) || 0;
       dieselChange = parseFloat(scrapedState.dieselChange) || 0;
-      dataSource = scraped.source;
-    } else {
-      petrolRetail = entry?.petrolPrice || 0;
-      dieselRetail = entry?.dieselPrice || 0;
-      petrolChange = entry?.petrolChange ?? 0;
-      dieselChange = entry?.dieselChange ?? 0;
+      if (!cngPrice) cngPrice = scrapedState.cng || null;
+      if (!lpgPrice) lpgPrice = scrapedState.lpg || null;
     }
 
-    if (petrolRetail === 0 && dieselRetail === 0 && !entry && !scrapedCity) {
+    // Fill CNG/LPG from state if city didn't have it
+    if (!cngPrice && scraped.states[resolvedState]?.cng) {
+      cngPrice = scraped.states[resolvedState].cng || null;
+    }
+    if (!lpgPrice && scraped.states[resolvedState]?.lpg) {
+      lpgPrice = scraped.states[resolvedState].lpg || null;
+    }
+
+    if (petrolRetail === 0 && dieselRetail === 0) {
       return NextResponse.json({
         success: false,
         error: `No fuel price data for: ${stateParam} ${cityParam}`,
-        availableStates: cache?.prices.map(p => p.state).sort() || [],
+        availableStates: Object.keys(scraped.states).sort(),
       }, { status: 404 });
     }
 
@@ -383,25 +328,27 @@ export async function GET(request: NextRequest) {
       dieselPrice: dieselRetail,
       petrolChange,
       dieselChange,
+      cngPrice,
+      lpgPrice,
       petrol,
       diesel,
       summary: {
         petrol: {
           retailPrice: petrol.retailPrice,
           totalTax: round2(petrolTotalTax),
-          totalTaxPercent: round2((petrolTotalTax / petrol.retailPrice) * 100),
-          centralTaxPercent: round2((petrol.exciseDuty / petrol.retailPrice) * 100),
-          stateTaxPercent: round2(((petrol.vatAmount + petrol.additionalCess) / petrol.retailPrice) * 100),
+          totalTaxPercent: petrolRetail > 0 ? round2((petrolTotalTax / petrol.retailPrice) * 100) : 0,
+          centralTaxPercent: petrolRetail > 0 ? round2((petrol.exciseDuty / petrol.retailPrice) * 100) : 0,
+          stateTaxPercent: petrolRetail > 0 ? round2(((petrol.vatAmount + petrol.additionalCess) / petrol.retailPrice) * 100) : 0,
         },
         diesel: {
           retailPrice: diesel.retailPrice,
           totalTax: round2(dieselTotalTax),
-          totalTaxPercent: round2((dieselTotalTax / diesel.retailPrice) * 100),
-          centralTaxPercent: round2((diesel.exciseDuty / diesel.retailPrice) * 100),
-          stateTaxPercent: round2(((diesel.vatAmount + diesel.additionalCess) / diesel.retailPrice) * 100),
+          totalTaxPercent: dieselRetail > 0 ? round2((dieselTotalTax / diesel.retailPrice) * 100) : 0,
+          centralTaxPercent: dieselRetail > 0 ? round2((diesel.exciseDuty / diesel.retailPrice) * 100) : 0,
+          stateTaxPercent: dieselRetail > 0 ? round2(((diesel.vatAmount + diesel.additionalCess) / diesel.retailPrice) * 100) : 0,
         },
       },
-      lastUpdated: scraped?.fetchedAt || cache?.fetchedAt,
+      lastUpdated: scraped.fetchedAt,
       source: dataSource,
     });
   } catch (error) {

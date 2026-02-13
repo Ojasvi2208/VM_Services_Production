@@ -39,11 +39,22 @@ export interface ScrapedCityPrice {
   diesel: number;
   petrolChange: string;
   dieselChange: string;
+  cng?: number;
+  lpg?: number;
+}
+
+export interface ScrapedStatePrice {
+  petrol: number;
+  diesel: number;
+  petrolChange: string;
+  dieselChange: string;
+  cng?: number;
+  lpg?: number;
 }
 
 export interface ScrapedFuelData {
   cities: Record<string, ScrapedCityPrice>;   // slug → prices
-  states: Record<string, { petrol: number; diesel: number; petrolChange: string; dieselChange: string }>;
+  states: Record<string, ScrapedStatePrice>;
   fetchedAt: string;
   source: string;
 }
