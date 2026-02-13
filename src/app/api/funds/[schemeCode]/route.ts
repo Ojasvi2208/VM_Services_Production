@@ -60,11 +60,13 @@ export async function GET(
         return_2y as "return2y",
         return_3y as "return3y",
         return_5y as "return5y",
+        return_7y as "return7y",
         return_10y as "return10y",
         cagr_1y as "cagr1y",
         cagr_2y as "cagr2y",
         cagr_3y as "cagr3y",
         cagr_5y as "cagr5y",
+        cagr_7y as "cagr7y",
         cagr_10y as "cagr10y",
         volatility_1y as "volatility1y",
         max_drawdown as "maxDrawdown",
@@ -78,6 +80,13 @@ export async function GET(
     );
 
     const returns = returnsResult.rows[0] || null;
+
+    // Calculate since-inception return if inception_date and NAV available
+    let returnSinceInception: number | null = null;
+    if (fund.inceptionDate && returns?.return10y !== undefined) {
+      // Use longest available CAGR as proxy for since-inception
+      returnSinceInception = returns.cagr10y ?? returns.cagr7y ?? returns.cagr5y ?? returns.cagr3y ?? null;
+    }
 
     // NAV history is fetched from MFApi on-demand (not stored in DB to save space)
     // We'll fetch it from the external API instead
@@ -101,7 +110,6 @@ export async function GET(
     }
 
     // Fund managers and expense history tables don't exist yet
-    // Return empty arrays for now
     const managers: any[] = [];
     const expenseHistory: any[] = [];
 
@@ -109,7 +117,7 @@ export async function GET(
       success: true,
       data: {
         fund,
-        returns,
+        returns: returns ? { ...returns, returnSinceInception } : null,
         navHistory,
         managers,
         expenseHistory

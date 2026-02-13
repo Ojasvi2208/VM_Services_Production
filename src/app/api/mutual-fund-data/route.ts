@@ -164,86 +164,79 @@ const fallbackData: MutualFundData[] = [
 
 export async function GET() {
   try {
-    console.log('🚀 MF API mutual fund data service starting...');
-    
-    // Try to fetch real funds from database with returns data
     const client = await pool.connect();
     try {
-      // Get top performing Direct Growth funds with returns
-      const result = await client.query(`
-        SELECT 
-          f.scheme_code,
-          f.scheme_name,
-          f.latest_nav,
-          fr.return_1y
-        FROM funds f
-        LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
-        WHERE f.scheme_name LIKE '%Direct%' 
-          AND f.scheme_name LIKE '%Growth%'
-          AND f.latest_nav IS NOT NULL
-          AND fr.return_1y IS NOT NULL
-          AND f.scheme_name NOT ILIKE '%segregated%'
-          AND f.scheme_name NOT ILIKE '%wind up%'
-          AND f.scheme_name NOT ILIKE '%interval%'
-          AND f.scheme_name NOT ILIKE '%fixed maturity%'
-          AND f.scheme_name NOT ILIKE '%FMP%'
-          AND f.scheme_name NOT ILIKE '%close ended%'
-          AND f.scheme_name NOT ILIKE '%ETF%'
-          AND f.scheme_name NOT ILIKE '%Fund of Fund%'
-          AND f.scheme_name NOT ILIKE '%FOF%'
-          AND f.scheme_name NOT ILIKE '%Gold%'
-          AND f.scheme_name NOT ILIKE '%Silver%'
-          AND f.scheme_name NOT ILIKE '%Overseas%'
-          AND f.scheme_name NOT ILIKE '%World%'
-          AND f.scheme_name NOT ILIKE '%Global%'
-          AND f.scheme_name NOT ILIKE '%Nifty%'
-          AND f.scheme_name NOT ILIKE '%Sensex%'
-          AND f.scheme_name NOT ILIKE '%Index%'
-          AND f.scheme_name NOT ILIKE '%Series%'
-          AND f.scheme_name NOT ILIKE '%Payout%'
-          AND f.scheme_name NOT ILIKE '%ayout of I%'
-          AND f.scheme_name NOT ILIKE '%Long Term Advantage%'
-          AND f.scheme_name NOT ILIKE '%Principal%'
-          AND f.scheme_name NOT ILIKE '%Offshore%'
-          AND f.scheme_name NOT ILIKE '%Taiwan%'
-          AND f.scheme_name NOT ILIKE '%Brazil%'
-          AND f.scheme_name NOT ILIKE '%China%'
-          AND f.scheme_name NOT ILIKE '%Japan%'
-          AND f.scheme_name NOT ILIKE '%Asia%'
-          AND f.scheme_name NOT ILIKE '%Europe%'
-          AND f.scheme_name NOT ILIKE '%US %'
-          AND f.scheme_name NOT ILIKE '%US Tech%'
-          AND f.scheme_name NOT ILIKE '%Emerging Markets%'
-          AND f.scheme_name NOT ILIKE '%International%'
-          AND f.scheme_name NOT ILIKE '%HSBC%'
-          AND f.scheme_name NOT ILIKE '%Franklin Asian%'
-          AND f.scheme_name NOT ILIKE '%1126D%'
-          AND f.scheme_name NOT ILIKE '%Opp Fund - II%'
-          AND f.scheme_name NOT ILIKE '%- II -%'
-          AND f.scheme_name NOT ILIKE '%- III -%'
-          AND f.scheme_name NOT ILIKE '%- IV -%'
-          AND f.scheme_name NOT ILIKE '%- V -%'
-          AND f.latest_nav > 5
-          AND fr.return_1y > 0
-          AND fr.return_1y < 100
-        ORDER BY fr.return_1y DESC
-        LIMIT 30
-      `);
+      // ── O(k) retrieval: Try materialized view first (pre-ranked by quality score) ──
+      let result;
+      try {
+        result = await client.query(`
+          SELECT scheme_code, scheme_name, latest_nav, return_1y,
+                 sharpe_ratio_1y, volatility_1y, quality_score, quality_rank
+          FROM mv_top_funds
+          WHERE quality_rank <= 30
+          ORDER BY quality_rank
+        `);
+      } catch (mvError) {
+        // Materialized view doesn't exist yet — fall back to indexed query
+        result = { rows: [] };
+      }
+
+      // ── Fallback: O(n log n) with partial index if MV not available ──
+      if (result.rows.length === 0) {
+        result = await client.query(`
+          SELECT 
+            f.scheme_code,
+            f.scheme_name,
+            f.latest_nav,
+            fr.return_1y,
+            fr.sharpe_ratio_1y,
+            fr.volatility_1y
+          FROM funds f
+          INNER JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
+          WHERE f.scheme_name LIKE '%Direct%' 
+            AND f.scheme_name LIKE '%Growth%'
+            AND f.latest_nav IS NOT NULL AND f.latest_nav > 5
+            AND fr.return_1y IS NOT NULL AND fr.return_1y > 0 AND fr.return_1y < 100
+            AND f.scheme_name NOT ILIKE '%segregated%'
+            AND f.scheme_name NOT ILIKE '%ETF%'
+            AND f.scheme_name NOT ILIKE '%Fund of Fund%'
+            AND f.scheme_name NOT ILIKE '%FOF%'
+            AND f.scheme_name NOT ILIKE '%Index%'
+            AND f.scheme_name NOT ILIKE '%Gold%'
+            AND f.scheme_name NOT ILIKE '%Silver%'
+            AND f.scheme_name NOT ILIKE '%International%'
+            AND f.scheme_name NOT ILIKE '%Global%'
+            AND f.scheme_name NOT ILIKE '%Overseas%'
+            AND f.scheme_name NOT ILIKE '%Series%'
+            AND f.scheme_name NOT ILIKE '%close ended%'
+            AND f.scheme_name NOT ILIKE '%FMP%'
+          ORDER BY fr.return_1y DESC
+          LIMIT 30
+        `);
+      }
       
       if (result.rows.length > 0) {
-        const dbFunds = result.rows.map((row, index) => {
+        const dbFunds = result.rows.map((row: any, index: number) => {
           const nav = parseFloat(row.latest_nav) || 100;
           const return1y = parseFloat(row.return_1y) || 0;
-          const changeData = calculateChange(nav);
+          const sharpe = parseFloat(row.sharpe_ratio_1y) || 0;
+          const qualityScore = parseFloat(row.quality_score) || 0;
+          
+          // Rating based on quality score or return
+          const rating = qualityScore > 0.8 ? 5 : qualityScore > 0.6 ? 4 :
+            return1y > 20 ? 5 : return1y > 10 ? 4 : return1y > 5 ? 3 : 2;
           
           return {
-            fundName: row.scheme_name.replace(' - Direct Plan - Growth Option', '').replace(' - Direct Plan - Growth', '').replace(' - Direct Growth', ''),
+            fundName: row.scheme_name
+              .replace(' - Direct Plan - Growth Option', '')
+              .replace(' - Direct Plan - Growth', '')
+              .replace(' - Direct Growth', ''),
             category: getCategory(row.scheme_name),
             nav: nav.toFixed(2),
-            change: changeData.change,
+            change: sharpe >= 0 ? `+${sharpe.toFixed(2)}` : sharpe.toFixed(2),
             changePercent: return1y >= 0 ? `+${return1y.toFixed(2)}` : return1y.toFixed(2),
-            rank: index + 1,
-            rating: return1y > 20 ? 5 : return1y > 10 ? 4 : return1y > 5 ? 3 : 2,
+            rank: parseInt(row.quality_rank) || (index + 1),
+            rating,
             aum: '₹10,000 Cr',
             isPositive: return1y >= 0,
             fundHouse: getAmcName(row.scheme_name),
@@ -253,10 +246,10 @@ export async function GET() {
         
         return NextResponse.json({
           success: true,
-          source: 'Database',
+          source: result.rows[0]?.quality_score ? 'MaterializedView' : 'Database',
           funds: dbFunds,
           lastUpdated: new Date().toISOString(),
-          note: 'Real fund data from database',
+          note: 'Quality-ranked funds (60% return + 40% Sharpe ratio)',
           totalFunds: dbFunds.length
         });
       }

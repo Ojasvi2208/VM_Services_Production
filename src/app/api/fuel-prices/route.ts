@@ -190,10 +190,69 @@ export async function GET(request: NextRequest) {
       stateParam = 'Delhi';
     }
 
-    const scraped = await ensureScrapedCache();
+    let scraped = await ensureScrapedCache();
+
+    // ── Secondary API fallback when scraped cache is null (cold start) ──
+    if (!scraped) {
+      try {
+        const apiKey = process.env.INDIANAPI_KEY || 'sk-live-Ne03Yxzf71nIfvbXTUrjZ5W1PGqkz75472pJRFTA';
+        const [petrolResp, dieselResp] = await Promise.all([
+          fetch(`https://fuel.indianapi.in/live_fuel_price?fuel_type=petrol&location_type=state`, {
+            headers: { 'x-api-key': apiKey }
+          }),
+          fetch(`https://fuel.indianapi.in/live_fuel_price?fuel_type=diesel&location_type=state`, {
+            headers: { 'x-api-key': apiKey }
+          })
+        ]);
+
+        if (petrolResp.ok && dieselResp.ok) {
+          const petrolData: any[] = await petrolResp.json();
+          const dieselData: any[] = await dieselResp.json();
+
+          // Build synthetic scraped cache from API response
+          const states: Record<string, any> = {};
+          for (const item of petrolData) {
+            const stateName = item.city || item.state || '';
+            if (!stateName) continue;
+            states[stateName] = {
+              petrol: parseFloat(item.price) || 0,
+              diesel: 0,
+              petrolChange: item.change || '0',
+              dieselChange: '0',
+              cng: null,
+              lpg: null,
+            };
+          }
+          for (const item of dieselData) {
+            const stateName = item.city || item.state || '';
+            if (states[stateName]) {
+              states[stateName].diesel = parseFloat(item.price) || 0;
+              states[stateName].dieselChange = item.change || '0';
+            }
+          }
+
+          scraped = {
+            states,
+            cities: {},
+            fetchedAt: new Date().toISOString(),
+            source: 'IndianAPI-fallback',
+          } as ScrapedFuelData;
+
+          // Persist to /tmp for next request
+          try {
+            const fs = await import('fs');
+            fs.writeFileSync('/tmp/fuel-scraped-cache.json', JSON.stringify(scraped));
+          } catch { /* ignore */ }
+
+          setScrapedFuelCache(scraped);
+        }
+      } catch (e) {
+        console.error('Secondary fuel API fallback failed:', e);
+      }
+    }
 
     if (!scraped) {
-      return NextResponse.json({ success: false, error: 'Fuel price data unavailable. Scraped cache not yet populated.' }, { status: 503 });
+      return NextResponse.json({ success: false, error: 'Fuel price data unavailable. All sources exhausted.' }, { status: 503 });
     }
 
     // ── Return all states ──
