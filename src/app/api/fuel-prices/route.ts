@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFuelCache, setFuelCache, isCacheFresh, type FuelStatePrice, type FuelCacheData } from '@/lib/fuel-cache';
+import { getScrapedFuelCache, setScrapedFuelCache, isScrapedCacheFresh, type ScrapedFuelData, type ScrapedCityPrice } from '@/lib/fuel-cache';
 
 // ── Central Government Taxes (same across India, gazette-notified) ──
 const CENTRAL_EXCISE_PETROL = 19.90;  // ₹/litre
@@ -44,6 +45,29 @@ const STATE_VAT: Record<string, { pVat: number; dVat: number; pCess: number; dCe
   'Uttar Pradesh':            { pVat: 19.36, dVat: 15.10, pCess: 2.0,  dCess: 2.0 },
   'Uttarakhand':              { pVat: 25.0,  dVat: 17.48, pCess: 0,    dCess: 0 },
   'West Bengal':              { pVat: 25.0,  dVat: 17.0,  pCess: 2.0,  dCess: 2.0 },
+};
+
+// City slug → goodreturns.in slug (for resolving app city names to scraped data)
+const CITY_SLUG_MAP: Record<string, string> = {
+  'mohali': 'sas-nagar', 'sas nagar': 'sas-nagar', 'sahibzada ajit singh nagar': 'sas-nagar',
+  'new delhi': 'new-delhi', 'delhi': 'new-delhi',
+  'gurgaon': 'gurgaon', 'gurugram': 'gurgaon',
+  'bangalore': 'bangalore', 'bengaluru': 'bangalore',
+  'mumbai': 'mumbai', 'kolkata': 'kolkata', 'chennai': 'chennai',
+  'pune': 'pune', 'ahmedabad': 'ahmedabad', 'surat': 'surat',
+  'indore': 'indore', 'nagpur': 'nagpur', 'noida': 'noida',
+  'chandigarh': 'chandigarh', 'hyderabad': 'hyderabad',
+  'jaipur': 'jaipur', 'lucknow': 'lucknow', 'patna': 'patna',
+  'bhubaneswar': 'bhubaneswar', 'thiruvananthapuram': 'thiruvananthapuram',
+  'ludhiana': 'ludhiana', 'amritsar': 'amritsar',
+  'kochi': 'kochi', 'coimbatore': 'coimbatore', 'madurai': 'madurai',
+  'visakhapatnam': 'visakhapatnam', 'bhopal': 'bhopal',
+  'vadodara': 'vadodara', 'raipur': 'raipur', 'ranchi': 'ranchi',
+  'dehradun': 'dehradun', 'guwahati': 'guwahati',
+  'agra': 'agra', 'varanasi': 'varanasi', 'kanpur': 'kanpur',
+  'jodhpur': 'jodhpur', 'udaipur': 'udaipur',
+  'mysore': 'mysore', 'mangalore': 'mangalore',
+  'shimla': 'shimla',
 };
 
 // City → state mapping for location-based lookups
@@ -122,6 +146,47 @@ async function fetchAndCacheLive(): Promise<FuelCacheData | null> {
   }
 }
 
+// ── Ensure scraped city cache (memory → /tmp) ──
+async function ensureScrapedCache(): Promise<ScrapedFuelData | null> {
+  if (isScrapedCacheFresh()) return getScrapedFuelCache();
+
+  try {
+    const fs = await import('fs');
+    if (fs.existsSync('/tmp/fuel-scraped-cache.json')) {
+      const raw = fs.readFileSync('/tmp/fuel-scraped-cache.json', 'utf-8');
+      const data: ScrapedFuelData = JSON.parse(raw);
+      const age = Date.now() - new Date(data.fetchedAt).getTime();
+      if (age < 25 * 60 * 60 * 1000) {
+        setScrapedFuelCache(data);
+        return data;
+      }
+    }
+  } catch { /* ignore */ }
+
+  return getScrapedFuelCache(); // return stale if nothing else
+}
+
+// ── Find scraped city price by name/slug ──
+function findScrapedCity(cityName: string, scraped: ScrapedFuelData): { slug: string; data: ScrapedCityPrice } | null {
+  const lower = cityName.toLowerCase().trim();
+
+  // Direct slug match
+  if (scraped.cities[lower]) return { slug: lower, data: scraped.cities[lower] };
+
+  // Map through alias
+  const mapped = CITY_SLUG_MAP[lower];
+  if (mapped && scraped.cities[mapped]) return { slug: mapped, data: scraped.cities[mapped] };
+
+  // Fuzzy: try matching city name field
+  for (const [slug, city] of Object.entries(scraped.cities)) {
+    if (city.name.toLowerCase() === lower || slug === lower) {
+      return { slug, data: city };
+    }
+  }
+
+  return null;
+}
+
 // ── Ensure we have data (memory → /tmp → live fetch) ──
 async function ensureCache(): Promise<FuelCacheData | null> {
   // 1. Memory cache
@@ -192,71 +257,134 @@ export async function GET(request: NextRequest) {
     }
 
     const cache = await ensureCache();
-    if (!cache || cache.prices.length === 0) {
+    const scraped = await ensureScrapedCache();
+
+    if ((!cache || cache.prices.length === 0) && !scraped) {
       return NextResponse.json({ success: false, error: 'Fuel price data unavailable. Try again later.' }, { status: 503 });
     }
 
     // ── Return all states ──
     if (allStates) {
-      const allData = cache.prices.map(p => {
-        const vat = STATE_VAT[p.state];
-        return {
-          state: p.state,
-          petrolPrice: p.petrolPrice,
-          petrolChange: p.petrolChange,
-          dieselPrice: p.dieselPrice,
-          dieselChange: p.dieselChange,
-          petrolVatPercent: vat?.pVat ?? null,
-          dieselVatPercent: vat?.dVat ?? null,
-        };
-      });
+      // Prefer scraped state data if available, merge with indianapi.in
+      const stateData: Record<string, { petrolPrice: number; petrolChange: number; dieselPrice: number; dieselChange: number; petrolVatPercent: number | null; dieselVatPercent: number | null }> = {};
+
+      // Base from indianapi.in cache
+      if (cache) {
+        for (const p of cache.prices) {
+          const vat = STATE_VAT[p.state];
+          stateData[p.state] = {
+            petrolPrice: p.petrolPrice,
+            petrolChange: p.petrolChange,
+            dieselPrice: p.dieselPrice,
+            dieselChange: p.dieselChange,
+            petrolVatPercent: vat?.pVat ?? null,
+            dieselVatPercent: vat?.dVat ?? null,
+          };
+        }
+      }
+
+      // Override with scraped state data (fresher)
+      if (scraped) {
+        for (const [state, data] of Object.entries(scraped.states)) {
+          const vat = STATE_VAT[state];
+          if (data.petrol > 0) {
+            stateData[state] = {
+              petrolPrice: data.petrol,
+              petrolChange: parseFloat(data.petrolChange) || 0,
+              dieselPrice: data.diesel,
+              dieselChange: parseFloat(data.dieselChange) || 0,
+              petrolVatPercent: vat?.pVat ?? null,
+              dieselVatPercent: vat?.dVat ?? null,
+            };
+          }
+        }
+      }
+
       return NextResponse.json({
         success: true,
-        states: allData,
-        lastUpdated: cache.fetchedAt,
-        source: cache.source,
+        states: Object.entries(stateData).map(([state, d]) => ({ state, ...d })),
+        lastUpdated: scraped?.fetchedAt || cache?.fetchedAt,
+        source: scraped ? scraped.source : cache?.source,
       });
     }
 
-    // ── Single state with full breakdown ──
-    // Accept actual retail prices from the app (RapidAPI city-level prices)
-    // so the breakdown matches exactly what the user sees on the card.
+    // ── Single city/state with full breakdown ──
     const petrolPriceParam = parseFloat(searchParams.get('petrolPrice') || '0');
     const dieselPriceParam = parseFloat(searchParams.get('dieselPrice') || '0');
 
-    // Try to find the state in cache for fallback prices and state name resolution
-    const entry = findState(stateParam, cache.prices);
+    // Try scraped city data first (most accurate, daily-updated from OMC)
+    let scrapedCity: ScrapedCityPrice | null = null;
+    let resolvedCityName = '';
+    if (scraped && cityParam) {
+      const found = findScrapedCity(cityParam, scraped);
+      if (found) {
+        scrapedCity = found.data;
+        resolvedCityName = found.data.name;
+      }
+    }
+
+    // Find state in indianapi.in cache for fallback + state name resolution
+    const entry = cache ? findState(stateParam, cache.prices) : undefined;
     const resolvedState = entry?.state || stateParam;
 
     const vat = STATE_VAT[resolvedState] || { pVat: 15, dVat: 12, pCess: 0, dCess: 0 };
 
-    // Use app-provided RapidAPI prices if available, otherwise fall back to cache
-    const petrolRetail = petrolPriceParam > 0 ? petrolPriceParam : (entry?.petrolPrice || 0);
-    const dieselRetail = dieselPriceParam > 0 ? dieselPriceParam : (entry?.dieselPrice || 0);
+    // Priority: 1) scraped city price, 2) app-provided price, 3) scraped state price, 4) indianapi.in state
+    let petrolRetail = 0;
+    let dieselRetail = 0;
+    let petrolChange = 0;
+    let dieselChange = 0;
+    let dataSource = cache?.source || 'unknown';
 
-    if (petrolRetail === 0 && dieselRetail === 0 && !entry) {
+    if (scrapedCity && scrapedCity.petrol > 0) {
+      petrolRetail = scrapedCity.petrol;
+      dieselRetail = scrapedCity.diesel;
+      petrolChange = parseFloat(scrapedCity.petrolChange) || 0;
+      dieselChange = parseFloat(scrapedCity.dieselChange) || 0;
+      dataSource = scraped!.source;
+    } else if (petrolPriceParam > 0) {
+      petrolRetail = petrolPriceParam;
+      dieselRetail = dieselPriceParam;
+      petrolChange = entry?.petrolChange ?? 0;
+      dieselChange = entry?.dieselChange ?? 0;
+    } else if (scraped && scraped.states[resolvedState]?.petrol > 0) {
+      const scrapedState = scraped.states[resolvedState];
+      petrolRetail = scrapedState.petrol;
+      dieselRetail = scrapedState.diesel;
+      petrolChange = parseFloat(scrapedState.petrolChange) || 0;
+      dieselChange = parseFloat(scrapedState.dieselChange) || 0;
+      dataSource = scraped.source;
+    } else {
+      petrolRetail = entry?.petrolPrice || 0;
+      dieselRetail = entry?.dieselPrice || 0;
+      petrolChange = entry?.petrolChange ?? 0;
+      dieselChange = entry?.dieselChange ?? 0;
+    }
+
+    if (petrolRetail === 0 && dieselRetail === 0 && !entry && !scrapedCity) {
       return NextResponse.json({
         success: false,
-        error: `No fuel price data for: ${stateParam}`,
-        availableStates: cache.prices.map(p => p.state).sort(),
+        error: `No fuel price data for: ${stateParam} ${cityParam}`,
+        availableStates: cache?.prices.map(p => p.state).sort() || [],
       }, { status: 404 });
     }
 
     const petrol = buildBreakdown(petrolRetail, vat.pVat, vat.pCess, CENTRAL_EXCISE_PETROL);
     const diesel = buildBreakdown(dieselRetail, vat.dVat, vat.dCess, CENTRAL_EXCISE_DIESEL);
 
-    // Tax summary percentages
     const petrolTotalTax = petrol.exciseDuty + petrol.vatAmount + petrol.additionalCess;
     const dieselTotalTax = diesel.exciseDuty + diesel.vatAmount + diesel.additionalCess;
 
     return NextResponse.json({
       success: true,
       state: resolvedState,
-      city: cityParam || resolvedState.toLowerCase(),
+      city: resolvedCityName || cityParam || resolvedState.toLowerCase(),
+      petrolPrice: petrolRetail,
+      dieselPrice: dieselRetail,
+      petrolChange,
+      dieselChange,
       petrol,
       diesel,
-      petrolChange: entry?.petrolChange ?? 0,
-      dieselChange: entry?.dieselChange ?? 0,
       summary: {
         petrol: {
           retailPrice: petrol.retailPrice,
@@ -273,8 +401,8 @@ export async function GET(request: NextRequest) {
           stateTaxPercent: round2(((diesel.vatAmount + diesel.additionalCess) / diesel.retailPrice) * 100),
         },
       },
-      lastUpdated: cache.fetchedAt,
-      source: cache.source,
+      lastUpdated: scraped?.fetchedAt || cache?.fetchedAt,
+      source: dataSource,
     });
   } catch (error) {
     console.error('Fuel prices API error:', error);

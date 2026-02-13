@@ -30,3 +30,36 @@ export function isCacheFresh(): boolean {
   const age = Date.now() - new Date(cachedData.fetchedAt).getTime();
   return age < 25 * 60 * 60 * 1000; // 25 hours
 }
+
+// ── Scraped city-level cache (from goodreturns.in via GitHub Action) ──
+
+export interface ScrapedCityPrice {
+  name: string;
+  petrol: number;
+  diesel: number;
+  petrolChange: string;
+  dieselChange: string;
+}
+
+export interface ScrapedFuelData {
+  cities: Record<string, ScrapedCityPrice>;   // slug → prices
+  states: Record<string, { petrol: number; diesel: number; petrolChange: string; dieselChange: string }>;
+  fetchedAt: string;
+  source: string;
+}
+
+let scrapedData: ScrapedFuelData | null = null;
+
+export function getScrapedFuelCache(): ScrapedFuelData | null {
+  return scrapedData;
+}
+
+export function setScrapedFuelCache(data: ScrapedFuelData): void {
+  scrapedData = data;
+}
+
+export function isScrapedCacheFresh(): boolean {
+  if (!scrapedData) return false;
+  const age = Date.now() - new Date(scrapedData.fetchedAt).getTime();
+  return age < 25 * 60 * 60 * 1000; // 25 hours
+}

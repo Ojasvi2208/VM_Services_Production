@@ -1,0 +1,30 @@
+name: Daily Fuel Price Scrape
+
+on:
+  schedule:
+    # 6:15 AM IST = 00:45 UTC
+    - cron: '45 0 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install cloudscraper beautifulsoup4 requests
+
+      - name: Run fuel scraper
+        env:
+          BACKEND_URL: https://www.vmfinancialservices.com
+          FUEL_SCRAPE_SECRET: ${{ secrets.FUEL_SCRAPE_SECRET }}
+        run: python scripts/scrape-fuel-prices.py
