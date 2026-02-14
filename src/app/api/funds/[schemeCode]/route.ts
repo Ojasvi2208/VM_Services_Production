@@ -88,18 +88,19 @@ export async function GET(
       returnSinceInception = returns.cagr10y ?? returns.cagr7y ?? returns.cagr5y ?? returns.cagr3y ?? null;
     }
 
-    // NAV history is fetched from MFApi on-demand (not stored in DB to save space)
-    // We'll fetch it from the external API instead
+    // NAV history from MFApi — return up to 2000 points for 5Y+ charts
     let navHistory: any[] = [];
+    let mfApiMeta: any = null;
     try {
       const navResponse = await fetch(`https://api.mfapi.in/mf/${schemeCode}`, {
         headers: { 'User-Agent': 'Mozilla/5.0' },
-        next: { revalidate: 3600 } // Cache for 1 hour
+        next: { revalidate: 3600 }
       });
       if (navResponse.ok) {
         const navData = await navResponse.json();
+        mfApiMeta = navData?.meta || null;
         if (navData?.data) {
-          navHistory = navData.data.slice(0, 30).map((item: any) => ({
+          navHistory = navData.data.slice(0, 2000).map((item: any) => ({
             date: item.date,
             nav: parseFloat(item.nav)
           }));
@@ -109,9 +110,10 @@ export async function GET(
       console.warn('Could not fetch NAV history from MFApi:', navError);
     }
 
-    // Fund managers and expense history tables don't exist yet
-    const managers: any[] = [];
-    const expenseHistory: any[] = [];
+    // Enrich fund info with MFApi meta
+    const fundHouseName = mfApiMeta?.fund_house || null;
+    const schemeCategory = mfApiMeta?.scheme_category || null;
+    const schemeType = mfApiMeta?.scheme_type || null;
 
     // Parse DECIMAL strings to numbers for mobile clients
     const parsedFund = fund ? {
@@ -132,11 +134,14 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: {
-        fund: parsedFund,
+        fund: {
+          ...parsedFund,
+          fundHouse: fundHouseName || parsedFund?.amcCode || null,
+          category: schemeCategory || parsedFund?.category || null,
+          schemeType: schemeType || parsedFund?.schemeType || null,
+        },
         returns: parsedReturns,
         navHistory,
-        managers,
-        expenseHistory
       }
     });
 
