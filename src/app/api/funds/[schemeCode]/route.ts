@@ -116,11 +116,21 @@ export async function GET(
     const schemeType = mfApiMeta?.scheme_type || null;
 
     // Find sibling variants (same fund, different plan/option types)
-    const STRIP_WORDS = ['direct', 'regular', 'plan', 'growth', 'idcw', 'dividend', 'payout', 'reinvestment', 'option'];
+    const STRIP_WORDS = new Set([
+      // Plan/option keywords
+      'direct', 'regular', 'plan', 'growth', 'idcw', 'dividend', 'payout', 'reinvestment', 'option', 'monthly', 'quarterly', 'annual', 'weekly',
+      // Common AMC name words (not fund-specific)
+      'aditya', 'birla', 'sun', 'life', 'icici', 'prudential', 'nippon', 'india', 'franklin', 'templeton',
+      'kotak', 'mahindra', 'tata', 'hdfc', 'sbi', 'axis', 'uti', 'dsp', 'mirae', 'asset',
+      'sundaram', 'invesco', 'motilal', 'oswal', 'quant', 'canara', 'robeco', 'bandhan',
+      'bajaj', 'finserv', 'edelweiss', 'union', 'manulife', 'ppfas', 'parag', 'parikh',
+      'pgim', 'baroda', 'bnp', 'paribas', 'hsbc', 'iti', 'fund', 'scheme', 'mutual',
+      'the', 'and', 'of', 'for'
+    ]);
     const baseWords = fund.schemeName.toLowerCase()
       .replace(/[^a-z0-9\s]/g, ' ')
       .split(/\s+/)
-      .filter((w: string) => w.length > 1 && !STRIP_WORDS.includes(w));
+      .filter((w: string) => w.length > 1 && !STRIP_WORDS.has(w));
 
     let variants: any[] = [];
     try {
