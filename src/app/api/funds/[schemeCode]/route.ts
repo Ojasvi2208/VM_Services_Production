@@ -134,15 +134,21 @@ export async function GET(
 
     let variants: any[] = [];
     try {
-      if (baseWords.length >= 2) {
+      if (baseWords.length >= 1) {
         const variantParams: string[] = [];
         let vp = 1;
-        const conditions = baseWords.slice(0, 5).map((word: string) => {
+
+        // AMC prefix: use fundHouse name or first word of scheme name to scope to same AMC
+        const amcPrefix = (fundHouseName || fund.schemeName.split(/\s/)[0] || '').replace(/[^a-zA-Z0-9]/g, '');
+        variantParams.push(`${amcPrefix}%`);
+        const prefixCond = `f.scheme_name ILIKE $${vp++}`;
+
+        const conditions = baseWords.slice(0, 6).map((word: string) => {
           variantParams.push(`%${word}%`);
           return `f.scheme_name ILIKE $${vp++}`;
         });
 
-        // Use AMC filter only if amcCode is available, otherwise rely on word matching
+        // Use AMC code filter if available, otherwise prefix
         let amcFilter = '';
         if (fund.amcCode) {
           variantParams.push(fund.amcCode);
@@ -160,7 +166,7 @@ export async function GET(
             r.return_1y as "return1y"
           FROM funds f
           LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
-          WHERE ${conditions.join(' AND ')}${amcFilter}
+          WHERE ${prefixCond} AND ${conditions.join(' AND ')}${amcFilter}
           ORDER BY f.scheme_name
           LIMIT 20`,
           variantParams
