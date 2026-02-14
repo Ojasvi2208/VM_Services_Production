@@ -113,11 +113,27 @@ export async function GET(
     const managers: any[] = [];
     const expenseHistory: any[] = [];
 
+    // Parse DECIMAL strings to numbers for mobile clients
+    const parsedFund = fund ? {
+      ...fund,
+      latestNav: fund.latestNav ? parseFloat(fund.latestNav) : null,
+      fundSize: fund.fundSize ? parseFloat(fund.fundSize) : null,
+      expenseRatio: fund.expenseRatio ? parseFloat(fund.expenseRatio) : null,
+      minInvestment: fund.minInvestment ? parseInt(fund.minInvestment) : null,
+      minSip: fund.minSip ? parseInt(fund.minSip) : null,
+    } : null;
+
+    const parsedReturns = returns ? Object.fromEntries(
+      Object.entries({ ...returns, returnSinceInception }).map(([k, v]) => 
+        [k, v !== null && v !== undefined && k !== 'updatedAt' ? parseFloat(v as string) || null : v]
+      )
+    ) : null;
+
     return NextResponse.json({
       success: true,
       data: {
-        fund,
-        returns: returns ? { ...returns, returnSinceInception } : null,
+        fund: parsedFund,
+        returns: parsedReturns,
         navHistory,
         managers,
         expenseHistory
