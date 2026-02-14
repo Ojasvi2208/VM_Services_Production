@@ -279,9 +279,9 @@ export async function GET(request: NextRequest) {
       SELECT f.scheme_code 
       FROM funds f
       LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
-      WHERE fr.volatility_1y IS NULL OR fr.updated_at < NOW() - INTERVAL '7 days'
+      WHERE fr.volatility_1y IS NULL OR fr.rolling_return_1y_min IS NULL OR fr.updated_at < NOW() - INTERVAL '7 days'
       ORDER BY 
-        CASE WHEN fr.volatility_1y IS NULL THEN 0 ELSE 1 END,
+        CASE WHEN fr.rolling_return_1y_min IS NULL THEN 0 WHEN fr.volatility_1y IS NULL THEN 1 ELSE 2 END,
         f.scheme_code
       LIMIT $1
     `, [batchSize]);
