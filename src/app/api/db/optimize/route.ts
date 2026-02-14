@@ -51,7 +51,22 @@ export async function GET(request: NextRequest) {
       'CREATE INDEX IF NOT EXISTS idx_fund_returns_sharpe_rank ON fund_returns(sharpe_ratio_1y DESC NULLS LAST) WHERE sharpe_ratio_1y IS NOT NULL',
       'CREATE INDEX IF NOT EXISTS idx_funds_updated ON funds(updated_at)',
       'CREATE INDEX IF NOT EXISTS idx_funds_nav_date ON funds(latest_nav_date DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_funds_scheme_code ON funds(scheme_code)',
     ];
+
+    // ── 2b. GIN trigram index for fast ILIKE search ──
+    try {
+      await client.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
+      log.push('✅ pg_trgm extension enabled');
+    } catch (e: any) {
+      log.push(`ℹ️ pg_trgm: ${e.message}`);
+    }
+    try {
+      await client.query('CREATE INDEX IF NOT EXISTS idx_funds_name_trgm ON funds USING GIN (scheme_name gin_trgm_ops)');
+      log.push('✅ GIN trigram index on scheme_name created');
+    } catch (e: any) {
+      log.push(`ℹ️ GIN trgm index: ${e.message}`);
+    }
 
     for (const sql of indexes) {
       try {
