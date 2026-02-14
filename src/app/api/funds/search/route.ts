@@ -175,13 +175,15 @@ export async function POST(request: NextRequest) {
     try {
       let sqlQuery = `
         SELECT 
-          scheme_code as "schemeCode",
-          scheme_name as "schemeName",
-          latest_nav as nav,
-          latest_nav_date as date,
-          amc_code as "amcCode",
-          scheme_type as "schemeType"
-        FROM funds
+          f.scheme_code as "schemeCode",
+          f.scheme_name as "schemeName",
+          f.latest_nav as nav,
+          f.latest_nav_date as date,
+          f.amc_code as "amcCode",
+          f.scheme_type as "schemeType",
+          r.return_1y as "return1y"
+        FROM funds f
+        LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
         WHERE 1=1
       `;
       
@@ -190,14 +192,14 @@ export async function POST(request: NextRequest) {
 
       // Filter by AMC
       if (amc) {
-        sqlQuery += ` AND amc_code ILIKE $${paramCount}`;
+        sqlQuery += ` AND f.amc_code ILIKE $${paramCount}`;
         params.push(`%${amc}%`);
         paramCount++;
       }
 
       // Filter by category (in scheme name or type)
       if (category) {
-        sqlQuery += ` AND (scheme_name ILIKE $${paramCount} OR scheme_type ILIKE $${paramCount})`;
+        sqlQuery += ` AND (f.scheme_name ILIKE $${paramCount} OR f.scheme_type ILIKE $${paramCount})`;
         params.push(`%${category}%`);
         paramCount++;
       }
@@ -207,25 +209,21 @@ export async function POST(request: NextRequest) {
         // For specific sub-categories like "Mid Cap", use precise matching
         // to avoid matching "Large & Mid Cap" when searching for "Mid Cap"
         if (subCategory === 'Mid Cap') {
-          // Match "Mid Cap" or "Midcap" but exclude "Large & Mid Cap" or "Large Midcap"
-          sqlQuery += ` AND ((scheme_name ILIKE $${paramCount} OR scheme_name ILIKE $${paramCount + 1}) OR (scheme_type ILIKE $${paramCount} OR scheme_type ILIKE $${paramCount + 1}))`;
-          sqlQuery += ` AND scheme_name NOT ILIKE $${paramCount + 2} AND scheme_name NOT ILIKE $${paramCount + 3}`;
+          sqlQuery += ` AND ((f.scheme_name ILIKE $${paramCount} OR f.scheme_name ILIKE $${paramCount + 1}) OR (f.scheme_type ILIKE $${paramCount} OR f.scheme_type ILIKE $${paramCount + 1}))`;
+          sqlQuery += ` AND f.scheme_name NOT ILIKE $${paramCount + 2} AND f.scheme_name NOT ILIKE $${paramCount + 3}`;
           params.push('%Mid Cap%', '%Midcap%', '%Large%Mid%', '%Large%Midcap%');
           paramCount += 4;
         } else if (subCategory === 'Large Cap') {
-          // Match "Large Cap" or "Largecap" but exclude "Large & Mid Cap"
-          sqlQuery += ` AND ((scheme_name ILIKE $${paramCount} OR scheme_name ILIKE $${paramCount + 1}) OR (scheme_type ILIKE $${paramCount} OR scheme_type ILIKE $${paramCount + 1}))`;
-          sqlQuery += ` AND scheme_name NOT ILIKE $${paramCount + 2} AND scheme_name NOT ILIKE $${paramCount + 3}`;
+          sqlQuery += ` AND ((f.scheme_name ILIKE $${paramCount} OR f.scheme_name ILIKE $${paramCount + 1}) OR (f.scheme_type ILIKE $${paramCount} OR f.scheme_type ILIKE $${paramCount + 1}))`;
+          sqlQuery += ` AND f.scheme_name NOT ILIKE $${paramCount + 2} AND f.scheme_name NOT ILIKE $${paramCount + 3}`;
           params.push('%Large Cap%', '%Largecap%', '%Large%Mid%', '%Large%Midcap%');
           paramCount += 4;
         } else if (subCategory === 'Small Cap') {
-          // Match "Small Cap" or "Smallcap"
-          sqlQuery += ` AND ((scheme_name ILIKE $${paramCount} OR scheme_name ILIKE $${paramCount + 1}) OR (scheme_type ILIKE $${paramCount} OR scheme_type ILIKE $${paramCount + 1}))`;
+          sqlQuery += ` AND ((f.scheme_name ILIKE $${paramCount} OR f.scheme_name ILIKE $${paramCount + 1}) OR (f.scheme_type ILIKE $${paramCount} OR f.scheme_type ILIKE $${paramCount + 1}))`;
           params.push('%Small Cap%', '%Smallcap%');
           paramCount += 2;
         } else {
-          // For other categories, use regular ILIKE
-          sqlQuery += ` AND (scheme_name ILIKE $${paramCount} OR scheme_type ILIKE $${paramCount})`;
+          sqlQuery += ` AND (f.scheme_name ILIKE $${paramCount} OR f.scheme_type ILIKE $${paramCount})`;
           params.push(`%${subCategory}%`);
           paramCount++;
         }
@@ -238,12 +236,12 @@ export async function POST(request: NextRequest) {
           const wordConditions = words.map((_: string, idx: number) => {
             params.push(`%${words[idx]}%`);
             const p = paramCount + idx;
-            return `scheme_name ILIKE $${p}`;
+            return `f.scheme_name ILIKE $${p}`;
           });
           sqlQuery += ` AND (${wordConditions.join(' AND ')})`;
           paramCount += words.length;
         } else {
-          sqlQuery += ` AND (scheme_name ILIKE $${paramCount} OR scheme_code LIKE $${paramCount})`;
+          sqlQuery += ` AND (f.scheme_name ILIKE $${paramCount} OR f.scheme_code LIKE $${paramCount})`;
           params.push(`%${query}%`);
           paramCount++;
         }
@@ -252,17 +250,17 @@ export async function POST(request: NextRequest) {
       // Filter by plan type (embedded in scheme name since plan_type column is null)
       if (planType) {
         if (planType === 'Direct') {
-          sqlQuery += ` AND scheme_name ILIKE $${paramCount}`;
+          sqlQuery += ` AND f.scheme_name ILIKE $${paramCount}`;
           params.push('%Direct%');
           paramCount++;
         } else if (planType === 'Regular') {
-          sqlQuery += ` AND scheme_name ILIKE $${paramCount} AND scheme_name NOT ILIKE $${paramCount + 1}`;
+          sqlQuery += ` AND f.scheme_name ILIKE $${paramCount} AND f.scheme_name NOT ILIKE $${paramCount + 1}`;
           params.push('%Regular%', '%Direct%');
           paramCount += 2;
         }
       }
 
-      sqlQuery += ` ORDER BY scheme_name LIMIT $${paramCount}`;
+      sqlQuery += ` ORDER BY r.return_1y DESC NULLS LAST LIMIT $${paramCount}`;
       params.push(limit);
 
       console.log('SQL Query:', sqlQuery);
@@ -281,7 +279,8 @@ export async function POST(request: NextRequest) {
           latestNav: parseFloat(fund.nav),
           latestNavDate: fund.date,
           amcCode: fund.amcCode,
-          schemeType: fund.schemeType
+          schemeType: fund.schemeType,
+          return1y: fund.return1y ? parseFloat(fund.return1y) : null
         })),
         total: funds.length,
         filters: { amc, category, subCategory, query, planType }
