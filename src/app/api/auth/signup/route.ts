@@ -67,10 +67,11 @@ export async function POST(request: NextRequest) {
       console.error('Failed to send welcome email:', err);
     });
 
-    // Set session cookie
+    // Set session cookie + return token for mobile clients
     const response = NextResponse.json({
       success: true,
       message: 'Account created successfully',
+      token: sessionToken,
       user: {
         id: result.userId,
         email,
