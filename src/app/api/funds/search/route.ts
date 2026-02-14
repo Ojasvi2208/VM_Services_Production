@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const amc = searchParams.get('amc') || '';
     const category = searchParams.get('category') || '';
     const planType = searchParams.get('planType') || '';
+    const dedup = searchParams.get('dedup') !== 'false'; // default true
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '10');
 
@@ -43,6 +44,13 @@ export async function GET(request: NextRequest) {
       const params: any[] = [];
       let paramCount = 1;
 
+      // Default dedup: Direct+Growth only (one entry per fund family)
+      if (dedup && !planType) {
+        whereClause += ` AND f.scheme_name ILIKE $${paramCount} AND f.scheme_name ILIKE $${paramCount + 1}`;
+        params.push('%Direct%', '%Growth%');
+        paramCount += 2;
+      }
+
       if (query) {
         // Split query into words for loose matching — each word must appear in scheme_name
         const words = query.trim().split(/\s+/).filter(w => w.length > 0);
@@ -51,43 +59,43 @@ export async function GET(request: NextRequest) {
           const wordConditions = words.map((_, idx) => {
             params.push(`%${words[idx]}%`);
             const p = paramCount + idx;
-            return `scheme_name ILIKE $${p}`;
+            return `f.scheme_name ILIKE $${p}`;
           });
           whereClause += ` AND (${wordConditions.join(' AND ')})`;
           paramCount += words.length;
         } else {
-          whereClause += ` AND (scheme_name ILIKE $${paramCount} OR scheme_code LIKE $${paramCount})`;
+          whereClause += ` AND (f.scheme_name ILIKE $${paramCount} OR f.scheme_code LIKE $${paramCount})`;
           params.push(`%${query}%`);
           paramCount++;
         }
       }
 
       if (amc) {
-        whereClause += ` AND (scheme_name ILIKE $${paramCount} OR amc_code ILIKE $${paramCount})`;
+        whereClause += ` AND (f.scheme_name ILIKE $${paramCount} OR f.amc_code ILIKE $${paramCount})`;
         params.push(`%${amc}%`);
         paramCount++;
       }
 
       if (category) {
-        whereClause += ` AND (scheme_name ILIKE $${paramCount} OR scheme_type ILIKE $${paramCount})`;
+        whereClause += ` AND (f.scheme_name ILIKE $${paramCount} OR f.scheme_type ILIKE $${paramCount})`;
         params.push(`%${category}%`);
         paramCount++;
       }
 
       // Plan type filter (embedded in scheme name)
       if (planType === 'Direct') {
-        whereClause += ` AND scheme_name ILIKE $${paramCount}`;
+        whereClause += ` AND f.scheme_name ILIKE $${paramCount}`;
         params.push('%Direct%');
         paramCount++;
       } else if (planType === 'Regular') {
-        whereClause += ` AND scheme_name ILIKE $${paramCount} AND scheme_name NOT ILIKE $${paramCount + 1}`;
+        whereClause += ` AND f.scheme_name ILIKE $${paramCount} AND f.scheme_name NOT ILIKE $${paramCount + 1}`;
         params.push('%Regular%', '%Direct%');
         paramCount += 2;
       }
 
       // Get total count
       const countResult = await client.query(
-        `SELECT COUNT(*) as total FROM funds ${whereClause}`,
+        `SELECT COUNT(*) as total FROM funds f LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code ${whereClause}`,
         params
       );
       const totalCount = parseInt(countResult.rows[0].total);
@@ -99,15 +107,18 @@ export async function GET(request: NextRequest) {
       
       const result = await client.query(
         `SELECT 
-          scheme_code as "schemeCode",
-          scheme_name as "schemeName",
-          latest_nav as nav,
-          latest_nav_date as date,
-          amc_code as "amcCode",
-          scheme_type as "schemeType"
-        FROM funds
+          f.scheme_code as "schemeCode",
+          f.scheme_name as "schemeName",
+          f.latest_nav as nav,
+          f.latest_nav_date as date,
+          f.amc_code as "amcCode",
+          f.scheme_type as "schemeType",
+          r.cagr_3y as "cagr3y",
+          r.cagr_5y as "cagr5y"
+        FROM funds f
+        LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
         ${whereClause}
-        ORDER BY scheme_name
+        ORDER BY r.cagr_3y DESC NULLS LAST
         LIMIT $${paramCount} OFFSET $${paramCount + 1}`,
         paginatedParams
       );
@@ -122,7 +133,9 @@ export async function GET(request: NextRequest) {
           latestNav: fund.nav ? parseFloat(fund.nav) : null,
           latestNavDate: fund.date,
           amcCode: fund.amcCode,
-          schemeType: fund.schemeType
+          schemeType: fund.schemeType,
+          cagr3y: fund.cagr3y ? parseFloat(fund.cagr3y) : null,
+          cagr5y: fund.cagr5y ? parseFloat(fund.cagr5y) : null
         })),
         total: totalCount,
         page,
@@ -153,7 +166,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { query = '', amc = '', category = '', subCategory = '', planType = '', limit = 100 } = body;
+    const { query = '', amc = '', category = '', subCategory = '', planType = '', limit = 100, dedup = true } = body;
 
     console.log('🔍 Advanced search:', { query, amc, category, subCategory, planType, limit });
 
@@ -181,7 +194,9 @@ export async function POST(request: NextRequest) {
           f.latest_nav_date as date,
           f.amc_code as "amcCode",
           f.scheme_type as "schemeType",
-          r.return_1y as "return1y"
+          r.return_1y as "return1y",
+          r.cagr_3y as "cagr3y",
+          r.cagr_5y as "cagr5y"
         FROM funds f
         LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
         WHERE 1=1
@@ -258,9 +273,14 @@ export async function POST(request: NextRequest) {
           params.push('%Regular%', '%Direct%');
           paramCount += 2;
         }
+      } else if (dedup) {
+        // Default dedup: show only Direct Plan + Growth (one row per fund family)
+        sqlQuery += ` AND f.scheme_name ILIKE $${paramCount} AND f.scheme_name ILIKE $${paramCount + 1}`;
+        params.push('%Direct%', '%Growth%');
+        paramCount += 2;
       }
 
-      sqlQuery += ` ORDER BY r.return_1y DESC NULLS LAST LIMIT $${paramCount}`;
+      sqlQuery += ` ORDER BY r.cagr_3y DESC NULLS LAST LIMIT $${paramCount}`;
       params.push(limit);
 
       console.log('SQL Query:', sqlQuery);
@@ -280,7 +300,9 @@ export async function POST(request: NextRequest) {
           latestNavDate: fund.date,
           amcCode: fund.amcCode,
           schemeType: fund.schemeType,
-          return1y: fund.return1y ? parseFloat(fund.return1y) : null
+          return1y: fund.return1y ? parseFloat(fund.return1y) : null,
+          cagr3y: fund.cagr3y ? parseFloat(fund.cagr3y) : null,
+          cagr5y: fund.cagr5y ? parseFloat(fund.cagr5y) : null
         })),
         total: funds.length,
         filters: { amc, category, subCategory, query, planType }

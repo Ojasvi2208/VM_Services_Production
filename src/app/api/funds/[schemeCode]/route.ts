@@ -115,6 +115,53 @@ export async function GET(
     const schemeCategory = mfApiMeta?.scheme_category || null;
     const schemeType = mfApiMeta?.scheme_type || null;
 
+    // Find sibling variants (same fund, different plan/option types)
+    const STRIP_WORDS = ['direct', 'regular', 'plan', 'growth', 'idcw', 'dividend', 'payout', 'reinvestment', 'option'];
+    const baseWords = fund.schemeName.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w: string) => w.length > 1 && !STRIP_WORDS.includes(w));
+
+    let variants: any[] = [];
+    if (baseWords.length >= 2) {
+      // Build AND conditions for each base word
+      const variantParams: string[] = [];
+      let vp = 1;
+      const conditions = baseWords.slice(0, 5).map((word: string) => {
+        variantParams.push(`%${word}%`);
+        return `scheme_name ILIKE $${vp++}`;
+      });
+      // Same AMC
+      variantParams.push(fund.amcCode);
+      const amcCond = `amc_code = $${vp++}`;
+
+      const variantResult = await client.query(
+        `SELECT 
+          f.scheme_code as "schemeCode",
+          f.scheme_name as "schemeName",
+          f.latest_nav as "latestNav",
+          f.latest_nav_date as "latestNavDate",
+          r.cagr_3y as "cagr3y",
+          r.cagr_5y as "cagr5y",
+          r.return_1y as "return1y"
+        FROM funds f
+        LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
+        WHERE ${conditions.join(' AND ')} AND ${amcCond}
+        ORDER BY f.scheme_name
+        LIMIT 20`,
+        variantParams
+      );
+      variants = variantResult.rows.map((v: any) => ({
+        schemeCode: v.schemeCode,
+        schemeName: v.schemeName,
+        latestNav: v.latestNav ? parseFloat(v.latestNav) : null,
+        latestNavDate: v.latestNavDate,
+        cagr3y: v.cagr3y ? parseFloat(v.cagr3y) : null,
+        cagr5y: v.cagr5y ? parseFloat(v.cagr5y) : null,
+        return1y: v.return1y ? parseFloat(v.return1y) : null,
+      }));
+    }
+
     // Parse DECIMAL strings to numbers for mobile clients
     const parsedFund = fund ? {
       ...fund,
@@ -142,6 +189,7 @@ export async function GET(
         },
         returns: parsedReturns,
         navHistory,
+        variants,
       }
     });
 
