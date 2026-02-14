@@ -44,9 +44,22 @@ export async function GET(request: NextRequest) {
       let paramCount = 1;
 
       if (query) {
-        whereClause += ` AND (scheme_name ILIKE $${paramCount} OR scheme_code LIKE $${paramCount})`;
-        params.push(`%${query}%`);
-        paramCount++;
+        // Split query into words for loose matching — each word must appear in scheme_name
+        const words = query.trim().split(/\s+/).filter(w => w.length > 0);
+        if (words.length > 1) {
+          // All words must appear (in any order)
+          const wordConditions = words.map((_, idx) => {
+            params.push(`%${words[idx]}%`);
+            const p = paramCount + idx;
+            return `scheme_name ILIKE $${p}`;
+          });
+          whereClause += ` AND (${wordConditions.join(' AND ')})`;
+          paramCount += words.length;
+        } else {
+          whereClause += ` AND (scheme_name ILIKE $${paramCount} OR scheme_code LIKE $${paramCount})`;
+          params.push(`%${query}%`);
+          paramCount++;
+        }
       }
 
       if (amc) {
@@ -218,11 +231,22 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Filter by search query
+      // Filter by search query (word-split for loose matching)
       if (query) {
-        sqlQuery += ` AND (scheme_name ILIKE $${paramCount} OR scheme_code LIKE $${paramCount})`;
-        params.push(`%${query}%`);
-        paramCount++;
+        const words = query.trim().split(/\s+/).filter((w: string) => w.length > 0);
+        if (words.length > 1) {
+          const wordConditions = words.map((_: string, idx: number) => {
+            params.push(`%${words[idx]}%`);
+            const p = paramCount + idx;
+            return `scheme_name ILIKE $${p}`;
+          });
+          sqlQuery += ` AND (${wordConditions.join(' AND ')})`;
+          paramCount += words.length;
+        } else {
+          sqlQuery += ` AND (scheme_name ILIKE $${paramCount} OR scheme_code LIKE $${paramCount})`;
+          params.push(`%${query}%`);
+          paramCount++;
+        }
       }
 
       // Filter by plan type (embedded in scheme name since plan_type column is null)
