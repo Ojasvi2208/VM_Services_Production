@@ -139,7 +139,7 @@ export async function GET(
         let vp = 1;
 
         // AMC prefix: use fundHouse name or first word of scheme name to scope to same AMC
-        const amcPrefix = (fundHouseName || fund.schemeName.split(/\s/)[0] || '').replace(/[^a-zA-Z0-9]/g, '');
+        const amcPrefix = (fundHouseName || fund.schemeName || '').split(/\s/)[0].replace(/[^a-zA-Z0-9]/g, '');
         variantParams.push(`${amcPrefix}%`);
         const prefixCond = `f.scheme_name ILIKE $${vp++}`;
 
