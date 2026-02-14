@@ -267,6 +267,7 @@ export async function GET(request: NextRequest) {
   }
 
   const batchSize = parseInt(request.nextUrl.searchParams.get('batch') || '100');
+  const targetScheme = request.nextUrl.searchParams.get('scheme') || '';
   
   console.log('🚀 Fund Metrics Cron Job Started:', new Date().toISOString());
   console.log(`📊 Batch size: ${batchSize}, Rate limit: ${RATE_LIMIT_MS}ms`);
@@ -274,19 +275,25 @@ export async function GET(request: NextRequest) {
   const client = await pool.connect();
   
   try {
-    // Get funds that need metrics update (prioritize those without risk metrics)
-    const fundsResult = await client.query(`
-      SELECT f.scheme_code 
-      FROM funds f
-      LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
-      WHERE fr.volatility_1y IS NULL OR fr.rolling_return_1y_min IS NULL OR fr.updated_at < NOW() - INTERVAL '7 days'
-      ORDER BY 
-        CASE WHEN fr.rolling_return_1y_min IS NULL THEN 0 WHEN fr.volatility_1y IS NULL THEN 1 ELSE 2 END,
-        f.scheme_code
-      LIMIT $1
-    `, [batchSize]);
-    
-    const funds = fundsResult.rows;
+    let funds: any[];
+    if (targetScheme) {
+      // Targeted recalc for specific scheme code(s)
+      const codes = targetScheme.split(',').map(s => s.trim());
+      funds = codes.map(c => ({ scheme_code: c }));
+    } else {
+      // Get funds that need metrics update (prioritize those without rolling returns)
+      const fundsResult = await client.query(`
+        SELECT f.scheme_code 
+        FROM funds f
+        LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
+        WHERE fr.volatility_1y IS NULL OR fr.rolling_return_1y_min IS NULL OR fr.updated_at < NOW() - INTERVAL '7 days'
+        ORDER BY 
+          CASE WHEN fr.rolling_return_1y_min IS NULL THEN 0 WHEN fr.volatility_1y IS NULL THEN 1 ELSE 2 END,
+          f.scheme_code
+        LIMIT $1
+      `, [batchSize]);
+      funds = fundsResult.rows;
+    }
     console.log(`📊 Processing ${funds.length} funds`);
 
     if (funds.length === 0) {
