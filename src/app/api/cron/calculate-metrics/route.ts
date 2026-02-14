@@ -68,6 +68,8 @@ function calculateCAGR(currentNav: number, pastNav: number, years: number): numb
   return Math.round(cagr * 100) / 100;
 }
 
+function r2(v: number): number { return Math.round(v * 100) / 100; }
+
 function calculateAllMetrics(navData: any[]): any {
   if (!navData || navData.length < 10) return null;
 
@@ -124,6 +126,13 @@ function calculateAllMetrics(navData: any[]): any {
     sharpe_ratio_1y: null as number | null,
     sortino_ratio_1y: null as number | null,
     rolling_return_1y_avg: null as number | null,
+    rolling_return_1y_min: null as number | null,
+    rolling_return_1y_max: null as number | null,
+    rolling_return_1y_median: null as number | null,
+    rolling_return_3y_avg: null as number | null,
+    rolling_return_3y_min: null as number | null,
+    rolling_return_3y_max: null as number | null,
+    rolling_return_3y_median: null as number | null,
   };
 
   if (fundAgeYears >= 1 && nav1Y) {
@@ -180,21 +189,49 @@ function calculateAllMetrics(navData: any[]): any {
           }
         }
 
-        // Rolling 1Y return average (calculate 1Y return at multiple points)
+        // Rolling 1Y returns — monthly granularity over last 3 years (or fund age)
         if (fundAgeYears >= 2) {
-          const rollingReturns: number[] = [];
-          for (let monthsBack = 0; monthsBack <= 12; monthsBack += 3) {
-            const endDate = new Date(today.getTime() - monthsBack * 30 * 24 * 60 * 60 * 1000);
+          const maxMonthsBack = Math.min(Math.floor((fundAgeYears - 1) * 12), 36);
+          const rolling1Y: number[] = [];
+          for (let m = 0; m <= maxMonthsBack; m++) {
+            const endDate = new Date(today.getTime() - m * 30 * 24 * 60 * 60 * 1000);
             const startDate = new Date(endDate.getTime() - 365 * 24 * 60 * 60 * 1000);
             const endNav = getNavAtDate(navData, endDate);
             const startNav = getNavAtDate(navData, startDate);
-            if (endNav && startNav) {
+            if (endNav && startNav && startNav > 0) {
               const ret = calculateReturn(endNav, startNav);
-              if (ret !== null) rollingReturns.push(ret);
+              if (ret !== null) rolling1Y.push(ret);
             }
           }
-          if (rollingReturns.length > 0) {
-            riskMetrics.rolling_return_1y_avg = Math.round(rollingReturns.reduce((a, b) => a + b, 0) / rollingReturns.length * 100) / 100;
+          if (rolling1Y.length >= 3) {
+            const sorted1Y = [...rolling1Y].sort((a, b) => a - b);
+            riskMetrics.rolling_return_1y_avg = r2(rolling1Y.reduce((a, b) => a + b, 0) / rolling1Y.length);
+            riskMetrics.rolling_return_1y_min = r2(sorted1Y[0]);
+            riskMetrics.rolling_return_1y_max = r2(sorted1Y[sorted1Y.length - 1]);
+            riskMetrics.rolling_return_1y_median = r2(sorted1Y[Math.floor(sorted1Y.length / 2)]);
+          }
+        }
+
+        // Rolling 3Y returns — monthly granularity over last 5 years (need 4+ years of data)
+        if (fundAgeYears >= 4) {
+          const maxMonthsBack3Y = Math.min(Math.floor((fundAgeYears - 3) * 12), 24);
+          const rolling3Y: number[] = [];
+          for (let m = 0; m <= maxMonthsBack3Y; m++) {
+            const endDate = new Date(today.getTime() - m * 30 * 24 * 60 * 60 * 1000);
+            const startDate = new Date(endDate.getTime() - 3 * 365 * 24 * 60 * 60 * 1000);
+            const endNav = getNavAtDate(navData, endDate);
+            const startNav = getNavAtDate(navData, startDate);
+            if (endNav && startNav && startNav > 0) {
+              const cagr = calculateCAGR(endNav, startNav, 3);
+              if (cagr !== null) rolling3Y.push(cagr);
+            }
+          }
+          if (rolling3Y.length >= 3) {
+            const sorted3Y = [...rolling3Y].sort((a, b) => a - b);
+            riskMetrics.rolling_return_3y_avg = r2(rolling3Y.reduce((a, b) => a + b, 0) / rolling3Y.length);
+            riskMetrics.rolling_return_3y_min = r2(sorted3Y[0]);
+            riskMetrics.rolling_return_3y_max = r2(sorted3Y[sorted3Y.length - 1]);
+            riskMetrics.rolling_return_3y_median = r2(sorted3Y[Math.floor(sorted3Y.length / 2)]);
           }
         }
       }
@@ -297,21 +334,27 @@ export async function GET(request: NextRequest) {
               return_1w, return_1m, return_3m, return_6m, 
               return_1y, return_2y, return_3y, return_5y, return_10y,
               cagr_1y, cagr_2y, cagr_3y, cagr_5y, cagr_10y,
-              volatility_1y, max_drawdown, sharpe_ratio_1y, sortino_ratio_1y, rolling_return_1y_avg,
+              volatility_1y, max_drawdown, sharpe_ratio_1y, sortino_ratio_1y,
+              rolling_return_1y_avg, rolling_return_1y_min, rolling_return_1y_max, rolling_return_1y_median,
+              rolling_return_3y_avg, rolling_return_3y_min, rolling_return_3y_max, rolling_return_3y_median,
               updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, CURRENT_TIMESTAMP)
             ON CONFLICT (scheme_code) DO UPDATE SET
               return_1w = $2, return_1m = $3, return_3m = $4, return_6m = $5,
               return_1y = $6, return_2y = $7, return_3y = $8, return_5y = $9, return_10y = $10,
               cagr_1y = $11, cagr_2y = $12, cagr_3y = $13, cagr_5y = $14, cagr_10y = $15,
-              volatility_1y = $16, max_drawdown = $17, sharpe_ratio_1y = $18, sortino_ratio_1y = $19, rolling_return_1y_avg = $20,
+              volatility_1y = $16, max_drawdown = $17, sharpe_ratio_1y = $18, sortino_ratio_1y = $19,
+              rolling_return_1y_avg = $20, rolling_return_1y_min = $21, rolling_return_1y_max = $22, rolling_return_1y_median = $23,
+              rolling_return_3y_avg = $24, rolling_return_3y_min = $25, rolling_return_3y_max = $26, rolling_return_3y_median = $27,
               updated_at = CURRENT_TIMESTAMP
           `, [
             fund.scheme_code,
             metrics.return_1w, metrics.return_1m, metrics.return_3m, metrics.return_6m,
             metrics.return_1y, metrics.return_2y, metrics.return_3y, metrics.return_5y, metrics.return_10y,
             metrics.cagr_1y, metrics.cagr_2y, metrics.cagr_3y, metrics.cagr_5y, metrics.cagr_10y,
-            metrics.volatility_1y, metrics.max_drawdown, metrics.sharpe_ratio_1y, metrics.sortino_ratio_1y, metrics.rolling_return_1y_avg
+            metrics.volatility_1y, metrics.max_drawdown, metrics.sharpe_ratio_1y, metrics.sortino_ratio_1y,
+            metrics.rolling_return_1y_avg, metrics.rolling_return_1y_min, metrics.rolling_return_1y_max, metrics.rolling_return_1y_median,
+            metrics.rolling_return_3y_avg, metrics.rolling_return_3y_min, metrics.rolling_return_3y_max, metrics.rolling_return_3y_median
           ]);
 
           successCount++;
