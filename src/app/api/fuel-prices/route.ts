@@ -46,7 +46,7 @@ const STATE_VAT: Record<string, { pVat: number; dVat: number; pCess: number; dCe
   'West Bengal':              { pVat: 25.0,  dVat: 17.0,  pCess: 2.0,  dCess: 2.0 },
 };
 
-// City slug → goodreturns.in slug (for resolving app city names to scraped data)
+// City slug → IndianAPI/scraped slug (resolves app city names to cached data keys)
 const CITY_SLUG_MAP: Record<string, string> = {
   'mohali': 'sas-nagar', 'sas nagar': 'sas-nagar', 'sahibzada ajit singh nagar': 'sas-nagar',
   'new delhi': 'new-delhi', 'delhi': 'new-delhi',
@@ -56,6 +56,7 @@ const CITY_SLUG_MAP: Record<string, string> = {
   'pune': 'pune', 'ahmedabad': 'ahmedabad', 'surat': 'surat',
   'indore': 'indore', 'nagpur': 'nagpur', 'noida': 'noida',
   'chandigarh': 'chandigarh', 'hyderabad': 'hyderabad',
+  'panchkula': 'panchkula',
   'jaipur': 'jaipur', 'lucknow': 'lucknow', 'patna': 'patna',
   'bhubaneswar': 'bhubaneswar', 'thiruvananthapuram': 'thiruvananthapuram',
   'ludhiana': 'ludhiana', 'amritsar': 'amritsar',
@@ -192,29 +193,52 @@ export async function GET(request: NextRequest) {
 
     let scraped = await ensureScrapedCache();
 
-    // ── Secondary API fallback when scraped cache is null (cold start) ──
+    // ── IndianAPI fetch: state + city level (709 cities) ──
     if (!scraped) {
       try {
         const apiKey = process.env.INDIANAPI_KEY || 'sk-live-Ne03Yxzf71nIfvbXTUrjZ5W1PGqkz75472pJRFTA';
-        const [petrolResp, dieselResp] = await Promise.all([
-          fetch(`https://fuel.indianapi.in/live_fuel_price?fuel_type=petrol&location_type=state`, {
-            headers: { 'x-api-key': apiKey }
-          }),
-          fetch(`https://fuel.indianapi.in/live_fuel_price?fuel_type=diesel&location_type=state`, {
-            headers: { 'x-api-key': apiKey }
-          })
+        const headers = { 'x-api-key': apiKey };
+
+        // Fetch state + city level data in parallel (4 calls)
+        const [petrolStateResp, dieselStateResp, petrolCityResp, dieselCityResp] = await Promise.all([
+          fetch('https://fuel.indianapi.in/live_fuel_price?fuel_type=petrol&location_type=state', { headers }),
+          fetch('https://fuel.indianapi.in/live_fuel_price?fuel_type=diesel&location_type=state', { headers }),
+          fetch('https://fuel.indianapi.in/live_fuel_price?fuel_type=petrol&location_type=city', { headers }),
+          fetch('https://fuel.indianapi.in/live_fuel_price?fuel_type=diesel&location_type=city', { headers }),
         ]);
 
-        if (petrolResp.ok && dieselResp.ok) {
-          const petrolData: any[] = await petrolResp.json();
-          const dieselData: any[] = await dieselResp.json();
+        const states: Record<string, any> = {};
+        const cities: Record<string, any> = {};
 
-          // Build synthetic scraped cache from API response
-          const states: Record<string, any> = {};
+        // Parse state-level data
+        if (petrolStateResp.ok) {
+          const petrolData: any[] = await petrolStateResp.json();
           for (const item of petrolData) {
-            const stateName = item.city || item.state || '';
-            if (!stateName) continue;
-            states[stateName] = {
+            const name = item.city || item.state || '';
+            if (!name) continue;
+            states[name] = { petrol: parseFloat(item.price) || 0, diesel: 0, petrolChange: item.change || '0', dieselChange: '0', cng: null, lpg: null };
+          }
+        }
+        if (dieselStateResp.ok) {
+          const dieselData: any[] = await dieselStateResp.json();
+          for (const item of dieselData) {
+            const name = item.city || item.state || '';
+            if (states[name]) {
+              states[name].diesel = parseFloat(item.price) || 0;
+              states[name].dieselChange = item.change || '0';
+            }
+          }
+        }
+
+        // Parse city-level data (709 cities)
+        if (petrolCityResp.ok) {
+          const petrolCities: any[] = await petrolCityResp.json();
+          for (const item of petrolCities) {
+            const cityName = (item.city || '').trim();
+            if (!cityName) continue;
+            const slug = cityName.toLowerCase().replace(/\s+/g, '-');
+            cities[slug] = {
+              name: cityName,
               petrol: parseFloat(item.price) || 0,
               diesel: 0,
               petrolChange: item.change || '0',
@@ -223,31 +247,31 @@ export async function GET(request: NextRequest) {
               lpg: null,
             };
           }
-          for (const item of dieselData) {
-            const stateName = item.city || item.state || '';
-            if (states[stateName]) {
-              states[stateName].diesel = parseFloat(item.price) || 0;
-              states[stateName].dieselChange = item.change || '0';
+        }
+        if (dieselCityResp.ok) {
+          const dieselCities: any[] = await dieselCityResp.json();
+          for (const item of dieselCities) {
+            const cityName = (item.city || '').trim();
+            const slug = cityName.toLowerCase().replace(/\s+/g, '-');
+            if (cities[slug]) {
+              cities[slug].diesel = parseFloat(item.price) || 0;
+              cities[slug].dieselChange = item.change || '0';
             }
           }
-
-          scraped = {
-            states,
-            cities: {},
-            fetchedAt: new Date().toISOString(),
-            source: 'IndianAPI-fallback',
-          } as ScrapedFuelData;
-
-          // Persist to /tmp for next request
-          try {
-            const fs = await import('fs');
-            fs.writeFileSync('/tmp/fuel-scraped-cache.json', JSON.stringify(scraped));
-          } catch { /* ignore */ }
-
-          setScrapedFuelCache(scraped);
         }
+
+        console.log(`[fuel] IndianAPI: ${Object.keys(states).length} states, ${Object.keys(cities).length} cities loaded`);
+
+        scraped = { states, cities, fetchedAt: new Date().toISOString(), source: 'IndianAPI' } as ScrapedFuelData;
+
+        try {
+          const fs = await import('fs');
+          fs.writeFileSync('/tmp/fuel-scraped-cache.json', JSON.stringify(scraped));
+        } catch { /* non-critical */ }
+        setScrapedFuelCache(scraped);
+
       } catch (e) {
-        console.error('Secondary fuel API fallback failed:', e);
+        console.error('IndianAPI fuel fetch failed:', e);
       }
     }
 
