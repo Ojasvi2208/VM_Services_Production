@@ -123,43 +123,50 @@ export async function GET(
       .filter((w: string) => w.length > 1 && !STRIP_WORDS.includes(w));
 
     let variants: any[] = [];
-    if (baseWords.length >= 2) {
-      // Build AND conditions for each base word
-      const variantParams: string[] = [];
-      let vp = 1;
-      const conditions = baseWords.slice(0, 5).map((word: string) => {
-        variantParams.push(`%${word}%`);
-        return `scheme_name ILIKE $${vp++}`;
-      });
-      // Same AMC
-      variantParams.push(fund.amcCode);
-      const amcCond = `amc_code = $${vp++}`;
+    try {
+      if (baseWords.length >= 2) {
+        const variantParams: string[] = [];
+        let vp = 1;
+        const conditions = baseWords.slice(0, 5).map((word: string) => {
+          variantParams.push(`%${word}%`);
+          return `f.scheme_name ILIKE $${vp++}`;
+        });
 
-      const variantResult = await client.query(
-        `SELECT 
-          f.scheme_code as "schemeCode",
-          f.scheme_name as "schemeName",
-          f.latest_nav as "latestNav",
-          f.latest_nav_date as "latestNavDate",
-          r.cagr_3y as "cagr3y",
-          r.cagr_5y as "cagr5y",
-          r.return_1y as "return1y"
-        FROM funds f
-        LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
-        WHERE ${conditions.join(' AND ')} AND ${amcCond}
-        ORDER BY f.scheme_name
-        LIMIT 20`,
-        variantParams
-      );
-      variants = variantResult.rows.map((v: any) => ({
-        schemeCode: v.schemeCode,
-        schemeName: v.schemeName,
-        latestNav: v.latestNav ? parseFloat(v.latestNav) : null,
-        latestNavDate: v.latestNavDate,
-        cagr3y: v.cagr3y ? parseFloat(v.cagr3y) : null,
-        cagr5y: v.cagr5y ? parseFloat(v.cagr5y) : null,
-        return1y: v.return1y ? parseFloat(v.return1y) : null,
-      }));
+        // Use AMC filter only if amcCode is available, otherwise rely on word matching
+        let amcFilter = '';
+        if (fund.amcCode) {
+          variantParams.push(fund.amcCode);
+          amcFilter = ` AND f.amc_code = $${vp++}`;
+        }
+
+        const variantResult = await client.query(
+          `SELECT 
+            f.scheme_code as "schemeCode",
+            f.scheme_name as "schemeName",
+            f.latest_nav as "latestNav",
+            f.latest_nav_date as "latestNavDate",
+            r.cagr_3y as "cagr3y",
+            r.cagr_5y as "cagr5y",
+            r.return_1y as "return1y"
+          FROM funds f
+          LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
+          WHERE ${conditions.join(' AND ')}${amcFilter}
+          ORDER BY f.scheme_name
+          LIMIT 20`,
+          variantParams
+        );
+        variants = variantResult.rows.map((v: any) => ({
+          schemeCode: v.schemeCode,
+          schemeName: v.schemeName,
+          latestNav: v.latestNav ? parseFloat(v.latestNav) : null,
+          latestNavDate: v.latestNavDate,
+          cagr3y: v.cagr3y ? parseFloat(v.cagr3y) : null,
+          cagr5y: v.cagr5y ? parseFloat(v.cagr5y) : null,
+          return1y: v.return1y ? parseFloat(v.return1y) : null,
+        }));
+      }
+    } catch (variantError) {
+      console.warn('Could not fetch variants:', variantError);
     }
 
     // Parse DECIMAL strings to numbers for mobile clients
