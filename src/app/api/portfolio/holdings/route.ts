@@ -77,6 +77,52 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const holdingId = searchParams.get('id');
+
+    if (!holdingId) {
+      return NextResponse.json({ error: 'Holding ID is required' }, { status: 400 });
+    }
+
+    const client = await pool.connect();
+    try {
+      // Delete associated transactions first
+      await client.query(
+        `DELETE FROM portfolio_transactions WHERE holding_id = $1 AND user_id = $2`,
+        [holdingId, user.id]
+      );
+
+      // Delete the holding (only if owned by this user)
+      const result = await client.query(
+        `DELETE FROM portfolio_holdings WHERE id = $1 AND user_id = $2 RETURNING id, scheme_code`,
+        [holdingId, user.id]
+      );
+
+      if (result.rowCount === 0) {
+        return NextResponse.json({ error: 'Holding not found' }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Holding deleted successfully',
+        deleted: result.rows[0]
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    console.error('Delete holding error:', error);
+    return NextResponse.json({ error: 'Failed to delete holding' }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
