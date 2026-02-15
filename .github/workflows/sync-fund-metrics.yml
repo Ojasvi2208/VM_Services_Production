@@ -54,14 +54,26 @@ jobs:
               const totalOverride = parseInt('${{ inputs.total_funds || 0 }}');
               const batchSize = parseInt('${{ inputs.batch_size || 50 }}');
 
-              // Find funds needing update: no metrics OR stale > 7 days
+              // Find funds needing update: no entry, missing risk metrics (1yr+ funds only), or stale >7 days
+              // Funds < 1yr old are excluded from volatility check (they CAN'T have it)
               let query = \`
                 SELECT f.scheme_code
                 FROM funds f
                 LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
-                WHERE (fr.volatility_1y IS NULL OR fr.updated_at < NOW() - INTERVAL '7 days')
-                  AND f.latest_nav IS NOT NULL
-                ORDER BY CASE WHEN fr.volatility_1y IS NULL THEN 0 ELSE 1 END, f.scheme_code
+                WHERE f.latest_nav IS NOT NULL AND (
+                  fr.scheme_code IS NULL
+                  OR fr.updated_at < NOW() - INTERVAL '7 days'
+                  OR (fr.volatility_1y IS NULL AND f.inception_date IS NOT NULL AND f.inception_date < NOW() - INTERVAL '1 year')
+                  OR (fr.rolling_return_1y_avg IS NULL AND f.inception_date IS NOT NULL AND f.inception_date < NOW() - INTERVAL '2 years')
+                )
+                ORDER BY 
+                  CASE 
+                    WHEN fr.scheme_code IS NULL THEN 0
+                    WHEN fr.rolling_return_1y_avg IS NULL THEN 1
+                    WHEN fr.volatility_1y IS NULL THEN 2
+                    ELSE 3 
+                  END,
+                  f.scheme_code
               \`;
 
               if (totalOverride > 0) query += ' LIMIT ' + totalOverride;

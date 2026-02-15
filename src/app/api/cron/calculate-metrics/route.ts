@@ -281,14 +281,25 @@ export async function GET(request: NextRequest) {
       const codes = targetScheme.split(',').map(s => s.trim());
       funds = codes.map(c => ({ scheme_code: c }));
     } else {
-      // Get funds that need metrics update (prioritize those without rolling returns)
+      // Get funds that need metrics update
+      // Priority: 1) No entry at all  2) Has basic returns but missing risk metrics (and fund is 1yr+)  3) Stale >7 days
+      // Funds < 1 year old are excluded from "missing volatility" check — they CAN'T have it
       const fundsResult = await client.query(`
         SELECT f.scheme_code 
         FROM funds f
         LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
-        WHERE fr.volatility_1y IS NULL OR fr.rolling_return_1y_min IS NULL OR fr.updated_at < NOW() - INTERVAL '7 days'
+        WHERE 
+          fr.scheme_code IS NULL
+          OR fr.updated_at < NOW() - INTERVAL '7 days'
+          OR (fr.volatility_1y IS NULL AND f.inception_date IS NOT NULL AND f.inception_date < NOW() - INTERVAL '1 year')
+          OR (fr.rolling_return_1y_avg IS NULL AND f.inception_date IS NOT NULL AND f.inception_date < NOW() - INTERVAL '2 years')
         ORDER BY 
-          CASE WHEN fr.rolling_return_1y_min IS NULL THEN 0 WHEN fr.volatility_1y IS NULL THEN 1 ELSE 2 END,
+          CASE 
+            WHEN fr.scheme_code IS NULL THEN 0
+            WHEN fr.rolling_return_1y_avg IS NULL AND f.inception_date < NOW() - INTERVAL '2 years' THEN 1
+            WHEN fr.volatility_1y IS NULL AND f.inception_date < NOW() - INTERVAL '1 year' THEN 2
+            ELSE 3 
+          END,
           f.scheme_code
         LIMIT $1
       `, [batchSize]);
