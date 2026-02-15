@@ -613,6 +613,47 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Filter: only keep mutual fund folios (skip stocks, bonds, insurance, debentures)
+function isMutualFund(folio: CASFolio): boolean {
+  const name = (folio.schemeName || '').toLowerCase();
+  const skipKeywords = ['equity share', 'debenture', 'bond', 'ncd', 'government securities',
+    'insurance', 'lic', 'sgb', 'sovereign gold', 'fixed deposit', 'national savings',
+    'ppf', 'epf', 'real estate', 'reit', 'invit'];
+  for (const kw of skipKeywords) {
+    if (name.includes(kw)) return false;
+  }
+  // Must have matched schemeCode (i.e. found in our MF database)
+  return !!folio.schemeCode;
+}
+
+// Detect SIP transactions from CAS data
+function extractSIPInfo(folios: CASFolio[]): Array<{
+  schemeName: string; schemeCode: string | undefined; sipAmount: number; frequency: string; lastDate: string;
+}> {
+  const sips: Array<{ schemeName: string; schemeCode: string | undefined; sipAmount: number; frequency: string; lastDate: string }> = [];
+  for (const folio of folios) {
+    const sipTxns = folio.transactions.filter(t => 
+      t.type === 'SIP' || t.description?.toLowerCase().includes('systematic') || t.description?.toLowerCase().includes('sip')
+    );
+    if (sipTxns.length >= 2) {
+      // Find most common amount (the SIP installment)
+      const amounts = sipTxns.map(t => Math.round(Math.abs(t.amount)));
+      const freq: Record<number, number> = {};
+      for (const a of amounts) freq[a] = (freq[a] || 0) + 1;
+      const sipAmount = Number(Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0]);
+      const lastSip = sipTxns[sipTxns.length - 1];
+      sips.push({
+        schemeName: folio.schemeName,
+        schemeCode: folio.schemeCode,
+        sipAmount,
+        frequency: 'Monthly',
+        lastDate: lastSip.date
+      });
+    }
+  }
+  return sips;
+}
+
 // Save parsed holdings to database
 export async function PUT(request: NextRequest) {
   try {
@@ -621,117 +662,143 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { folios, investorInfo } = await request.json() as { 
-      folios: CASFolio[]; 
-      investorInfo?: { pan?: string; email?: string; phone?: string } 
-    };
+    const body = await request.json();
+    const folios: CASFolio[] = body.folios || [];
+    const investorInfo = body.investorInfo as { pan?: string; email?: string } | undefined;
 
     if (!folios || folios.length === 0) {
       return NextResponse.json({ error: 'No holdings to import' }, { status: 400 });
     }
 
+    // Filter only mutual funds
+    const mfFolios = folios.filter(isMutualFund);
+    const nonMfCount = folios.length - mfFolios.length;
+    
+    // Extract SIP info before filtering
+    const sipInfo = extractSIPInfo(folios);
+
+    console.log(`CAS import: ${folios.length} total, ${mfFolios.length} MF, ${nonMfCount} non-MF skipped, ${sipInfo.length} SIPs detected`);
+
+    if (mfFolios.length === 0) {
+      return NextResponse.json({ 
+        success: true, imported: 0, skipped: folios.length, sipCount: 0,
+        message: 'No mutual fund holdings found to import.' 
+      });
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      
-      // Store PAN/email/phone in user record (silently, without notifying user)
-      // This is optional - if columns don't exist, we skip this step
-      if (investorInfo) {
+
+      // Ensure portfolio_holdings table exists
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS portfolio_holdings (
+          id SERIAL PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          scheme_code TEXT NOT NULL,
+          units NUMERIC DEFAULT 0,
+          purchase_nav NUMERIC DEFAULT 0,
+          purchase_date TIMESTAMP DEFAULT NOW(),
+          purchase_amount NUMERIC DEFAULT 0,
+          notes TEXT,
+          source TEXT DEFAULT 'manual',
+          folio_number TEXT,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      // Ensure cas_sip_info table exists
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS cas_sip_info (
+          id SERIAL PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          scheme_code TEXT,
+          scheme_name TEXT NOT NULL,
+          sip_amount NUMERIC DEFAULT 0,
+          frequency TEXT DEFAULT 'Monthly',
+          last_sip_date TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      let importedCount = 0;
+      let errorCount = 0;
+
+      for (const folio of mfFolios) {
         try {
-          const updates: string[] = [];
-          const values: any[] = [];
-          let paramCount = 1;
-          
-          if (investorInfo.pan && investorInfo.pan.length >= 10) {
-            updates.push(`pan = $${paramCount}`);
-            values.push(investorInfo.pan);
-            paramCount++;
+          // Calculate total invested and average NAV from transactions
+          let totalInvested = 0;
+          let earliestDate: Date | null = null;
+
+          for (const tx of (folio.transactions || [])) {
+            if (tx.type === 'BUY' || tx.type === 'SIP' || tx.type === 'SWITCH_IN') {
+              totalInvested += Math.abs(tx.amount);
+              try {
+                const txDate = new Date(tx.date);
+                if (!isNaN(txDate.getTime()) && (!earliestDate || txDate < earliestDate)) {
+                  earliestDate = txDate;
+                }
+              } catch { /* skip bad dates */ }
+            }
           }
-          if (investorInfo.email && investorInfo.email.includes('@')) {
-            updates.push(`cas_email = $${paramCount}`);
-            values.push(investorInfo.email);
-            paramCount++;
+
+          // Use closingNav * closingBalance as invested if no transactions
+          if (totalInvested === 0 && folio.costValue) {
+            totalInvested = folio.costValue;
           }
-          if (investorInfo.phone && investorInfo.phone.length >= 10) {
-            updates.push(`cas_phone = $${paramCount}`);
-            values.push(investorInfo.phone);
-            paramCount++;
+          if (totalInvested === 0 && folio.closingNav && folio.closingBalance) {
+            totalInvested = folio.closingBalance * folio.closingNav;
           }
-          
-          if (updates.length > 0) {
-            values.push(user.id);
+
+          const avgNav = folio.closingNav || (folio.closingBalance > 0 && totalInvested > 0 ? totalInvested / folio.closingBalance : 0);
+
+          // Check if holding already exists
+          const existing = await client.query(
+            `SELECT id FROM portfolio_holdings WHERE user_id = $1 AND scheme_code = $2`,
+            [user.id, folio.schemeCode]
+          );
+
+          if (existing.rows.length > 0) {
             await client.query(
-              `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${paramCount}`,
-              values
+              `UPDATE portfolio_holdings 
+               SET units = $1, purchase_nav = $2, purchase_amount = $3, folio_number = $4, source = 'cas', updated_at = NOW()
+               WHERE id = $5`,
+              [folio.closingBalance, avgNav, totalInvested, folio.folioNumber, existing.rows[0].id]
             );
-            console.log(`Updated user ${user.id} with CAS info`);
+          } else {
+            await client.query(
+              `INSERT INTO portfolio_holdings (user_id, scheme_code, units, purchase_nav, purchase_date, purchase_amount, notes, source, folio_number)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, 'cas', $8)`,
+              [user.id, folio.schemeCode, folio.closingBalance, avgNav, 
+               earliestDate || new Date(), totalInvested,
+               `CAS Import - ${folio.amc} - Folio: ${folio.folioNumber}`,
+               folio.folioNumber]
+            );
           }
-        } catch (userUpdateError) {
-          // Silently ignore if columns don't exist - this is optional functionality
-          console.log('Could not update user with CAS info (columns may not exist):', userUpdateError);
+
+          importedCount++;
+        } catch (folioError) {
+          console.error(`Error importing folio ${folio.folioNumber} (${folio.schemeName}):`, folioError);
+          errorCount++;
         }
       }
 
-      let importedCount = 0;
-      let skippedCount = 0;
-
-      for (const folio of folios) {
-        if (!folio.schemeCode) {
-          skippedCount++;
-          continue;
+      // Save SIP info
+      let sipSaved = 0;
+      if (sipInfo.length > 0) {
+        // Clear old SIP data for this user
+        await client.query(`DELETE FROM cas_sip_info WHERE user_id = $1`, [user.id]);
+        for (const sip of sipInfo) {
+          try {
+            await client.query(
+              `INSERT INTO cas_sip_info (user_id, scheme_code, scheme_name, sip_amount, frequency, last_sip_date)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [user.id, sip.schemeCode || null, sip.schemeName, sip.sipAmount, sip.frequency, sip.lastDate]
+            );
+            sipSaved++;
+          } catch { /* skip */ }
         }
-
-        // Calculate total invested and average NAV from transactions
-        let totalUnits = 0;
-        let totalInvested = 0;
-        let earliestDate = new Date();
-
-        for (const tx of folio.transactions) {
-          if (tx.type === 'BUY' || tx.type === 'SIP') {
-            totalUnits += tx.units;
-            totalInvested += Math.abs(tx.amount);
-            const txDate = new Date(tx.date);
-            if (txDate < earliestDate) earliestDate = txDate;
-          }
-        }
-
-        const avgNav = totalUnits > 0 ? totalInvested / totalUnits : 0;
-
-        // Check if holding already exists
-        const existing = await client.query(
-          `SELECT id FROM portfolio_holdings 
-           WHERE user_id = $1 AND scheme_code = $2`,
-          [user.id, folio.schemeCode]
-        );
-
-        if (existing.rows.length > 0) {
-          // Update existing holding
-          await client.query(
-            `UPDATE portfolio_holdings 
-             SET units = $1, purchase_nav = $2, purchase_amount = $3, updated_at = NOW()
-             WHERE id = $4`,
-            [folio.closingBalance, avgNav, totalInvested, existing.rows[0].id]
-          );
-        } else {
-          // Insert new holding
-          await client.query(
-            `INSERT INTO portfolio_holdings (user_id, scheme_code, units, purchase_nav, purchase_date, purchase_amount, notes)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [user.id, folio.schemeCode, folio.closingBalance, avgNav, earliestDate, totalInvested, `Imported from CAS - Folio: ${folio.folioNumber}`]
-          );
-        }
-
-        // Insert transactions
-        for (const tx of folio.transactions) {
-          await client.query(
-            `INSERT INTO portfolio_transactions (user_id, scheme_code, transaction_type, units, nav, amount, transaction_date, notes)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             ON CONFLICT DO NOTHING`,
-            [user.id, folio.schemeCode, tx.type, tx.units, tx.nav, tx.amount, new Date(tx.date), tx.description]
-          );
-        }
-
-        importedCount++;
       }
 
       await client.query('COMMIT');
@@ -739,8 +806,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({
         success: true,
         imported: importedCount,
-        skipped: skippedCount,
-        message: `Successfully imported ${importedCount} holdings. ${skippedCount} skipped (scheme not found in database).`
+        skipped: nonMfCount,
+        errors: errorCount,
+        sipCount: sipSaved,
+        message: `Imported ${importedCount} mutual fund holdings. ${sipSaved} SIPs detected. ${nonMfCount} non-MF items skipped.`
       });
 
     } catch (error) {
