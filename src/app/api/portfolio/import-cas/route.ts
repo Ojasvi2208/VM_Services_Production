@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import pool from '@/lib/postgres-db';
 import { extractText, getDocumentProxy } from 'unpdf';
 import { deobfuscateFromTransport } from '@/lib/encryption';
+import { calculateXIRR, calculateCAGR, buildCashFlowsFromTransactions } from '@/lib/xirr';
 import { spawn } from 'child_process';
 import { writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
@@ -346,6 +347,58 @@ function parseCASText(text: string): ParsedCAS {
   return parsed;
 }
 
+// Enrich folios with returns computed from our NAV DB + XIRR
+async function enrichWithReturns(folios: CASFolio[]): Promise<void> {
+  for (const folio of folios) {
+    if (!folio.schemeCode || folio.closingBalance <= 0) continue;
+    try {
+      // Get latest NAV from our DB
+      const navResult = await pool.query(
+        `SELECT latest_nav FROM funds WHERE scheme_code = $1`,
+        [folio.schemeCode]
+      );
+      const latestNav = navResult.rows[0]?.latest_nav ? parseFloat(navResult.rows[0].latest_nav) : folio.closingNav;
+      if (!latestNav) continue;
+
+      const currentValue = folio.closingBalance * latestNav;
+      const invested = folio.costValue || folio.transactions
+        .filter(t => ['BUY', 'SIP', 'SWITCH_IN'].includes(t.type))
+        .reduce((s, t) => s + Math.abs(t.amount), 0);
+
+      // Absolute return
+      if (invested > 0) {
+        (folio as any).absoluteReturn = Math.round((currentValue - invested) * 100) / 100;
+        (folio as any).absoluteReturnPct = Math.round(((currentValue - invested) / invested) * 10000) / 100;
+      }
+
+      // XIRR from transactions
+      if (folio.transactions.length >= 1) {
+        const cashFlows = buildCashFlowsFromTransactions(
+          folio.transactions.map(t => ({ date: t.date, amount: t.amount, type: t.type })),
+          folio.closingBalance,
+          latestNav
+        );
+        const xirr = calculateXIRR(cashFlows);
+        if (xirr !== null) (folio as any).xirr = xirr;
+      }
+
+      // CAGR from earliest transaction
+      const buyTxns = folio.transactions.filter(t => ['BUY', 'SIP', 'SWITCH_IN'].includes(t.type));
+      if (buyTxns.length > 0 && invested > 0) {
+        const earliest = new Date(buyTxns[0].date);
+        const years = (Date.now() - earliest.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+        if (years > 0.08) { // At least ~1 month
+          const cagr = calculateCAGR(invested, currentValue, years);
+          if (cagr !== null) (folio as any).cagr = cagr;
+        }
+      }
+
+      (folio as any).latestNav = latestNav;
+      (folio as any).currentValue = Math.round(currentValue * 100) / 100;
+    } catch { /* skip enrichment errors */ }
+  }
+}
+
 async function matchSchemeCode(schemeName: string, isin?: string): Promise<string | null> {
   try {
     // Strategy 1: Exact ISIN match (most reliable)
@@ -529,6 +582,9 @@ export async function POST(request: NextRequest) {
       
       const matched = parsedData.folios.filter(f => f.schemeCode).length;
       console.log(`Matched ${matched}/${parsedData.folios.length} folios to DB`);
+
+      // Enrich with returns (XIRR, CAGR, absolute return) from our NAV DB
+      await enrichWithReturns(parsedData.folios);
       
       return NextResponse.json({
         success: true,
@@ -591,6 +647,9 @@ export async function POST(request: NextRequest) {
 
     const jsMatched = jsParsedData.folios.filter(f => f.schemeCode).length;
     console.log(`JS parser matched ${jsMatched}/${jsParsedData.folios.length} folios to DB`);
+
+    // Enrich with returns (XIRR, CAGR, absolute return) from our NAV DB
+    await enrichWithReturns(jsParsedData.folios);
 
     return NextResponse.json({
       success: true,
