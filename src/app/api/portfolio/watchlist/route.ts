@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
           w.notes,
           f.scheme_name,
           f.latest_nav as current_nav,
-          fr.return_1y
+          fr.return_1y,
+          fr.cagr_3y,
+          fr.cagr_5y
         FROM user_watchlist w
         LEFT JOIN funds f ON w.scheme_code = f.scheme_code
         LEFT JOIN fund_returns fr ON w.scheme_code = fr.scheme_code
@@ -35,6 +37,8 @@ export async function GET(request: NextRequest) {
         schemeName: row.scheme_name || `Fund ${row.scheme_code}`,
         currentNav: parseFloat(row.current_nav) || 0,
         return1y: parseFloat(row.return_1y) || 0,
+        cagr3y: row.cagr_3y ? parseFloat(row.cagr_3y) : null,
+        cagr5y: row.cagr_5y ? parseFloat(row.cagr_5y) : null,
         addedAt: row.added_at,
         notes: row.notes
       }));

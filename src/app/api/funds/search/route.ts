@@ -113,6 +113,7 @@ export async function GET(request: NextRequest) {
           f.latest_nav_date as date,
           f.amc_code as "amcCode",
           f.scheme_type as "schemeType",
+          r.return_1y as "return1y",
           r.cagr_3y as "cagr3y",
           r.cagr_5y as "cagr5y"
         FROM funds f
@@ -134,6 +135,7 @@ export async function GET(request: NextRequest) {
           latestNavDate: fund.date,
           amcCode: fund.amcCode,
           schemeType: fund.schemeType,
+          return1y: fund.return1y ? parseFloat(fund.return1y) : null,
           cagr3y: fund.cagr3y ? parseFloat(fund.cagr3y) : null,
           cagr5y: fund.cagr5y ? parseFloat(fund.cagr5y) : null
         })),

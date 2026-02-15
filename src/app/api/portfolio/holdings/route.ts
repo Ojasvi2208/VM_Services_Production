@@ -23,9 +23,13 @@ export async function GET(request: NextRequest) {
           ph.purchase_amount,
           ph.notes,
           f.scheme_name,
-          f.latest_nav as current_nav
+          f.latest_nav as current_nav,
+          fr.return_1y,
+          fr.cagr_3y,
+          fr.cagr_5y
         FROM portfolio_holdings ph
         LEFT JOIN funds f ON ph.scheme_code = f.scheme_code
+        LEFT JOIN fund_returns fr ON ph.scheme_code = fr.scheme_code
         WHERE ph.user_id = $1
         ORDER BY ph.created_at DESC
       `, [user.id]);
@@ -51,7 +55,10 @@ export async function GET(request: NextRequest) {
           returns: Math.round(returns * 100) / 100,
           returnsPercentage: Math.round(returnsPercentage * 100) / 100,
           purchaseDate: row.purchase_date,
-          notes: row.notes
+          notes: row.notes,
+          return1y: row.return_1y ? parseFloat(row.return_1y) : null,
+          cagr3y: row.cagr_3y ? parseFloat(row.cagr_3y) : null,
+          cagr5y: row.cagr_5y ? parseFloat(row.cagr_5y) : null
         };
       });
 
