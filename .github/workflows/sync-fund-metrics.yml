@@ -2,8 +2,8 @@ name: "Fund Metrics Pipeline"
 
 on:
   schedule:
-    # Sunday 5:30 PM IST = 12:00 PM UTC
-    - cron: "0 12 * * 0"
+    # Daily 6:00 AM IST = 00:30 UTC
+    - cron: "30 0 * * *"
   workflow_dispatch:
     inputs:
       batch_size:
