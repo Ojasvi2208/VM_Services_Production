@@ -346,18 +346,70 @@ function parseCASText(text: string): ParsedCAS {
   return parsed;
 }
 
-async function matchSchemeCode(schemeName: string): Promise<string | null> {
+async function matchSchemeCode(schemeName: string, isin?: string): Promise<string | null> {
   try {
-    // Try to find matching scheme in database
-    const result = await pool.query(
-      `SELECT scheme_code FROM funds 
-       WHERE LOWER(scheme_name) LIKE $1 
-       OR LOWER(scheme_name) LIKE $2
-       LIMIT 1`,
-      [`%${schemeName.toLowerCase().substring(0, 30)}%`, `%${schemeName.split(' ').slice(0, 3).join(' ').toLowerCase()}%`]
+    // Strategy 1: Exact ISIN match (most reliable)
+    if (isin && isin.startsWith('INF')) {
+      const isinResult = await pool.query(
+        `SELECT scheme_code FROM funds WHERE isin = $1 OR isin2 = $1 LIMIT 1`,
+        [isin]
+      );
+      if (isinResult.rows[0]?.scheme_code) return isinResult.rows[0].scheme_code;
+    }
+
+    // Strategy 2: Clean name + exact match on key words
+    // Strip noise from CAS scheme names: "(Advisor: ...)", registrar tags, etc.
+    const cleaned = schemeName
+      .replace(/\(Advisor.*?\)/gi, '')
+      .replace(/\(Erstwhile.*?\)/gi, '')
+      .replace(/Registrar\s*:.*$/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Try exact name match first
+    const exactResult = await pool.query(
+      `SELECT scheme_code FROM funds WHERE LOWER(scheme_name) = $1 LIMIT 1`,
+      [cleaned.toLowerCase()]
     );
+    if (exactResult.rows[0]?.scheme_code) return exactResult.rows[0].scheme_code;
+
+    // Strategy 3: Word-intersection match — all significant words must appear
+    const stopWords = new Set(['fund', 'mutual', 'plan', 'option', 'the', 'of', 'and', '-', '–']);
+    const words = cleaned.toLowerCase().split(/[\s\-]+/).filter(w => w.length > 2 && !stopWords.has(w));
     
-    return result.rows[0]?.scheme_code || null;
+    if (words.length >= 2) {
+      // Use first 5 meaningful words to build ILIKE conditions
+      const matchWords = words.slice(0, 5);
+      const conditions = matchWords.map((_, i) => `LOWER(scheme_name) LIKE $${i + 1}`);
+      const params = matchWords.map(w => `%${w}%`);
+      
+      // Prefer Direct Plan + Growth as canonical
+      const result = await pool.query(
+        `SELECT scheme_code, scheme_name FROM funds 
+         WHERE ${conditions.join(' AND ')}
+         ORDER BY 
+           CASE WHEN scheme_name ILIKE '%Direct%' THEN 0 ELSE 1 END,
+           CASE WHEN scheme_name ILIKE '%Growth%' THEN 0 ELSE 1 END
+         LIMIT 1`,
+        params
+      );
+      if (result.rows[0]?.scheme_code) return result.rows[0].scheme_code;
+    }
+
+    // Strategy 4: Fallback — first 3 words loose match
+    const first3 = cleaned.split(' ').slice(0, 3).join(' ').toLowerCase();
+    if (first3.length > 8) {
+      const fallback = await pool.query(
+        `SELECT scheme_code FROM funds 
+         WHERE LOWER(scheme_name) LIKE $1
+         ORDER BY CASE WHEN scheme_name ILIKE '%Direct%' THEN 0 ELSE 1 END
+         LIMIT 1`,
+        [`%${first3}%`]
+      );
+      if (fallback.rows[0]?.scheme_code) return fallback.rows[0].scheme_code;
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -465,20 +517,23 @@ export async function POST(request: NextRequest) {
     if (parsedData && parsedData.folios && parsedData.folios.length > 0) {
       console.log(`Python casparser found ${parsedData.folios.length} folios`);
       
-      // Match scheme codes for each folio
+      // Match scheme codes for each folio (pass ISIN if available from schemeCode field)
       for (const folio of parsedData.folios) {
-        if (!folio.schemeCode) {
-          const schemeCode = await matchSchemeCode(folio.schemeName);
-          if (schemeCode) {
-            folio.schemeCode = schemeCode;
-          }
+        const existingCode = folio.schemeCode;
+        const isin = existingCode && existingCode.startsWith('INF') ? existingCode : undefined;
+        const schemeCode = await matchSchemeCode(folio.schemeName, isin);
+        if (schemeCode) {
+          folio.schemeCode = schemeCode;
         }
       }
+      
+      const matched = parsedData.folios.filter(f => f.schemeCode).length;
+      console.log(`Matched ${matched}/${parsedData.folios.length} folios to DB`);
       
       return NextResponse.json({
         success: true,
         data: parsedData,
-        message: `Successfully parsed ${parsedData.folios.length} mutual fund holdings using casparser`,
+        message: `Successfully parsed ${parsedData.folios.length} mutual fund holdings (${matched} matched)`,
         parser: 'casparser'
       });
     }
@@ -524,18 +579,23 @@ export async function POST(request: NextRequest) {
     // Parse the CAS text using JS fallback parser
     const jsParsedData = parseCASText(textContent);
 
-    // Match scheme codes for each folio
+    // Match scheme codes for each folio (pass ISIN if available)
     for (const folio of jsParsedData.folios) {
-      const schemeCode = await matchSchemeCode(folio.schemeName);
+      const existingCode = folio.schemeCode;
+      const isin = existingCode && existingCode.startsWith('INF') ? existingCode : undefined;
+      const schemeCode = await matchSchemeCode(folio.schemeName, isin);
       if (schemeCode) {
         folio.schemeCode = schemeCode;
       }
     }
 
+    const jsMatched = jsParsedData.folios.filter(f => f.schemeCode).length;
+    console.log(`JS parser matched ${jsMatched}/${jsParsedData.folios.length} folios to DB`);
+
     return NextResponse.json({
       success: true,
       data: jsParsedData,
-      message: `Successfully parsed ${jsParsedData.folios.length} mutual fund holdings`,
+      message: `Successfully parsed ${jsParsedData.folios.length} mutual fund holdings (${jsMatched} matched)`,
       parser: 'javascript',
       debug: {
         textLength: textContent.length,
