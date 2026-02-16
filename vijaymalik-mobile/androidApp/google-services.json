@@ -1,0 +1,28 @@
+{
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "vmfinancial-android",
+    "storage_bucket": "vmfinancial-android.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+        "android_client_info": {
+          "package_name": "com.vmfinancial.android"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "PLACEHOLDER_REPLACE_WITH_REAL_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other": {}
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
