@@ -738,6 +738,15 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'No holdings to import', details: `body keys: ${Object.keys(body).join(', ')}` }, { status: 400 });
     }
 
+    // Re-match scheme codes for folios that lost them in the round-trip
+    // (Android kotlinx.serialization omits null fields, so schemeCode may be missing)
+    for (const folio of folios) {
+      if (!folio.schemeCode && folio.schemeName) {
+        const matched = await matchSchemeCode(folio.schemeName);
+        if (matched) folio.schemeCode = matched;
+      }
+    }
+
     // Filter only mutual funds
     const mfFolios = folios.filter(isMutualFund);
     const nonMfCount = folios.length - mfFolios.length;
@@ -747,9 +756,11 @@ export async function PUT(request: NextRequest) {
 
 
     if (mfFolios.length === 0) {
+      const withCode = folios.filter(f => !!f.schemeCode).length;
+      const sampleNames = folios.slice(0, 3).map(f => f.schemeName?.substring(0, 40) || 'no-name');
       return NextResponse.json({ 
         success: true, imported: 0, skipped: folios.length, sipCount: 0,
-        message: 'No mutual fund holdings found to import.' 
+        message: `No mutual fund holdings found to import. ${folios.length} folios received, ${withCode} had schemeCode. Samples: ${sampleNames.join('; ')}` 
       });
     }
 
