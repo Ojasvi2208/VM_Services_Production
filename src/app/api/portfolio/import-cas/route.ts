@@ -694,7 +694,7 @@ function extractSIPInfo(folios: CASFolio[]): Array<{
 }> {
   const sips: Array<{ schemeName: string; schemeCode: string | undefined; sipAmount: number; frequency: string; lastDate: string }> = [];
   for (const folio of folios) {
-    const sipTxns = folio.transactions.filter(t => 
+    const sipTxns = (folio.transactions || []).filter(t => 
       t.type === 'SIP' || t.description?.toLowerCase().includes('systematic') || t.description?.toLowerCase().includes('sip')
     );
     if (sipTxns.length >= 2) {
@@ -798,7 +798,8 @@ export async function PUT(request: NextRequest) {
           let totalInvested = 0;
           let earliestDate: Date | null = null;
 
-          for (const tx of (folio.transactions || [])) {
+          const txns = Array.isArray(folio.transactions) ? folio.transactions : [];
+          for (const tx of txns) {
             if (tx.type === 'BUY' || tx.type === 'SIP' || tx.type === 'SWITCH_IN') {
               totalInvested += Math.abs(tx.amount);
               try {
