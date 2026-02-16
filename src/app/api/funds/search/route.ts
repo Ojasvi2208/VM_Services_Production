@@ -77,14 +77,24 @@ async function searchUnified(
   const params: any[] = [];
   let p = 1;
 
-  // Text search: trigram match on pre-computed search_text column
+  // Text search: case-insensitive + space-insensitive on search_text
+  // "smallcap" matches "small cap", "SBI" matches "sbi", etc.
   if (query) {
-    const words = query.trim().toLowerCase().split(/\s+/).filter(w => w.length > 0);
-    for (const word of words) {
-      where += ` AND search_text LIKE $${p}`;
+    const raw = query.trim().toLowerCase();
+    const words = raw.split(/\s+/).filter(w => w.length > 0);
+    const collapsed = raw.replace(/\s+/g, '');
+
+    // Build two match strategies combined with OR:
+    //   A) each word appears in search_text (handles "sbi small cap")
+    //   B) collapsed query appears in space-stripped search_text (handles "smallcap" → "small cap")
+    const wordConditions = words.map(word => {
       params.push(`%${word}%`);
-      p++;
-    }
+      return `search_text LIKE $${p++}`;
+    });
+    params.push(`%${collapsed}%`);
+    const collapsedParam = p++;
+
+    where += ` AND ((${wordConditions.join(' AND ')}) OR REPLACE(search_text, ' ', '') LIKE $${collapsedParam})`;
   }
 
   if (amc) {
@@ -143,19 +153,28 @@ async function searchUnified(
 
   return NextResponse.json({
     success: true,
-    funds: result.rows.map(row => ({
-      ...row,
-      latestNav: row.latestNav ? parseFloat(row.latestNav) : null,
-      return1y: row.return1y ? parseFloat(row.return1y) : null,
-      cagr3y: row.cagr3y ? parseFloat(row.cagr3y) : null,
-      cagr5y: row.cagr5y ? parseFloat(row.cagr5y) : null,
-      cagr3yMin: row.cagr3yMin ? parseFloat(row.cagr3yMin) : null,
-      cagr3yMax: row.cagr3yMax ? parseFloat(row.cagr3yMax) : null,
-      cagr5yMin: row.cagr5yMin ? parseFloat(row.cagr5yMin) : null,
-      cagr5yMax: row.cagr5yMax ? parseFloat(row.cagr5yMax) : null,
-      sharpeRatio: row.sharpeRatio ? parseFloat(row.sharpeRatio) : null,
-      variants: row.variants || [],
-    })),
+    funds: result.rows.map(row => {
+      // Ensure schemeCode is never null — fall back to first variant's code
+      const variants = row.variants || [];
+      const fallbackCode = variants.length > 0 ? variants[0].schemeCode : null;
+      const schemeCode = row.schemeCode || fallbackCode || '';
+      const schemeName = row.schemeName || row.strategyName || '';
+      return {
+        ...row,
+        schemeCode,
+        schemeName,
+        latestNav: row.latestNav ? parseFloat(row.latestNav) : null,
+        return1y: row.return1y ? parseFloat(row.return1y) : null,
+        cagr3y: row.cagr3y ? parseFloat(row.cagr3y) : null,
+        cagr5y: row.cagr5y ? parseFloat(row.cagr5y) : null,
+        cagr3yMin: row.cagr3yMin ? parseFloat(row.cagr3yMin) : null,
+        cagr3yMax: row.cagr3yMax ? parseFloat(row.cagr3yMax) : null,
+        cagr5yMin: row.cagr5yMin ? parseFloat(row.cagr5yMin) : null,
+        cagr5yMax: row.cagr5yMax ? parseFloat(row.cagr5yMax) : null,
+        sharpeRatio: row.sharpeRatio ? parseFloat(row.sharpeRatio) : null,
+        variants,
+      };
+    }),
     total,
     page,
     pageSize,
