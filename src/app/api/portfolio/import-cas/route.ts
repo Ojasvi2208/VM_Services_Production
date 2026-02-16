@@ -884,10 +884,13 @@ export async function PUT(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Save holdings error:', error instanceof Error ? error.message : 'Unknown');
+    const errMsg = error instanceof Error ? error.message : 'Unknown';
+    const errStack = error instanceof Error ? error.stack?.split('\n').slice(0, 3).join(' | ') : '';
+    console.error('Save holdings error:', errMsg, errStack);
     return NextResponse.json({ 
       error: 'Failed to save holdings',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      details: errMsg,
+      trace: errStack
     }, { status: 500 });
   }
 }
