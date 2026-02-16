@@ -724,12 +724,18 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const folios: CASFolio[] = body.folios || [];
+    let body: any;
+    try {
+      body = await request.json();
+    } catch (parseErr) {
+      return NextResponse.json({ error: 'Invalid JSON body', details: parseErr instanceof Error ? parseErr.message : 'parse error' }, { status: 400 });
+    }
+
+    const folios: CASFolio[] = Array.isArray(body.folios) ? body.folios : [];
     const investorInfo = body.investorInfo as { pan?: string; email?: string } | undefined;
 
-    if (!folios || folios.length === 0) {
-      return NextResponse.json({ error: 'No holdings to import' }, { status: 400 });
+    if (folios.length === 0) {
+      return NextResponse.json({ error: 'No holdings to import', details: `body keys: ${Object.keys(body).join(', ')}` }, { status: 400 });
     }
 
     // Filter only mutual funds
