@@ -1,326 +1,335 @@
 /**
- * Fast Fund Search API
- * Searches through 37,000+ funds in PostgreSQL
- * Optimized for speed with indexed queries
+ * Fast Fund Search API — Unified Search Engine
+ *
+ * Queries mv_unified_search (materialized view) for O(k) speed.
+ * ~4,000 pre-aggregated family rows with GIN trigram index → sub-50ms.
+ *
+ * Falls back to legacy funds table scan if mv_unified_search doesn't exist yet
+ * (pre-migration compatibility).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { searchFunds, getDatabaseStats } from '@/lib/postgres-db';
+import pool from '@/lib/postgres-db';
+
+// ── Check if mv_unified_search exists (cached per cold start) ──
+let matViewExists: boolean | null = null;
+
+async function checkMatView(): Promise<boolean> {
+  if (matViewExists !== null) return matViewExists;
+  try {
+    const res = await pool.query(
+      `SELECT 1 FROM pg_matviews WHERE matviewname = 'mv_unified_search' LIMIT 1`
+    );
+    matViewExists = res.rows.length > 0;
+  } catch {
+    matViewExists = false;
+  }
+  return matViewExists;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  GET /api/funds/search?q=hdfc+top&amc=HDFC&category=Equity&page=1
+// ════════════════════════════════════════════════════════════════════
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const query = searchParams.get('q') || '';
-    const amc = searchParams.get('amc') || '';
-    const category = searchParams.get('category') || '';
-    const planType = searchParams.get('planType') || '';
-    const dedup = searchParams.get('dedup') !== 'false'; // default true
-    const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '10');
+    const sp = request.nextUrl.searchParams;
+    const query       = sp.get('q') || '';
+    const amc         = sp.get('amc') || '';
+    const category    = sp.get('category') || '';
+    const subCategory = sp.get('subCategory') || '';
+    const page        = Math.max(1, parseInt(sp.get('page') || '1'));
+    const pageSize    = Math.min(50, parseInt(sp.get('pageSize') || '10'));
 
-    console.log('🔍 Search request:', { query, amc, category, planType, page, pageSize });
-
-    // If no filters, return empty (don't load all funds)
-    if (!query && !amc && !category) {
-      const stats = await getDatabaseStats();
+    if (!query && !amc && !category && !subCategory) {
+      const stats = await pool.query('SELECT COUNT(*) FROM funds');
       return NextResponse.json({
-        success: true,
-        funds: [],
-        total: stats.totalFunds,
-        page: 1,
-        pageSize,
-        totalPages: 0,
-        message: 'Apply filters to search funds'
+        success: true, funds: [], total: parseInt(stats.rows[0].count),
+        page: 1, pageSize, totalPages: 0, message: 'Apply filters to search funds'
       });
     }
 
-    // Use pool for paginated search
-    const pool = (await import('@/lib/postgres-db')).default;
-    const client = await pool.connect();
+    const useMV = await checkMatView();
 
-    try {
-      // Build WHERE clause
-      let whereClause = 'WHERE 1=1';
-      const params: any[] = [];
-      let paramCount = 1;
-
-      // Default dedup: Direct+Growth only (one entry per fund family)
-      if (dedup && !planType) {
-        whereClause += ` AND f.scheme_name ILIKE $${paramCount} AND f.scheme_name ILIKE $${paramCount + 1}`;
-        params.push('%Direct%', '%Growth%');
-        paramCount += 2;
-      }
-
-      if (query) {
-        // Split query into words for loose matching — each word must appear in scheme_name
-        const words = query.trim().split(/\s+/).filter(w => w.length > 0);
-        if (words.length > 1) {
-          // All words must appear (in any order)
-          const wordConditions = words.map((_, idx) => {
-            params.push(`%${words[idx]}%`);
-            const p = paramCount + idx;
-            return `f.scheme_name ILIKE $${p}`;
-          });
-          whereClause += ` AND (${wordConditions.join(' AND ')})`;
-          paramCount += words.length;
-        } else {
-          whereClause += ` AND (f.scheme_name ILIKE $${paramCount} OR f.scheme_code LIKE $${paramCount})`;
-          params.push(`%${query}%`);
-          paramCount++;
-        }
-      }
-
-      if (amc) {
-        whereClause += ` AND (f.scheme_name ILIKE $${paramCount} OR f.amc_code ILIKE $${paramCount})`;
-        params.push(`%${amc}%`);
-        paramCount++;
-      }
-
-      if (category) {
-        whereClause += ` AND (f.scheme_name ILIKE $${paramCount} OR f.scheme_type ILIKE $${paramCount})`;
-        params.push(`%${category}%`);
-        paramCount++;
-      }
-
-      // Plan type filter (embedded in scheme name)
-      if (planType === 'Direct') {
-        whereClause += ` AND f.scheme_name ILIKE $${paramCount}`;
-        params.push('%Direct%');
-        paramCount++;
-      } else if (planType === 'Regular') {
-        whereClause += ` AND f.scheme_name ILIKE $${paramCount} AND f.scheme_name NOT ILIKE $${paramCount + 1}`;
-        params.push('%Regular%', '%Direct%');
-        paramCount += 2;
-      }
-
-      // Get total count
-      const countResult = await client.query(
-        `SELECT COUNT(*) as total FROM funds f LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code ${whereClause}`,
-        params
-      );
-      const totalCount = parseInt(countResult.rows[0].total);
-      const totalPages = Math.ceil(totalCount / pageSize);
-
-      // Get paginated results
-      const offset = (page - 1) * pageSize;
-      const paginatedParams = [...params, pageSize, offset];
-      
-      const result = await client.query(
-        `SELECT 
-          f.scheme_code as "schemeCode",
-          f.scheme_name as "schemeName",
-          f.latest_nav as nav,
-          f.latest_nav_date as date,
-          f.amc_code as "amcCode",
-          f.scheme_type as "schemeType",
-          r.return_1y as "return1y",
-          r.cagr_3y as "cagr3y",
-          r.cagr_5y as "cagr5y"
-        FROM funds f
-        LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
-        ${whereClause}
-        ORDER BY r.cagr_3y DESC NULLS LAST
-        LIMIT $${paramCount} OFFSET $${paramCount + 1}`,
-        paginatedParams
-      );
-
-      console.log(`✅ Found ${totalCount} total funds, returning page ${page} of ${totalPages}`);
-
-      return NextResponse.json({
-        success: true,
-        funds: result.rows.map(fund => ({
-          schemeCode: fund.schemeCode,
-          schemeName: fund.schemeName,
-          latestNav: fund.nav ? parseFloat(fund.nav) : null,
-          latestNavDate: fund.date,
-          amcCode: fund.amcCode,
-          schemeType: fund.schemeType,
-          return1y: fund.return1y ? parseFloat(fund.return1y) : null,
-          cagr3y: fund.cagr3y ? parseFloat(fund.cagr3y) : null,
-          cagr5y: fund.cagr5y ? parseFloat(fund.cagr5y) : null
-        })),
-        total: totalCount,
-        page,
-        pageSize,
-        totalPages,
-        query: query || amc || category
-      });
-
-    } finally {
-      client.release();
+    if (useMV) {
+      return await searchUnified(query, amc, category, subCategory, page, pageSize);
+    } else {
+      return await searchLegacy(query, amc, category, page, pageSize);
     }
 
   } catch (error: any) {
-    console.error('❌ Search error:', error);
-    
     return NextResponse.json({
-      success: false,
-      error: error.message,
-      funds: [],
-      total: 0,
-      page: 1,
-      pageSize: 10,
-      totalPages: 0
+      success: false, error: error.message, funds: [],
+      total: 0, page: 1, pageSize: 10, totalPages: 0
     }, { status: 500 });
   }
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  UNIFIED SEARCH — queries mv_unified_search (O(k), sub-50ms)
+// ════════════════════════════════════════════════════════════════════
+
+async function searchUnified(
+  query: string, amc: string, category: string, subCategory: string,
+  page: number, pageSize: number
+) {
+  let where = 'WHERE 1=1';
+  const params: any[] = [];
+  let p = 1;
+
+  // Text search: trigram match on pre-computed search_text column
+  if (query) {
+    const words = query.trim().toLowerCase().split(/\s+/).filter(w => w.length > 0);
+    for (const word of words) {
+      where += ` AND search_text LIKE $${p}`;
+      params.push(`%${word}%`);
+      p++;
+    }
+  }
+
+  if (amc) {
+    where += ` AND fund_house ILIKE $${p}`;
+    params.push(`%${amc}%`);
+    p++;
+  }
+
+  if (subCategory) {
+    where += ` AND sub_category ILIKE $${p}`;
+    params.push(`%${subCategory}%`);
+    p++;
+  } else if (category) {
+    where += ` AND (category ILIKE $${p} OR sub_category ILIKE $${p})`;
+    params.push(`%${category}%`);
+    p++;
+  }
+
+  // Count
+  const countRes = await pool.query(
+    `SELECT COUNT(*) FROM mv_unified_search ${where}`, params
+  );
+  const total = parseInt(countRes.rows[0].count);
+  const totalPages = Math.ceil(total / pageSize);
+  const offset = (page - 1) * pageSize;
+
+  // Paginated results
+  const dataParams = [...params, pageSize, offset];
+  const result = await pool.query(
+    `SELECT
+      master_fund_id    AS "masterFundId",
+      strategy_name     AS "strategyName",
+      fund_house        AS "fundHouse",
+      category,
+      sub_category      AS "subCategory",
+      variant_count     AS "variantCount",
+      canonical_scheme_code AS "schemeCode",
+      canonical_scheme_name AS "schemeName",
+      canonical_nav         AS "latestNav",
+      canonical_nav_date    AS "latestNavDate",
+      return_1y         AS "return1y",
+      cagr_3y           AS "cagr3y",
+      cagr_5y           AS "cagr5y",
+      cagr_3y_min       AS "cagr3yMin",
+      cagr_3y_max       AS "cagr3yMax",
+      cagr_5y_min       AS "cagr5yMin",
+      cagr_5y_max       AS "cagr5yMax",
+      sharpe_ratio      AS "sharpeRatio",
+      variants
+    FROM mv_unified_search
+    ${where}
+    ORDER BY cagr_3y DESC NULLS LAST
+    LIMIT $${p} OFFSET $${p + 1}`,
+    dataParams
+  );
+
+  return NextResponse.json({
+    success: true,
+    funds: result.rows.map(row => ({
+      ...row,
+      latestNav: row.latestNav ? parseFloat(row.latestNav) : null,
+      return1y: row.return1y ? parseFloat(row.return1y) : null,
+      cagr3y: row.cagr3y ? parseFloat(row.cagr3y) : null,
+      cagr5y: row.cagr5y ? parseFloat(row.cagr5y) : null,
+      cagr3yMin: row.cagr3yMin ? parseFloat(row.cagr3yMin) : null,
+      cagr3yMax: row.cagr3yMax ? parseFloat(row.cagr3yMax) : null,
+      cagr5yMin: row.cagr5yMin ? parseFloat(row.cagr5yMin) : null,
+      cagr5yMax: row.cagr5yMax ? parseFloat(row.cagr5yMax) : null,
+      sharpeRatio: row.sharpeRatio ? parseFloat(row.sharpeRatio) : null,
+      variants: row.variants || [],
+    })),
+    total,
+    page,
+    pageSize,
+    totalPages,
+    query: query || amc || category || subCategory,
+    engine: 'unified'
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  LEGACY SEARCH — fallback if migration hasn't run yet
+// ════════════════════════════════════════════════════════════════════
+
+async function searchLegacy(
+  query: string, amc: string, category: string,
+  page: number, pageSize: number
+) {
+  let where = 'WHERE f.scheme_name ILIKE $1 AND f.scheme_name ILIKE $2';
+  const params: any[] = ['%Direct%', '%Growth%'];
+  let p = 3;
+
+  if (query) {
+    const words = query.trim().split(/\s+/).filter(w => w.length > 0);
+    for (const word of words) {
+      where += ` AND f.scheme_name ILIKE $${p}`;
+      params.push(`%${word}%`);
+      p++;
+    }
+  }
+
+  if (amc) {
+    where += ` AND (f.amc_code ILIKE $${p} OR f.scheme_name ILIKE $${p})`;
+    params.push(`%${amc}%`);
+    p++;
+  }
+
+  if (category) {
+    where += ` AND (f.scheme_type ILIKE $${p} OR f.scheme_name ILIKE $${p})`;
+    params.push(`%${category}%`);
+    p++;
+  }
+
+  const countRes = await pool.query(
+    `SELECT COUNT(*) FROM funds f LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code ${where}`,
+    params
+  );
+  const total = parseInt(countRes.rows[0].count);
+  const totalPages = Math.ceil(total / pageSize);
+  const offset = (page - 1) * pageSize;
+
+  const dataParams = [...params, pageSize, offset];
+  const result = await pool.query(
+    `SELECT
+      f.scheme_code AS "schemeCode", f.scheme_name AS "schemeName",
+      f.latest_nav AS nav, f.latest_nav_date AS date,
+      f.amc_code AS "amcCode", f.scheme_type AS "schemeType",
+      r.return_1y AS "return1y", r.cagr_3y AS "cagr3y", r.cagr_5y AS "cagr5y"
+    FROM funds f
+    LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
+    ${where}
+    ORDER BY r.cagr_3y DESC NULLS LAST
+    LIMIT $${p} OFFSET $${p + 1}`,
+    dataParams
+  );
+
+  return NextResponse.json({
+    success: true,
+    funds: result.rows.map(fund => ({
+      schemeCode: fund.schemeCode,
+      schemeName: fund.schemeName,
+      latestNav: fund.nav ? parseFloat(fund.nav) : null,
+      latestNavDate: fund.date,
+      amcCode: fund.amcCode,
+      schemeType: fund.schemeType,
+      return1y: fund.return1y ? parseFloat(fund.return1y) : null,
+      cagr3y: fund.cagr3y ? parseFloat(fund.cagr3y) : null,
+      cagr5y: fund.cagr5y ? parseFloat(fund.cagr5y) : null,
+    })),
+    total, page, pageSize, totalPages,
+    query: query || amc || category,
+    engine: 'legacy'
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  POST /api/funds/search — Advanced search (category browser)
+// ════════════════════════════════════════════════════════════════════
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { query = '', amc = '', category = '', subCategory = '', planType = '', limit = 100, dedup = true } = body;
+    const { query = '', amc = '', category = '', subCategory = '', limit = 100 } = body;
 
-    console.log('🔍 Advanced search:', { query, amc, category, subCategory, planType, limit });
-
-    // If no filters, return stats only
-    if (!query && !amc && !category && !subCategory && !planType) {
-      const stats = await getDatabaseStats();
+    if (!query && !amc && !category && !subCategory) {
+      const stats = await pool.query('SELECT COUNT(*) FROM funds');
       return NextResponse.json({
-        success: true,
-        funds: [],
-        total: stats.totalFunds,
+        success: true, funds: [], total: parseInt(stats.rows[0].count),
         message: 'Apply filters to search funds'
       });
     }
 
-    // Use custom search with separate filters
-    const pool = (await import('@/lib/postgres-db')).default;
-    const client = await pool.connect();
+    const useMV = await checkMatView();
 
-    try {
-      let sqlQuery = `
-        SELECT 
-          f.scheme_code as "schemeCode",
-          f.scheme_name as "schemeName",
-          f.latest_nav as nav,
-          f.latest_nav_date as date,
-          f.amc_code as "amcCode",
-          f.scheme_type as "schemeType",
-          r.return_1y as "return1y",
-          r.cagr_3y as "cagr3y",
-          r.cagr_5y as "cagr5y"
-        FROM funds f
-        LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
-        WHERE 1=1
-      `;
-      
-      const params: any[] = [];
-      let paramCount = 1;
-
-      // Filter by AMC
-      if (amc) {
-        sqlQuery += ` AND f.amc_code ILIKE $${paramCount}`;
-        params.push(`%${amc}%`);
-        paramCount++;
-      }
-
-      // Filter by category (in scheme name or type)
-      if (category) {
-        sqlQuery += ` AND (f.scheme_name ILIKE $${paramCount} OR f.scheme_type ILIKE $${paramCount})`;
-        params.push(`%${category}%`);
-        paramCount++;
-      }
-
-      // Filter by sub-category with exact matching for specific terms
-      if (subCategory) {
-        // For specific sub-categories like "Mid Cap", use precise matching
-        // to avoid matching "Large & Mid Cap" when searching for "Mid Cap"
-        if (subCategory === 'Mid Cap') {
-          sqlQuery += ` AND ((f.scheme_name ILIKE $${paramCount} OR f.scheme_name ILIKE $${paramCount + 1}) OR (f.scheme_type ILIKE $${paramCount} OR f.scheme_type ILIKE $${paramCount + 1}))`;
-          sqlQuery += ` AND f.scheme_name NOT ILIKE $${paramCount + 2} AND f.scheme_name NOT ILIKE $${paramCount + 3}`;
-          params.push('%Mid Cap%', '%Midcap%', '%Large%Mid%', '%Large%Midcap%');
-          paramCount += 4;
-        } else if (subCategory === 'Large Cap') {
-          sqlQuery += ` AND ((f.scheme_name ILIKE $${paramCount} OR f.scheme_name ILIKE $${paramCount + 1}) OR (f.scheme_type ILIKE $${paramCount} OR f.scheme_type ILIKE $${paramCount + 1}))`;
-          sqlQuery += ` AND f.scheme_name NOT ILIKE $${paramCount + 2} AND f.scheme_name NOT ILIKE $${paramCount + 3}`;
-          params.push('%Large Cap%', '%Largecap%', '%Large%Mid%', '%Large%Midcap%');
-          paramCount += 4;
-        } else if (subCategory === 'Small Cap') {
-          sqlQuery += ` AND ((f.scheme_name ILIKE $${paramCount} OR f.scheme_name ILIKE $${paramCount + 1}) OR (f.scheme_type ILIKE $${paramCount} OR f.scheme_type ILIKE $${paramCount + 1}))`;
-          params.push('%Small Cap%', '%Smallcap%');
-          paramCount += 2;
-        } else {
-          sqlQuery += ` AND (f.scheme_name ILIKE $${paramCount} OR f.scheme_type ILIKE $${paramCount})`;
-          params.push(`%${subCategory}%`);
-          paramCount++;
-        }
-      }
-
-      // Filter by search query (word-split for loose matching)
-      if (query) {
-        const words = query.trim().split(/\s+/).filter((w: string) => w.length > 0);
-        if (words.length > 1) {
-          const wordConditions = words.map((_: string, idx: number) => {
-            params.push(`%${words[idx]}%`);
-            const p = paramCount + idx;
-            return `f.scheme_name ILIKE $${p}`;
-          });
-          sqlQuery += ` AND (${wordConditions.join(' AND ')})`;
-          paramCount += words.length;
-        } else {
-          sqlQuery += ` AND (f.scheme_name ILIKE $${paramCount} OR f.scheme_code LIKE $${paramCount})`;
-          params.push(`%${query}%`);
-          paramCount++;
-        }
-      }
-
-      // Filter by plan type (embedded in scheme name since plan_type column is null)
-      if (planType) {
-        if (planType === 'Direct') {
-          sqlQuery += ` AND f.scheme_name ILIKE $${paramCount}`;
-          params.push('%Direct%');
-          paramCount++;
-        } else if (planType === 'Regular') {
-          sqlQuery += ` AND f.scheme_name ILIKE $${paramCount} AND f.scheme_name NOT ILIKE $${paramCount + 1}`;
-          params.push('%Regular%', '%Direct%');
-          paramCount += 2;
-        }
-      } else if (dedup) {
-        // Default dedup: show only Direct Plan + Growth (one row per fund family)
-        sqlQuery += ` AND f.scheme_name ILIKE $${paramCount} AND f.scheme_name ILIKE $${paramCount + 1}`;
-        params.push('%Direct%', '%Growth%');
-        paramCount += 2;
-      }
-
-      sqlQuery += ` ORDER BY r.cagr_3y DESC NULLS LAST LIMIT $${paramCount}`;
-      params.push(limit);
-
-      console.log('SQL Query:', sqlQuery);
-      console.log('Params:', params);
-
-      const result = await client.query(sqlQuery, params);
-      const funds = result.rows;
-
-      console.log(`✅ Found ${funds.length} funds`);
-
-      return NextResponse.json({
-        success: true,
-        funds: funds.map(fund => ({
-          schemeCode: fund.schemeCode,
-          schemeName: fund.schemeName,
-          latestNav: parseFloat(fund.nav),
-          latestNavDate: fund.date,
-          amcCode: fund.amcCode,
-          schemeType: fund.schemeType,
-          return1y: fund.return1y ? parseFloat(fund.return1y) : null,
-          cagr3y: fund.cagr3y ? parseFloat(fund.cagr3y) : null,
-          cagr5y: fund.cagr5y ? parseFloat(fund.cagr5y) : null
-        })),
-        total: funds.length,
-        filters: { amc, category, subCategory, query, planType }
-      });
-
-    } finally {
-      client.release();
+    if (useMV) {
+      // Use unified search with limit as pageSize, page 1
+      return await searchUnified(query, amc, category, subCategory, 1, Math.min(limit, 200));
     }
 
-  } catch (error: any) {
-    console.error('❌ Search error:', error);
-    
+    // Legacy fallback
+    let where = 'WHERE f.scheme_name ILIKE $1 AND f.scheme_name ILIKE $2';
+    const params: any[] = ['%Direct%', '%Growth%'];
+    let p = 3;
+
+    if (amc) {
+      where += ` AND f.amc_code ILIKE $${p}`;
+      params.push(`%${amc}%`);
+      p++;
+    }
+
+    if (subCategory) {
+      where += ` AND (f.scheme_name ILIKE $${p} OR f.scheme_type ILIKE $${p})`;
+      params.push(`%${subCategory}%`);
+      p++;
+    } else if (category) {
+      where += ` AND (f.scheme_name ILIKE $${p} OR f.scheme_type ILIKE $${p})`;
+      params.push(`%${category}%`);
+      p++;
+    }
+
+    if (query) {
+      const words = query.trim().split(/\s+/).filter((w: string) => w.length > 0);
+      for (const word of words) {
+        where += ` AND f.scheme_name ILIKE $${p}`;
+        params.push(`%${word}%`);
+        p++;
+      }
+    }
+
+    params.push(limit);
+    const result = await pool.query(
+      `SELECT
+        f.scheme_code AS "schemeCode", f.scheme_name AS "schemeName",
+        f.latest_nav AS nav, f.latest_nav_date AS date,
+        f.amc_code AS "amcCode", f.scheme_type AS "schemeType",
+        r.return_1y AS "return1y", r.cagr_3y AS "cagr3y", r.cagr_5y AS "cagr5y"
+      FROM funds f
+      LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
+      ${where}
+      ORDER BY r.cagr_3y DESC NULLS LAST
+      LIMIT $${p}`,
+      params
+    );
+
     return NextResponse.json({
-      success: false,
-      error: error.message,
-      funds: []
+      success: true,
+      funds: result.rows.map(fund => ({
+        schemeCode: fund.schemeCode,
+        schemeName: fund.schemeName,
+        latestNav: fund.nav ? parseFloat(fund.nav) : null,
+        latestNavDate: fund.date,
+        amcCode: fund.amcCode,
+        schemeType: fund.schemeType,
+        return1y: fund.return1y ? parseFloat(fund.return1y) : null,
+        cagr3y: fund.cagr3y ? parseFloat(fund.cagr3y) : null,
+        cagr5y: fund.cagr5y ? parseFloat(fund.cagr5y) : null,
+      })),
+      total: result.rows.length,
+      filters: { amc, category, subCategory, query },
+      engine: 'legacy'
+    });
+
+  } catch (error: any) {
+    return NextResponse.json({
+      success: false, error: error.message, funds: []
     }, { status: 500 });
   }
 }

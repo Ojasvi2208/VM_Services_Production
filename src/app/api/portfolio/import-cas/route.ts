@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import pool from '@/lib/postgres-db';
 import { extractText, getDocumentProxy } from 'unpdf';
-import { deobfuscateFromTransport } from '@/lib/encryption';
+import { deobfuscateFromTransport, encryptPII, maskPAN, maskFolio, maskName, maskEmail } from '@/lib/encryption';
 import { calculateXIRR, calculateCAGR, buildCashFlowsFromTransactions } from '@/lib/xirr';
 import { spawn } from 'child_process';
 import { writeFile, unlink } from 'fs/promises';
@@ -123,7 +123,6 @@ function parseCASText(text: string): ParsedCAS {
     parsed.statementPeriod.to = periodMatch[2];
   }
 
-  console.log('[CAS-JS] Starting multi-strategy parse, lines:', lines.length);
 
   // ── 2. STRATEGY: Line-by-line CAMS/KFINTECH parser ──
   // Detects "Folio No:" headers, scheme names, transaction rows, and closing balance lines
@@ -146,7 +145,6 @@ function parseCASText(text: string): ParsedCAS {
         currentFolio.closingValue = currentFolio.closingBalance * currentFolio.closingNav;
       }
       parsed.folios.push(currentFolio);
-      console.log(`[CAS-JS] Added: ${currentFolio.schemeName} — ${currentFolio.closingBalance} units @ ₹${currentFolio.closingNav} = ₹${currentFolio.closingValue}`);
     }
     currentFolio = null;
     currentScheme = '';
@@ -272,7 +270,6 @@ function parseCASText(text: string): ParsedCAS {
 
   // ── 3. STRATEGY: NSDL ISIN-based fallback (if line-by-line found nothing) ──
   if (parsed.folios.length === 0) {
-    console.log('[CAS-JS] Line-by-line found 0 folios, trying ISIN-based NSDL strategy');
     const flatText = fullText.replace(/\s+/g, ' ');
     const isinRegex = /\b(INF[A-Z0-9]{9})\b/g;
     const foundIsins = new Set<string>();
@@ -280,7 +277,6 @@ function parseCASText(text: string): ParsedCAS {
     while ((match = isinRegex.exec(flatText)) !== null) {
       foundIsins.add(match[1]);
     }
-    console.log(`[CAS-JS] Found ${foundIsins.size} ISINs`);
 
     for (const isin of foundIsins) {
       if (parsed.folios.some(f => f.schemeCode === isin)) continue;
@@ -343,7 +339,6 @@ function parseCASText(text: string): ParsedCAS {
     }
   }
 
-  console.log(`[CAS-JS] Parsed ${parsed.folios.length} holdings, ₹${parsed.summary.currentValue.toFixed(0)} value`);
   return parsed;
 }
 
@@ -500,8 +495,8 @@ async function parseCASWithPython(pdfBuffer: Buffer, password?: string): Promise
         // Clean up temp file
         try {
           await unlink(tempPath);
-        } catch (e) {
-          console.error('Failed to delete temp file:', e);
+        } catch {
+          // Silent — temp file cleanup is best-effort
         }
         
         if (code === 0 && stdout) {
@@ -510,21 +505,17 @@ async function parseCASWithPython(pdfBuffer: Buffer, password?: string): Promise
             if (result.success) {
               resolve(result as ParsedCAS);
             } else {
-              console.log('Python parser returned error:', result.error);
               resolve(null);
             }
           } catch (e) {
-            console.error('Failed to parse Python output:', e);
             resolve(null);
           }
         } else {
-          console.error('Python parser failed:', stderr);
           resolve(null);
         }
       });
       
       pythonProcess.on('error', (err) => {
-        console.error('Failed to start Python process:', err);
         resolve(null);
       });
       
@@ -535,10 +526,26 @@ async function parseCASWithPython(pdfBuffer: Buffer, password?: string): Promise
       }, 30000);
       
     } catch (error) {
-      console.error('Python parser error:', error);
       resolve(null);
     }
   });
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  PII SANITIZATION — Mask all sensitive identifiers before response
+// ════════════════════════════════════════════════════════════════════
+function sanitizeResponsePII(data: ParsedCAS): ParsedCAS {
+  return {
+    ...data,
+    investorName: maskName(data.investorName),
+    email: maskEmail(data.email),
+    pan: maskPAN(data.pan),
+    folios: data.folios.map(folio => ({
+      ...folio,
+      folioNumber: maskFolio(folio.folioNumber),
+      pan: maskPAN(folio.pan),
+    })),
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -564,11 +571,9 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
     
     // Try Python casparser first (more accurate for CAMS/KFINTECH)
-    console.log('Attempting to parse CAS with Python casparser...');
     let parsedData = await parseCASWithPython(buffer, password);
     
     if (parsedData && parsedData.folios && parsedData.folios.length > 0) {
-      console.log(`Python casparser found ${parsedData.folios.length} folios`);
       
       // Match scheme codes for each folio (pass ISIN if available from schemeCode field)
       for (const folio of parsedData.folios) {
@@ -581,21 +586,22 @@ export async function POST(request: NextRequest) {
       }
       
       const matched = parsedData.folios.filter(f => f.schemeCode).length;
-      console.log(`Matched ${matched}/${parsedData.folios.length} folios to DB`);
 
       // Enrich with returns (XIRR, CAGR, absolute return) from our NAV DB
       await enrichWithReturns(parsedData.folios);
       
+      // Sanitize PII before sending to client (DPDP Act compliance)
+      const sanitizedData = sanitizeResponsePII(parsedData);
+      
       return NextResponse.json({
         success: true,
-        data: parsedData,
+        data: sanitizedData,
         message: `Successfully parsed ${parsedData.folios.length} mutual fund holdings (${matched} matched)`,
         parser: 'casparser'
       });
     }
     
     // Fallback to JavaScript parser if Python fails
-    console.log('Python casparser failed or not available, falling back to JS parser...');
     
     let textContent = '';
     
@@ -607,7 +613,7 @@ export async function POST(request: NextRequest) {
       const result = await extractText(pdf, { mergePages: true });
       textContent = result.text;
     } catch (pdfError) {
-      console.error('PDF parsing error:', pdfError);
+      // Do not log pdfError — may contain raw PDF content or PAN
       const errorMessage = pdfError instanceof Error ? pdfError.message : 'Unknown error';
       
       if (errorMessage.includes('password') || errorMessage.includes('encrypted') || errorMessage.includes('Incorrect Password')) {
@@ -629,8 +635,6 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Log first 2000 chars of extracted text for debugging
-    console.log('Extracted PDF text (first 2000 chars):', textContent.substring(0, 2000));
     
     // Parse the CAS text using JS fallback parser
     const jsParsedData = parseCASText(textContent);
@@ -646,25 +650,24 @@ export async function POST(request: NextRequest) {
     }
 
     const jsMatched = jsParsedData.folios.filter(f => f.schemeCode).length;
-    console.log(`JS parser matched ${jsMatched}/${jsParsedData.folios.length} folios to DB`);
 
     // Enrich with returns (XIRR, CAGR, absolute return) from our NAV DB
     await enrichWithReturns(jsParsedData.folios);
 
+    // Wipe raw PDF text from memory — PAN was only used ephemerally for decryption
+    textContent = '';
+
+    // Sanitize PII before sending to client (DPDP Act compliance)
+    const sanitizedJsData = sanitizeResponsePII(jsParsedData);
+
     return NextResponse.json({
       success: true,
-      data: jsParsedData,
+      data: sanitizedJsData,
       message: `Successfully parsed ${jsParsedData.folios.length} mutual fund holdings (${jsMatched} matched)`,
-      parser: 'javascript',
-      debug: {
-        textLength: textContent.length,
-        textPreview: textContent.substring(0, 2000),
-        lines: textContent.split('\n').slice(0, 50)
-      }
+      parser: 'javascript'
     });
 
   } catch (error) {
-    console.error('CAS import error:', error);
     return NextResponse.json({ 
       error: 'Failed to parse CAS statement',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -736,7 +739,6 @@ export async function PUT(request: NextRequest) {
     // Extract SIP info before filtering
     const sipInfo = extractSIPInfo(folios);
 
-    console.log(`CAS import: ${folios.length} total, ${mfFolios.length} MF, ${nonMfCount} non-MF skipped, ${sipInfo.length} SIPs detected`);
 
     if (mfFolios.length === 0) {
       return NextResponse.json({ 
@@ -818,12 +820,15 @@ export async function PUT(request: NextRequest) {
             [user.id, folio.schemeCode]
           );
 
+          // Encrypt PII before DB persistence (AES-256-GCM)
+          const encryptedFolio = encryptPII(folio.folioNumber);
+
           if (existing.rows.length > 0) {
             await client.query(
               `UPDATE portfolio_holdings 
                SET units = $1, purchase_nav = $2, purchase_amount = $3, folio_number = $4, source = 'cas', updated_at = NOW()
                WHERE id = $5`,
-              [folio.closingBalance, avgNav, totalInvested, folio.folioNumber, existing.rows[0].id]
+              [folio.closingBalance, avgNav, totalInvested, encryptedFolio, existing.rows[0].id]
             );
           } else {
             await client.query(
@@ -831,14 +836,14 @@ export async function PUT(request: NextRequest) {
                VALUES ($1, $2, $3, $4, $5, $6, $7, 'cas', $8)`,
               [user.id, folio.schemeCode, folio.closingBalance, avgNav, 
                earliestDate || new Date(), totalInvested,
-               `CAS Import - ${folio.amc} - Folio: ${folio.folioNumber}`,
-               folio.folioNumber]
+               `CAS Import - ${folio.amc}`,
+               encryptedFolio]
             );
           }
 
           importedCount++;
         } catch (folioError) {
-          console.error(`Error importing folio ${folio.folioNumber} (${folio.schemeName}):`, folioError);
+          console.error(`Error importing holding for scheme_code ${folio.schemeCode}:`, folioError instanceof Error ? folioError.message : 'Unknown');
           errorCount++;
         }
       }
@@ -879,7 +884,7 @@ export async function PUT(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Save holdings error:', error);
+    console.error('Save holdings error:', error instanceof Error ? error.message : 'Unknown');
     return NextResponse.json({ 
       error: 'Failed to save holdings',
       details: error instanceof Error ? error.message : 'Unknown error'

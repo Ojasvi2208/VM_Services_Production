@@ -1,18 +1,41 @@
 /**
- * PostgreSQL Database Service
- * Works locally and on Zoho hosting with same code
- * Just change DATABASE_URL environment variable
+ * PostgreSQL Database Service — Singleton Pool
+ *
+ * Serverless-safe: Uses a global singleton with lazy initialization
+ * to prevent "Too many clients" errors when Next.js Edge/Serverless
+ * functions spin up multiple module instances.
+ *
+ * The pool is attached to `globalThis` so it survives hot-reloads
+ * in development and is shared across all API routes in production.
  */
 
 import { Pool } from 'pg';
 
-// Create connection pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://localhost/vijaymalik_funds',
-  max: 20, // Maximum connections
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
+// Extend globalThis to hold our singleton pool reference
+declare global {
+  // eslint-disable-next-line no-var
+  var __pgPool: Pool | undefined;
+}
+
+function getPool(): Pool {
+  if (!globalThis.__pgPool) {
+    globalThis.__pgPool = new Pool({
+      connectionString: process.env.DATABASE_URL || 'postgresql://localhost/vijaymalik_funds',
+      max: 10,                    // Conservative for serverless (was 20 — causes pool exhaustion)
+      idleTimeoutMillis: 20000,   // Release idle connections faster in serverless
+      connectionTimeoutMillis: 5000,
+      allowExitOnIdle: true,      // Let the process exit cleanly in serverless
+    });
+
+    // Log pool errors instead of crashing the process
+    globalThis.__pgPool.on('error', (err) => {
+      console.error('Unexpected PG pool error:', err.message);
+    });
+  }
+  return globalThis.__pgPool;
+}
+
+const pool = getPool();
 
 export interface NAVRecord {
   schemeCode: string;

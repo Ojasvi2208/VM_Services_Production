@@ -126,3 +126,105 @@ CREATE INDEX IF NOT EXISTS idx_mv_top_funds_rank ON mv_top_funds(quality_rank);
 -- To refresh after each metrics update:
 --   REFRESH MATERIALIZED VIEW CONCURRENTLY mv_top_funds;
 -- ═══════════════════════════════════════════════════════════════
+
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  MATERIALIZED VIEW: mv_unified_search
+--  Purpose: One row per fund family (master_fund) with aggregated metrics.
+--           Search API queries THIS instead of funds + fund_returns JOIN.
+--
+--  Performance: ~4,000 rows (vs 37,000+ in funds). GIN trigram index
+--               enables sub-50ms ILIKE searches. Pre-computed CAGR ranges
+--               eliminate runtime aggregation.
+--
+--  Refresh: REFRESH MATERIALIZED VIEW CONCURRENTLY mv_unified_search;
+--           (after daily NAV sync + returns recalculation)
+-- ═══════════════════════════════════════════════════════════════════════
+
+-- Ensure pg_trgm extension for GIN trigram index
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+DROP MATERIALIZED VIEW IF EXISTS mv_unified_search;
+
+CREATE MATERIALIZED VIEW mv_unified_search AS
+SELECT
+  mf.id                                     AS master_fund_id,
+  mf.strategy_name,
+  mf.fund_house,
+  mf.category,
+  mf.sub_category,
+  mf.variant_count,
+
+  -- Canonical variant: Direct + Growth (the "hero" row for display)
+  canonical.scheme_code                     AS canonical_scheme_code,
+  canonical.scheme_name                     AS canonical_scheme_name,
+  canonical.latest_nav                      AS canonical_nav,
+  canonical.latest_nav_date                 AS canonical_nav_date,
+
+  -- Aggregated CAGR ranges across all variants
+  ROUND(MIN(fr.cagr_3y)::numeric, 2)       AS cagr_3y_min,
+  ROUND(MAX(fr.cagr_3y)::numeric, 2)       AS cagr_3y_max,
+  ROUND(MIN(fr.cagr_5y)::numeric, 2)       AS cagr_5y_min,
+  ROUND(MAX(fr.cagr_5y)::numeric, 2)       AS cagr_5y_max,
+
+  -- Best Direct Plan returns (for hero display)
+  ROUND(canonical_r.return_1y::numeric, 2)  AS return_1y,
+  ROUND(canonical_r.cagr_3y::numeric, 2)   AS cagr_3y,
+  ROUND(canonical_r.cagr_5y::numeric, 2)   AS cagr_5y,
+  ROUND(canonical_r.sharpe_ratio_1y::numeric, 4) AS sharpe_ratio,
+
+  -- All variant scheme_codes as JSON array (for detail screen variant switching)
+  JSON_AGG(
+    JSON_BUILD_OBJECT(
+      'schemeCode', f.scheme_code,
+      'planType', f.plan_type,
+      'optionType', f.option_type,
+      'nav', f.latest_nav,
+      'cagr3y', fr.cagr_3y,
+      'cagr5y', fr.cagr_5y
+    ) ORDER BY
+      CASE WHEN f.plan_type = 'Direct' THEN 0 ELSE 1 END,
+      CASE WHEN f.option_type = 'Growth' THEN 0 ELSE 1 END
+  )                                         AS variants,
+
+  -- Searchable text: strategy name + fund house (for trigram matching)
+  LOWER(mf.strategy_name || ' ' || COALESCE(mf.fund_house, '')) AS search_text
+
+FROM master_funds mf
+-- All child variants
+JOIN funds f ON f.master_fund_id = mf.id
+LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
+-- Canonical variant: prefer Direct + Growth
+LEFT JOIN LATERAL (
+  SELECT fc.scheme_code, fc.scheme_name, fc.latest_nav, fc.latest_nav_date
+  FROM funds fc
+  WHERE fc.master_fund_id = mf.id
+    AND fc.plan_type = 'Direct'
+    AND fc.option_type = 'Growth'
+  ORDER BY fc.latest_nav DESC NULLS LAST
+  LIMIT 1
+) canonical ON TRUE
+LEFT JOIN fund_returns canonical_r ON canonical.scheme_code = canonical_r.scheme_code
+WHERE mf.variant_count > 0
+GROUP BY
+  mf.id, mf.strategy_name, mf.fund_house, mf.category, mf.sub_category, mf.variant_count,
+  canonical.scheme_code, canonical.scheme_name, canonical.latest_nav, canonical.latest_nav_date,
+  canonical_r.return_1y, canonical_r.cagr_3y, canonical_r.cagr_5y, canonical_r.sharpe_ratio_1y;
+
+-- Unique index required for CONCURRENTLY refresh
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_unified_search_id ON mv_unified_search(master_fund_id);
+
+-- GIN trigram index for sub-50ms ILIKE/similarity searches
+CREATE INDEX IF NOT EXISTS idx_mv_unified_search_trgm ON mv_unified_search USING GIN (search_text gin_trgm_ops);
+
+-- B-Tree indexes for sorting/filtering
+CREATE INDEX IF NOT EXISTS idx_mv_unified_search_cagr3y ON mv_unified_search(cagr_3y DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_mv_unified_search_cagr5y ON mv_unified_search(cagr_5y DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_mv_unified_search_house ON mv_unified_search(fund_house);
+CREATE INDEX IF NOT EXISTS idx_mv_unified_search_category ON mv_unified_search(sub_category);
+
+-- ═══════════════════════════════════════════════════════════════
+-- To refresh after each metrics update:
+--   REFRESH MATERIALIZED VIEW CONCURRENTLY mv_unified_search;
+--   REFRESH MATERIALIZED VIEW CONCURRENTLY mv_top_funds;
+-- ═══════════════════════════════════════════════════════════════
