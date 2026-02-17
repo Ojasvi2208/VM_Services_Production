@@ -365,16 +365,26 @@ function parseCASText(text: string): ParsedCAS {
       folio.closingValue = folio.closingBalance * folio.closingNav;
       parsed.summary.currentValue += folio.closingValue;
     }
-    if (folio.costValue) {
+    if (folio.costValue && folio.costValue > 0) {
+      // CAS provides cost basis directly — most accurate
       parsed.summary.totalInvested += folio.costValue;
     } else {
-      // Sum BUY/SIP transactions as invested amount
-      const invested = folio.transactions
-        .filter(t => t.type === 'BUY' || t.type === 'SIP' || t.type === 'SWITCH_IN')
-        .reduce((s, t) => s + Math.abs(t.amount), 0);
-      if (invested > 0) {
-        folio.costValue = invested;
-        parsed.summary.totalInvested += invested;
+      // Fallback: fresh capital only (exclude reinvested dividends), net of redemptions
+      let freshCapital = 0;
+      let redemptions = 0;
+      for (const t of folio.transactions) {
+        const amt = Math.abs(t.amount);
+        if (t.type === 'BUY' || t.type === 'SIP' || t.type === 'SWITCH_IN') {
+          freshCapital += amt;
+        } else if (t.type === 'REDEMPTION' || t.type === 'SELL' || t.type === 'SWP' || t.type === 'SWITCH_OUT') {
+          redemptions += amt;
+        }
+        // DIVIDEND reinvestments excluded from cost basis
+      }
+      const netInvested = Math.max(0, freshCapital - redemptions);
+      if (netInvested > 0) {
+        folio.costValue = netInvested;
+        parsed.summary.totalInvested += netInvested;
       }
     }
   }
@@ -439,7 +449,7 @@ async function matchSchemeCode(schemeName: string, isin?: string): Promise<strin
     // Strategy 1: Exact ISIN match (most reliable)
     if (isin && isin.startsWith('INF')) {
       const isinResult = await pool.query(
-        `SELECT scheme_code FROM funds WHERE isin = $1 OR isin2 = $1 LIMIT 1`,
+        `SELECT scheme_code FROM funds WHERE isin_growth = $1 OR isin_div_reinvestment = $1 LIMIT 1`,
         [isin]
       );
       if (isinResult.rows[0]?.scheme_code) return isinResult.rows[0].scheme_code;
@@ -654,6 +664,20 @@ async function ensureTables() {
       await client.query(`ALTER TABLE portfolio_holdings ALTER COLUMN scheme_code TYPE TEXT`);
     } catch { /* already TEXT or other issue — non-fatal */ }
 
+    // Add ISIN columns to funds table if missing (needed for ISIN-based matching)
+    const fundsAlterations = [
+      `ALTER TABLE funds ADD COLUMN IF NOT EXISTS isin_growth TEXT`,
+      `ALTER TABLE funds ADD COLUMN IF NOT EXISTS isin_div_reinvestment TEXT`,
+    ];
+    for (const sql of fundsAlterations) {
+      try { await client.query(sql); } catch { /* column may already exist */ }
+    }
+    // Index for fast ISIN lookups
+    try {
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_funds_isin_growth ON funds(isin_growth) WHERE isin_growth IS NOT NULL`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_funds_isin_div ON funds(isin_div_reinvestment) WHERE isin_div_reinvestment IS NOT NULL`);
+    } catch { /* indexes may already exist */ }
+
     // SIP info table
     await client.query(`
       CREATE TABLE IF NOT EXISTS cas_sip_info (
@@ -674,8 +698,68 @@ async function ensureTables() {
     `);
     tablesEnsured = true;
     console.log('[CAS] ensureTables: schema migration complete');
+
+    // Kick off background ISIN backfill (non-blocking, runs once)
+    backfillISINs().catch(e => console.log('[CAS] ISIN backfill error (non-fatal):', e instanceof Error ? e.message : e));
   } finally {
     client.release();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  One-time ISIN backfill from AMFI NAV file
+//  Format: SchemeCode;ISIN_Growth;ISIN_DivReinvest;SchemeName;NAV;Date
+// ════════════════════════════════════════════════════════════════════
+let isinBackfillDone = false;
+async function backfillISINs() {
+  if (isinBackfillDone) return;
+  isinBackfillDone = true; // prevent re-entry
+
+  // Check if ISINs already populated
+  const check = await pool.query(`SELECT COUNT(*) FROM funds WHERE isin_growth IS NOT NULL AND isin_growth != ''`);
+  if (parseInt(check.rows[0].count) > 1000) {
+    console.log('[CAS] ISIN columns already populated, skipping backfill');
+    return;
+  }
+
+  console.log('[CAS] Starting ISIN backfill from AMFI...');
+  try {
+    const resp = await fetch('https://www.amfiindia.com/spages/NAVAll.txt', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VMFinancial/1.0)' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) { console.log('[CAS] AMFI fetch failed:', resp.status); return; }
+    const text = await resp.text();
+    const lines = text.split('\n');
+
+    let updated = 0;
+    const client = await pool.connect();
+    try {
+      for (const line of lines) {
+        const parts = line.split(';');
+        if (parts.length < 5) continue;
+        const [schemeCode, isin1, isin2] = parts;
+        if (!schemeCode || !/^\d+$/.test(schemeCode.trim())) continue;
+        const isinGrowth = (isin1 || '').trim();
+        const isinDiv = (isin2 || '').trim();
+        if (!isinGrowth && !isinDiv) continue;
+
+        try {
+          const res = await client.query(
+            `UPDATE funds SET isin_growth = COALESCE(NULLIF($2, ''), isin_growth),
+                              isin_div_reinvestment = COALESCE(NULLIF($3, ''), isin_div_reinvestment)
+             WHERE scheme_code = $1 AND (isin_growth IS NULL OR isin_growth = '')`,
+            [schemeCode.trim(), isinGrowth, isinDiv]
+          );
+          if (res.rowCount && res.rowCount > 0) updated++;
+        } catch { /* skip individual rows */ }
+      }
+      console.log(`[CAS] ISIN backfill complete: ${updated} funds updated`);
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.log('[CAS] ISIN backfill failed (non-fatal):', e instanceof Error ? e.message : e);
   }
 }
 
@@ -799,13 +883,38 @@ export async function POST(request: NextRequest) {
       await client.query(`DELETE FROM cas_import_staging WHERE user_id = $1`, [user.id]);
 
       for (const folio of mfFolios) {
-        // Compute financials from transactions
+        // Compute financials — RCA-correct logic:
+        //   1. Prefer costValue from CAS (actual cost basis, excludes reinvested dividends)
+        //   2. Fallback: sum fresh-capital txns only (BUY + SIP), NOT reinvested dividends
+        //   3. Subtract redemptions from cost basis
         let totalInvested = 0;
         let earliestDate: Date | null = null;
         const txns = Array.isArray(folio.transactions) ? folio.transactions : [];
+
+        if (folio.costValue && folio.costValue > 0) {
+          // CAS provides the correct cost basis — use it directly
+          totalInvested = folio.costValue;
+        } else {
+          // Fallback: compute from transactions
+          let freshCapital = 0;
+          let redemptions = 0;
+          for (const tx of txns) {
+            const amt = Math.abs(tx.amount);
+            if (tx.type === 'BUY' || tx.type === 'SIP') {
+              freshCapital += amt;
+            } else if (tx.type === 'SWITCH_IN') {
+              freshCapital += amt;
+            } else if (tx.type === 'REDEMPTION' || tx.type === 'SELL' || tx.type === 'SWP' || tx.type === 'SWITCH_OUT') {
+              redemptions += amt;
+            }
+            // DIVIDEND reinvestments are NOT counted as fresh capital
+          }
+          totalInvested = Math.max(0, freshCapital - redemptions);
+        }
+
+        // Find earliest transaction date
         for (const tx of txns) {
           if (tx.type === 'BUY' || tx.type === 'SIP' || tx.type === 'SWITCH_IN') {
-            totalInvested += Math.abs(tx.amount);
             try {
               const txDate = new Date(tx.date);
               if (!isNaN(txDate.getTime()) && (!earliestDate || txDate < earliestDate)) {
@@ -814,11 +923,12 @@ export async function POST(request: NextRequest) {
             } catch { /* skip */ }
           }
         }
-        if (totalInvested === 0 && folio.costValue) totalInvested = folio.costValue;
+
         if (totalInvested === 0 && folio.closingNav && folio.closingBalance) {
           totalInvested = folio.closingBalance * folio.closingNav;
         }
         const avgNav = folio.closingNav || (folio.closingBalance > 0 && totalInvested > 0 ? totalInvested / folio.closingBalance : 0);
+        // RCA 2: Use CAS closing_value as-is, don't re-enrich with latest NAV
         const closingValue = folio.closingValue || (folio.closingBalance * (folio.closingNav || 0));
 
         await client.query(
@@ -929,19 +1039,6 @@ export async function PUT(request: NextRequest) {
 
     try {
       await client.query('BEGIN');
-
-      // Log first staged row for diagnostics
-      if (staged.rows.length > 0) {
-        const r = staged.rows[0];
-        console.log(`[CAS-PUT] Sample staged row keys: ${Object.keys(r).join(', ')}`);
-        console.log(`[CAS-PUT] Sample: scheme_code=${r.scheme_code}, scheme_name=${String(r.scheme_name).substring(0,40)}, closing_balance=${r.closing_balance}, avg_nav=${r.avg_nav}, total_invested=${r.total_invested}, earliest_date=${r.earliest_date}, folio_number=${r.folio_number?.substring(0,10)}`);
-      }
-
-      // Check portfolio_holdings columns
-      const colCheck = await client.query(
-        `SELECT column_name FROM information_schema.columns WHERE table_name = 'portfolio_holdings' ORDER BY ordinal_position`
-      );
-      console.log(`[CAS-PUT] portfolio_holdings columns: ${colCheck.rows.map((r: any) => r.column_name).join(', ')}`);
 
       for (let i = 0; i < staged.rows.length; i++) {
         const row = staged.rows[i];

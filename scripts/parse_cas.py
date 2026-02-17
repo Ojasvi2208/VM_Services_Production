@@ -130,8 +130,9 @@ def parse_cas_mf(data: CASData) -> dict:
             if folio_data["closingValue"] == 0 and folio_data["closingBalance"] > 0 and closing_nav > 0:
                 folio_data["closingValue"] = folio_data["closingBalance"] * closing_nav
 
-            # Process transactions
-            total_invested = 0.0
+            # Process transactions — RCA-correct: exclude reinvested dividends, handle redemptions
+            fresh_capital = 0.0
+            redemptions = 0.0
             for tx in scheme.transactions:
                 tx_type = classify_tx(tx.type, tx.description, tx.units)
                 amount = abs(dec(tx.amount))
@@ -148,14 +149,20 @@ def parse_cas_mf(data: CASData) -> dict:
                 })
 
                 if tx_type in ("BUY", "SIP", "SWITCH_IN"):
-                    total_invested += amount
+                    fresh_capital += amount
+                elif tx_type in ("REDEMPTION", "SELL", "SWP", "SWITCH_OUT"):
+                    redemptions += amount
+                # DIVIDEND reinvestments are NOT counted as fresh capital
 
-            if cost_value == 0 and total_invested > 0:
-                folio_data["costValue"] = total_invested
+            # Prefer CAS cost_value (actual cost basis), fallback to net fresh capital
+            if cost_value <= 0:
+                net_invested = max(0, fresh_capital - redemptions)
+                if net_invested > 0:
+                    folio_data["costValue"] = net_invested
 
             result["folios"].append(folio_data)
             result["summary"]["currentValue"] += folio_data["closingValue"]
-            result["summary"]["totalInvested"] += folio_data["costValue"] or total_invested
+            result["summary"]["totalInvested"] += folio_data["costValue"]
 
     result["summary"]["totalFolios"] = len(set(f["folioNumber"] for f in result["folios"]))
     result["summary"]["totalSchemes"] = len(result["folios"])
