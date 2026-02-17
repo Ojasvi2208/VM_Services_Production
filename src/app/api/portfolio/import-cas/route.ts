@@ -601,6 +601,7 @@ async function ensureTables() {
   if (tablesEnsured) return;
   const client = await pool.connect();
   try {
+    // Staging table (we own this — create fresh)
     await client.query(`
       CREATE TABLE IF NOT EXISTS cas_import_staging (
         id SERIAL PRIMARY KEY,
@@ -623,22 +624,37 @@ async function ensureTables() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS portfolio_holdings (
-        id SERIAL PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        scheme_code TEXT NOT NULL,
-        units NUMERIC DEFAULT 0,
-        purchase_nav NUMERIC DEFAULT 0,
-        purchase_date TIMESTAMP DEFAULT NOW(),
-        purchase_amount NUMERIC DEFAULT 0,
-        notes TEXT,
-        source TEXT DEFAULT 'manual',
-        folio_number TEXT,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
+
+    // portfolio_holdings already exists (from db-schema-auth.sql) with:
+    //   id UUID, user_id UUID (FK→users), scheme_code VARCHAR(20) (FK→funds),
+    //   units DECIMAL, purchase_nav DECIMAL, purchase_date DATE, purchase_amount DECIMAL, notes TEXT
+    // We need to:
+    //   1. Add source + folio_number columns if missing
+    //   2. Drop FK on scheme_code so CAS imports with unmatched codes work
+    //   3. Widen scheme_code from VARCHAR(20) to TEXT for UNMATCHED: keys
+
+    // Add missing columns (safe — IF NOT EXISTS / catch)
+    const alterations = [
+      `ALTER TABLE portfolio_holdings ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual'`,
+      `ALTER TABLE portfolio_holdings ADD COLUMN IF NOT EXISTS folio_number TEXT`,
+      `ALTER TABLE portfolio_holdings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`,
+    ];
+    for (const sql of alterations) {
+      try { await client.query(sql); } catch { /* column may already exist */ }
+    }
+
+    // Drop FK constraint on scheme_code (CAS imports have schemes not in our funds table)
+    // The constraint name from db-schema-auth.sql is "fk_scheme"
+    try {
+      await client.query(`ALTER TABLE portfolio_holdings DROP CONSTRAINT IF EXISTS fk_scheme`);
+    } catch { /* constraint may not exist */ }
+
+    // Widen scheme_code from VARCHAR(20) to TEXT (UNMATCHED: keys are longer)
+    try {
+      await client.query(`ALTER TABLE portfolio_holdings ALTER COLUMN scheme_code TYPE TEXT`);
+    } catch { /* already TEXT or other issue — non-fatal */ }
+
+    // SIP info table
     await client.query(`
       CREATE TABLE IF NOT EXISTS cas_sip_info (
         id SERIAL PRIMARY KEY,
@@ -651,11 +667,13 @@ async function ensureTables() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
+
     // Index for fast import confirmation
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_staging_import_id ON cas_import_staging(import_id)
     `);
     tablesEnsured = true;
+    console.log('[CAS] ensureTables: schema migration complete');
   } finally {
     client.release();
   }
@@ -934,7 +952,8 @@ export async function PUT(request: NextRequest) {
           const schemeCode = row.scheme_code;
           const holdingKey = schemeCode || `UNMATCHED:${(row.scheme_name || '').substring(0, 80).replace(/[^a-zA-Z0-9 ]/g, '')}`;
           const encryptedFolio = encryptPII(row.folio_number || '');
-          const purchaseDate = row.earliest_date ? new Date(row.earliest_date) : new Date();
+          const rawDate = row.earliest_date ? new Date(row.earliest_date) : new Date();
+          const purchaseDate = rawDate.toISOString().split('T')[0]; // DATE column needs YYYY-MM-DD
           const units = parseFloat(row.closing_balance) || 0;
           const avgNav = parseFloat(row.avg_nav) || 0;
           const totalInvested = parseFloat(row.total_invested) || 0;
