@@ -503,19 +503,24 @@ async function parseCASWithPython(pdfBuffer: Buffer, password?: string): Promise
           try {
             const result = JSON.parse(stdout);
             if (result.success) {
+              console.log(`[CAS] Python casparser succeeded: ${result.folios?.length || 0} folios`);
               resolve(result as ParsedCAS);
             } else {
+              console.log(`[CAS] Python casparser returned error: ${result.error}`);
               resolve(null);
             }
           } catch (e) {
+            console.log(`[CAS] Python casparser JSON parse failed: ${(e as Error).message}. stdout=${stdout.substring(0, 200)}`);
             resolve(null);
           }
         } else {
+          console.log(`[CAS] Python casparser exited code=${code} stderr=${stderr.substring(0, 300)}`);
           resolve(null);
         }
       });
       
       pythonProcess.on('error', (err) => {
+        console.log(`[CAS] Python spawn error: ${err.message}`);
         resolve(null);
       });
       
@@ -602,6 +607,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Fallback to JavaScript parser if Python fails
+    console.log('[CAS] Python casparser did not produce results, falling back to JS parser');
     
     let textContent = '';
     
@@ -638,6 +644,7 @@ export async function POST(request: NextRequest) {
     
     // Parse the CAS text using JS fallback parser
     const jsParsedData = parseCASText(textContent);
+    console.log(`[CAS] JS parser found ${jsParsedData.folios.length} folios. Names: ${jsParsedData.folios.slice(0, 3).map(f => f.schemeName?.substring(0, 40)).join('; ')}`);
 
     // Match scheme codes for each folio (pass ISIN if available)
     for (const folio of jsParsedData.folios) {
@@ -650,6 +657,7 @@ export async function POST(request: NextRequest) {
     }
 
     const jsMatched = jsParsedData.folios.filter(f => f.schemeCode).length;
+    console.log(`[CAS] JS parser matched ${jsMatched}/${jsParsedData.folios.length} folios to DB`);
 
     // Enrich with returns (XIRR, CAGR, absolute return) from our NAV DB
     await enrichWithReturns(jsParsedData.folios);
@@ -678,14 +686,23 @@ export async function POST(request: NextRequest) {
 // Filter: only keep mutual fund folios (skip stocks, bonds, insurance, debentures)
 function isMutualFund(folio: CASFolio): boolean {
   const name = (folio.schemeName || '').toLowerCase();
+  if (!name || name.length < 5) return false;
   const skipKeywords = ['equity share', 'debenture', 'bond', 'ncd', 'government securities',
-    'insurance', 'lic', 'sgb', 'sovereign gold', 'fixed deposit', 'national savings',
-    'ppf', 'epf', 'real estate', 'reit', 'invit'];
+    'insurance', 'lic ', 'sgb', 'sovereign gold', 'fixed deposit', 'national savings',
+    'ppf', 'epf', 'real estate', 'reit', 'invit', 'gold bond'];
   for (const kw of skipKeywords) {
     if (name.includes(kw)) return false;
   }
-  // Must have matched schemeCode (i.e. found in our MF database)
-  return !!folio.schemeCode;
+  // Accept if it has a schemeCode OR has a valid MF-like name with positive balance
+  if (folio.schemeCode) return true;
+  // MF-positive signals: fund house names, plan types, growth/dividend keywords
+  const mfSignals = ['fund', 'growth', 'direct', 'regular', 'dividend', 'idcw',
+    'flexi', 'cap', 'equity', 'debt', 'hybrid', 'liquid', 'overnight',
+    'gilt', 'index', 'nifty', 'sensex', 'balanced', 'advantage', 'savings',
+    'ultra short', 'money market', 'arbitrage', 'value', 'contra',
+    'focused', 'multi', 'large', 'mid', 'small', 'elss', 'tax'];
+  const hasMfSignal = mfSignals.some(s => name.includes(s));
+  return hasMfSignal && folio.closingBalance > 0;
 }
 
 // Detect SIP transactions from CAS data
@@ -824,9 +841,16 @@ export async function PUT(request: NextRequest) {
 
       let importedCount = 0;
       let errorCount = 0;
+      let errorDetails: string | null = null;
 
       for (const folio of mfFolios) {
         try {
+          // Last-chance scheme code match if still missing
+          if (!folio.schemeCode && folio.schemeName) {
+            const lastChance = await matchSchemeCode(folio.schemeName);
+            if (lastChance) folio.schemeCode = lastChance;
+          }
+
           // Calculate total invested and average NAV from transactions
           let totalInvested = 0;
           let earliestDate: Date | null = null;
@@ -854,10 +878,13 @@ export async function PUT(request: NextRequest) {
 
           const avgNav = folio.closingNav || (folio.closingBalance > 0 && totalInvested > 0 ? totalInvested / folio.closingBalance : 0);
 
-          // Check if holding already exists
+          // Use schemeCode if available, otherwise use a sanitized schemeName as identifier
+          const holdingKey = folio.schemeCode || `UNMATCHED:${folio.schemeName.substring(0, 80).replace(/[^a-zA-Z0-9 ]/g, '')}`;
+
+          // Check if holding already exists (by scheme_code or by scheme_name for unmatched)
           const existing = await client.query(
             `SELECT id FROM portfolio_holdings WHERE user_id = $1 AND scheme_code = $2`,
-            [user.id, folio.schemeCode]
+            [user.id, holdingKey]
           );
 
           // Encrypt PII before DB persistence (AES-256-GCM)
@@ -866,25 +893,29 @@ export async function PUT(request: NextRequest) {
           if (existing.rows.length > 0) {
             await client.query(
               `UPDATE portfolio_holdings 
-               SET units = $1, purchase_nav = $2, purchase_amount = $3, folio_number = $4, source = 'cas', updated_at = NOW()
+               SET units = $1, purchase_nav = $2, purchase_amount = $3, folio_number = $4, source = 'cas', updated_at = NOW(),
+                   notes = $6
                WHERE id = $5`,
-              [folio.closingBalance, avgNav, totalInvested, encryptedFolio, existing.rows[0].id]
+              [folio.closingBalance, avgNav, totalInvested, encryptedFolio, existing.rows[0].id,
+               `CAS Import - ${folio.amc} - ${folio.schemeName.substring(0, 60)}`]
             );
           } else {
             await client.query(
               `INSERT INTO portfolio_holdings (user_id, scheme_code, units, purchase_nav, purchase_date, purchase_amount, notes, source, folio_number)
                VALUES ($1, $2, $3, $4, $5, $6, $7, 'cas', $8)`,
-              [user.id, folio.schemeCode, folio.closingBalance, avgNav, 
+              [user.id, holdingKey, folio.closingBalance, avgNav, 
                earliestDate || new Date(), totalInvested,
-               `CAS Import - ${folio.amc}`,
+               `CAS Import - ${folio.amc} - ${folio.schemeName.substring(0, 60)}`,
                encryptedFolio]
             );
           }
 
           importedCount++;
         } catch (folioError) {
-          console.error(`Error importing holding for scheme_code ${folio.schemeCode}:`, folioError instanceof Error ? folioError.message : 'Unknown');
+          const folioErrMsg = folioError instanceof Error ? folioError.message : 'Unknown';
+          console.error(`[CAS-PUT] Error importing scheme_code=${folio.schemeCode} name=${folio.schemeName?.substring(0,40)}:`, folioErrMsg);
           errorCount++;
+          if (!errorDetails) errorDetails = folioErrMsg;
         }
       }
 
@@ -913,7 +944,7 @@ export async function PUT(request: NextRequest) {
         skipped: nonMfCount,
         errors: errorCount,
         sipCount: sipSaved,
-        message: `Imported ${importedCount} mutual fund holdings. ${sipSaved} SIPs detected. ${nonMfCount} non-MF items skipped.`
+        message: `Imported ${importedCount} mutual fund holdings. ${sipSaved} SIPs detected. ${nonMfCount} non-MF items skipped.${errorCount > 0 ? ` ${errorCount} errors: ${errorDetails}` : ''}`
       });
 
     } catch (error) {
