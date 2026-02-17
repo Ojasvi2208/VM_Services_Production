@@ -1,3 +1,28 @@
+/**
+ * CAS Import API — Gold-Standard Architecture
+ *
+ * KEY DESIGN: Server-side parse + stage + confirm. ZERO data round-trip through the app.
+ *
+ * POST /api/portfolio/import-cas
+ *   1. Receive PDF upload
+ *   2. Parse via Python casparser (primary) or JS fallback
+ *   3. Match every scheme to our funds DB (ISIN → AMFI code → name match)
+ *   4. Stage all holdings in `cas_import_staging` table with a unique importId
+ *   5. Return { importId, preview[] } — lightweight summary for the app to display
+ *   6. App NEVER receives raw folio data — only preview summaries
+ *
+ * PUT /api/portfolio/import-cas
+ *   1. Receive { importId } — literally 1 field, no folio data
+ *   2. Promote staged rows → portfolio_holdings (upsert by user_id + scheme_code)
+ *   3. Return { success, imported, skipped }
+ *
+ * This eliminates:
+ *   - Serialization loss (kotlinx.serialization dropping null fields)
+ *   - Data corruption in round-trip
+ *   - schemeCode mismatch between parse and save
+ *   - The entire class of bugs we've been fighting
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import pool from '@/lib/postgres-db';
@@ -8,6 +33,11 @@ import { spawn } from 'child_process';
 import { writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { randomUUID } from 'crypto';
+
+// ════════════════════════════════════════════════════════════════════
+//  Types
+// ════════════════════════════════════════════════════════════════════
 
 interface CASTransaction {
   date: string;
@@ -45,6 +75,16 @@ interface ParsedCAS {
     totalInvested: number;
     currentValue: number;
   };
+}
+
+// Preview item sent to the app (lightweight, no sensitive data)
+interface PreviewItem {
+  schemeName: string;
+  amc: string;
+  closingBalance: number;
+  closingValue: number;
+  matched: boolean;
+  schemeCode: string | null;
 }
 
 function parseCASText(text: string): ParsedCAS {
@@ -553,137 +593,77 @@ function sanitizeResponsePII(data: ParsedCAS): ParsedCAS {
   };
 }
 
-export async function POST(request: NextRequest) {
+// ════════════════════════════════════════════════════════════════════
+//  Ensure staging + holdings tables exist (idempotent, cached)
+// ════════════════════════════════════════════════════════════════════
+let tablesEnsured = false;
+async function ensureTables() {
+  if (tablesEnsured) return;
+  const client = await pool.connect();
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const formData = await request.formData();
-    const file = formData.get('casFile') as File;
-    const obfuscatedPassword = formData.get('password') as string;
-
-    if (!file) {
-      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
-    }
-
-    // Deobfuscate password if provided
-    const password = obfuscatedPassword ? deobfuscateFromTransport(obfuscatedPassword) : undefined;
-
-    // Convert file to buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    
-    // Try Python casparser first (more accurate for CAMS/KFINTECH)
-    let parsedData = await parseCASWithPython(buffer, password);
-    
-    if (parsedData && parsedData.folios && parsedData.folios.length > 0) {
-      
-      // Match scheme codes for each folio (pass ISIN if available from schemeCode field)
-      for (const folio of parsedData.folios) {
-        const existingCode = folio.schemeCode;
-        const isin = existingCode && existingCode.startsWith('INF') ? existingCode : undefined;
-        const schemeCode = await matchSchemeCode(folio.schemeName, isin);
-        if (schemeCode) {
-          folio.schemeCode = schemeCode;
-        }
-      }
-      
-      const matched = parsedData.folios.filter(f => f.schemeCode).length;
-
-      // Enrich with returns (XIRR, CAGR, absolute return) from our NAV DB
-      await enrichWithReturns(parsedData.folios);
-      
-      // Sanitize PII before sending to client (DPDP Act compliance)
-      const sanitizedData = sanitizeResponsePII(parsedData);
-      
-      return NextResponse.json({
-        success: true,
-        data: sanitizedData,
-        message: `Successfully parsed ${parsedData.folios.length} mutual fund holdings (${matched} matched)`,
-        parser: 'casparser'
-      });
-    }
-    
-    // Fallback to JavaScript parser if Python fails
-    console.log('[CAS] Python casparser did not produce results, falling back to JS parser');
-    
-    let textContent = '';
-    
-    try {
-      // Parse PDF server-side using unpdf (supports password-protected PDFs)
-      const pdf = await getDocumentProxy(new Uint8Array(buffer), { 
-        password: password || undefined 
-      });
-      const result = await extractText(pdf, { mergePages: true });
-      textContent = result.text;
-    } catch (pdfError) {
-      // Do not log pdfError — may contain raw PDF content or PAN
-      const errorMessage = pdfError instanceof Error ? pdfError.message : 'Unknown error';
-      
-      if (errorMessage.includes('password') || errorMessage.includes('encrypted') || errorMessage.includes('Incorrect Password')) {
-        return NextResponse.json({ 
-          error: 'This PDF is password protected. Please enter the correct password (usually your PAN like ABCDE1234F or DOB like 01011990).',
-          requiresPassword: true 
-        }, { status: 400 });
-      }
-      
-      return NextResponse.json({ 
-        error: 'Could not parse PDF. Please ensure the file is a valid CAS statement.',
-        details: errorMessage
-      }, { status: 400 });
-    }
-    
-    if (!textContent || textContent.trim().length < 100) {
-      return NextResponse.json({ 
-        error: 'Could not extract text from PDF. The file may be scanned or image-based. Please use a text-based CAS PDF.',
-      }, { status: 400 });
-    }
-
-    
-    // Parse the CAS text using JS fallback parser
-    const jsParsedData = parseCASText(textContent);
-    console.log(`[CAS] JS parser found ${jsParsedData.folios.length} folios. Names: ${jsParsedData.folios.slice(0, 3).map(f => f.schemeName?.substring(0, 40)).join('; ')}`);
-
-    // Match scheme codes for each folio (pass ISIN if available)
-    for (const folio of jsParsedData.folios) {
-      const existingCode = folio.schemeCode;
-      const isin = existingCode && existingCode.startsWith('INF') ? existingCode : undefined;
-      const schemeCode = await matchSchemeCode(folio.schemeName, isin);
-      if (schemeCode) {
-        folio.schemeCode = schemeCode;
-      }
-    }
-
-    const jsMatched = jsParsedData.folios.filter(f => f.schemeCode).length;
-    console.log(`[CAS] JS parser matched ${jsMatched}/${jsParsedData.folios.length} folios to DB`);
-
-    // Enrich with returns (XIRR, CAGR, absolute return) from our NAV DB
-    await enrichWithReturns(jsParsedData.folios);
-
-    // Wipe raw PDF text from memory — PAN was only used ephemerally for decryption
-    textContent = '';
-
-    // Sanitize PII before sending to client (DPDP Act compliance)
-    const sanitizedJsData = sanitizeResponsePII(jsParsedData);
-
-    return NextResponse.json({
-      success: true,
-      data: sanitizedJsData,
-      message: `Successfully parsed ${jsParsedData.folios.length} mutual fund holdings (${jsMatched} matched)`,
-      parser: 'javascript'
-    });
-
-  } catch (error) {
-    return NextResponse.json({ 
-      error: 'Failed to parse CAS statement',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cas_import_staging (
+        id SERIAL PRIMARY KEY,
+        import_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        scheme_name TEXT NOT NULL,
+        scheme_code TEXT,
+        amc TEXT,
+        folio_number TEXT,
+        registrar TEXT,
+        closing_balance NUMERIC DEFAULT 0,
+        closing_nav NUMERIC DEFAULT 0,
+        closing_value NUMERIC DEFAULT 0,
+        cost_value NUMERIC DEFAULT 0,
+        total_invested NUMERIC DEFAULT 0,
+        earliest_date TIMESTAMP,
+        avg_nav NUMERIC DEFAULT 0,
+        is_mf BOOLEAN DEFAULT TRUE,
+        transactions_json JSONB DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS portfolio_holdings (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        scheme_code TEXT NOT NULL,
+        units NUMERIC DEFAULT 0,
+        purchase_nav NUMERIC DEFAULT 0,
+        purchase_date TIMESTAMP DEFAULT NOW(),
+        purchase_amount NUMERIC DEFAULT 0,
+        notes TEXT,
+        source TEXT DEFAULT 'manual',
+        folio_number TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cas_sip_info (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        scheme_code TEXT,
+        scheme_name TEXT NOT NULL,
+        sip_amount NUMERIC DEFAULT 0,
+        frequency TEXT DEFAULT 'Monthly',
+        last_sip_date TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    // Index for fast import confirmation
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_staging_import_id ON cas_import_staging(import_id)
+    `);
+    tablesEnsured = true;
+  } finally {
+    client.release();
   }
 }
 
-// Filter: only keep mutual fund folios (skip stocks, bonds, insurance, debentures)
+// ════════════════════════════════════════════════════════════════════
+//  Filter: only keep mutual fund folios
+// ════════════════════════════════════════════════════════════════════
 function isMutualFund(folio: CASFolio): boolean {
   const name = (folio.schemeName || '').toLowerCase();
   if (!name || name.length < 5) return false;
@@ -693,47 +673,205 @@ function isMutualFund(folio: CASFolio): boolean {
   for (const kw of skipKeywords) {
     if (name.includes(kw)) return false;
   }
-  // Accept if it has a schemeCode OR has a valid MF-like name with positive balance
   if (folio.schemeCode) return true;
-  // MF-positive signals: fund house names, plan types, growth/dividend keywords
   const mfSignals = ['fund', 'growth', 'direct', 'regular', 'dividend', 'idcw',
     'flexi', 'cap', 'equity', 'debt', 'hybrid', 'liquid', 'overnight',
     'gilt', 'index', 'nifty', 'sensex', 'balanced', 'advantage', 'savings',
     'ultra short', 'money market', 'arbitrage', 'value', 'contra',
     'focused', 'multi', 'large', 'mid', 'small', 'elss', 'tax'];
-  const hasMfSignal = mfSignals.some(s => name.includes(s));
-  return hasMfSignal && folio.closingBalance > 0;
+  return mfSignals.some(s => name.includes(s)) && folio.closingBalance > 0;
 }
 
-// Detect SIP transactions from CAS data
-function extractSIPInfo(folios: CASFolio[]): Array<{
-  schemeName: string; schemeCode: string | undefined; sipAmount: number; frequency: string; lastDate: string;
-}> {
-  const sips: Array<{ schemeName: string; schemeCode: string | undefined; sipAmount: number; frequency: string; lastDate: string }> = [];
-  for (const folio of folios) {
-    const sipTxns = (folio.transactions || []).filter(t => 
-      t.type === 'SIP' || t.description?.toLowerCase().includes('systematic') || t.description?.toLowerCase().includes('sip')
-    );
-    if (sipTxns.length >= 2) {
-      // Find most common amount (the SIP installment)
-      const amounts = sipTxns.map(t => Math.round(Math.abs(t.amount)));
-      const freq: Record<number, number> = {};
-      for (const a of amounts) freq[a] = (freq[a] || 0) + 1;
-      const sipAmount = Number(Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0]);
-      const lastSip = sipTxns[sipTxns.length - 1];
-      sips.push({
-        schemeName: folio.schemeName,
-        schemeCode: folio.schemeCode,
-        sipAmount,
-        frequency: 'Monthly',
-        lastDate: lastSip.date
-      });
+// ════════════════════════════════════════════════════════════════════
+//  POST — Parse PDF, match codes, stage in DB, return importId + preview
+//  The app NEVER receives raw folio data. Only a preview summary.
+// ════════════════════════════════════════════════════════════════════
+export async function POST(request: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    await ensureTables();
+
+    const formData = await request.formData();
+    const file = formData.get('casFile') as File;
+    const obfuscatedPassword = formData.get('password') as string;
+
+    if (!file) {
+      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+    }
+
+    const password = obfuscatedPassword ? deobfuscateFromTransport(obfuscatedPassword) : undefined;
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // ── Step 1: Parse PDF (Python casparser primary, JS fallback) ──
+    let parsedData: ParsedCAS | null = null;
+    let parser = 'unknown';
+
+    // Try Python casparser first
+    parsedData = await parseCASWithPython(buffer, password);
+    if (parsedData && parsedData.folios && parsedData.folios.length > 0) {
+      parser = 'casparser';
+      console.log(`[CAS] Python casparser: ${parsedData.folios.length} folios`);
+    } else {
+      // Fallback to JS parser
+      console.log('[CAS] Python casparser unavailable, falling back to JS parser');
+      let textContent = '';
+      try {
+        const pdf = await getDocumentProxy(new Uint8Array(buffer), { password: password || undefined });
+        const result = await extractText(pdf, { mergePages: true });
+        textContent = result.text;
+      } catch (pdfError) {
+        const errorMessage = pdfError instanceof Error ? pdfError.message : 'Unknown error';
+        if (errorMessage.includes('password') || errorMessage.includes('encrypted') || errorMessage.includes('Incorrect Password')) {
+          return NextResponse.json({
+            error: 'This PDF is password protected. Please enter the correct password (usually your PAN like ABCDE1234F or DOB like 01011990).',
+            requiresPassword: true
+          }, { status: 400 });
+        }
+        return NextResponse.json({ error: 'Could not parse PDF.', details: errorMessage }, { status: 400 });
+      }
+      if (!textContent || textContent.trim().length < 100) {
+        return NextResponse.json({ error: 'Could not extract text from PDF. The file may be scanned or image-based.' }, { status: 400 });
+      }
+      parsedData = parseCASText(textContent);
+      parser = 'javascript';
+      console.log(`[CAS] JS parser: ${parsedData.folios.length} folios`);
+    }
+
+    if (!parsedData || parsedData.folios.length === 0) {
+      return NextResponse.json({ error: 'No holdings found in the CAS statement.' }, { status: 400 });
+    }
+
+    // ── Step 2: Match every scheme to our funds DB ──
+    for (const folio of parsedData.folios) {
+      const existingCode = folio.schemeCode;
+      const isin = existingCode && existingCode.startsWith('INF') ? existingCode : undefined;
+      // Try AMFI code match first (from casparser), then ISIN, then name
+      const amfiCode = existingCode && /^\d{5,6}$/.test(existingCode) ? existingCode : undefined;
+      if (amfiCode) {
+        // Verify it exists in our DB
+        const verify = await pool.query(`SELECT scheme_code FROM funds WHERE scheme_code = $1 LIMIT 1`, [amfiCode]);
+        if (verify.rows.length > 0) {
+          folio.schemeCode = amfiCode;
+          continue;
+        }
+      }
+      const matched = await matchSchemeCode(folio.schemeName, isin);
+      if (matched) folio.schemeCode = matched;
+    }
+
+    const matchedCount = parsedData.folios.filter(f => !!f.schemeCode).length;
+    console.log(`[CAS] Matched ${matchedCount}/${parsedData.folios.length} folios to DB`);
+
+    // ── Step 3: Filter MF folios and compute financials ──
+    const mfFolios = parsedData.folios.filter(isMutualFund);
+    const nonMfCount = parsedData.folios.length - mfFolios.length;
+
+    // ── Step 4: Stage all MF holdings in DB with a unique importId ──
+    const importId = randomUUID();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Clear any previous pending imports for this user (only keep latest)
+      await client.query(`DELETE FROM cas_import_staging WHERE user_id = $1`, [user.id]);
+
+      for (const folio of mfFolios) {
+        // Compute financials from transactions
+        let totalInvested = 0;
+        let earliestDate: Date | null = null;
+        const txns = Array.isArray(folio.transactions) ? folio.transactions : [];
+        for (const tx of txns) {
+          if (tx.type === 'BUY' || tx.type === 'SIP' || tx.type === 'SWITCH_IN') {
+            totalInvested += Math.abs(tx.amount);
+            try {
+              const txDate = new Date(tx.date);
+              if (!isNaN(txDate.getTime()) && (!earliestDate || txDate < earliestDate)) {
+                earliestDate = txDate;
+              }
+            } catch { /* skip */ }
+          }
+        }
+        if (totalInvested === 0 && folio.costValue) totalInvested = folio.costValue;
+        if (totalInvested === 0 && folio.closingNav && folio.closingBalance) {
+          totalInvested = folio.closingBalance * folio.closingNav;
+        }
+        const avgNav = folio.closingNav || (folio.closingBalance > 0 && totalInvested > 0 ? totalInvested / folio.closingBalance : 0);
+        const closingValue = folio.closingValue || (folio.closingBalance * (folio.closingNav || 0));
+
+        await client.query(
+          `INSERT INTO cas_import_staging
+            (import_id, user_id, scheme_name, scheme_code, amc, folio_number, registrar,
+             closing_balance, closing_nav, closing_value, cost_value, total_invested,
+             earliest_date, avg_nav, is_mf, transactions_json)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+          [importId, user.id, folio.schemeName, folio.schemeCode || null,
+           folio.amc, folio.folioNumber, folio.registrar || '',
+           folio.closingBalance, folio.closingNav || 0, closingValue,
+           folio.costValue || 0, totalInvested,
+           earliestDate, avgNav, true,
+           JSON.stringify(txns)]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (stageErr) {
+      await client.query('ROLLBACK');
+      throw stageErr;
+    } finally {
+      client.release();
+    }
+
+    console.log(`[CAS] Staged ${mfFolios.length} MF holdings under importId=${importId}`);
+
+    // ── Step 5: Build preview for the app (lightweight, no sensitive data) ──
+    const preview: PreviewItem[] = mfFolios.map(f => ({
+      schemeName: f.schemeName,
+      amc: f.amc,
+      closingBalance: f.closingBalance,
+      closingValue: f.closingValue || (f.closingBalance * (f.closingNav || 0)),
+      matched: !!f.schemeCode,
+      schemeCode: f.schemeCode || null,
+    }));
+
+    const totalValue = preview.reduce((s, p) => s + p.closingValue, 0);
+
+    return NextResponse.json({
+      success: true,
+      importId,
+      parser,
+      data: {
+        investorName: maskName(parsedData.investorName),
+        email: maskEmail(parsedData.email),
+        pan: maskPAN(parsedData.pan),
+        folios: preview,
+        summary: {
+          totalFolios: new Set(mfFolios.map(f => f.folioNumber)).size,
+          totalSchemes: mfFolios.length,
+          totalInvested: parsedData.summary.totalInvested,
+          currentValue: totalValue,
+        }
+      },
+      message: `Parsed ${mfFolios.length} mutual fund holdings (${matchedCount} matched). ${nonMfCount} non-MF items skipped.`,
+    });
+
+  } catch (error) {
+    console.error('[CAS-POST] Error:', error instanceof Error ? error.message : error);
+    return NextResponse.json({
+      error: 'Failed to parse CAS statement',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
-  return sips;
 }
 
-// Save parsed holdings to database
+// ════════════════════════════════════════════════════════════════════
+//  PUT — Confirm import: promote staged rows → portfolio_holdings
+//  Request body: { importId } — that's it. ZERO folio data.
+// ════════════════════════════════════════════════════════════════════
 export async function PUT(request: NextRequest) {
   try {
     const user = await getCurrentUser();
@@ -741,210 +879,116 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    await ensureTables();
+
     let body: any;
     try {
       body = await request.json();
-    } catch (parseErr) {
-      return NextResponse.json({ error: 'Invalid JSON body', details: parseErr instanceof Error ? parseErr.message : 'parse error' }, { status: 400 });
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const folios: CASFolio[] = Array.isArray(body.folios) ? body.folios : [];
-    const investorInfo = body.investorInfo as { pan?: string; email?: string } | undefined;
-
-    console.log('[CAS-PUT] Received', folios.length, 'folios. Body keys:', Object.keys(body).join(', '));
-    if (folios.length > 0) {
-      const sample = folios[0];
-      console.log('[CAS-PUT] Sample folio keys:', Object.keys(sample).join(', '));
-      console.log('[CAS-PUT] Sample folio:', JSON.stringify({
-        schemeName: sample.schemeName?.substring(0, 50),
-        schemeCode: sample.schemeCode,
-        closingBalance: sample.closingBalance,
-        hasTransactions: Array.isArray(sample.transactions) ? sample.transactions.length : 'none'
-      }));
+    const importId = body.importId as string;
+    if (!importId) {
+      return NextResponse.json({ error: 'Missing importId' }, { status: 400 });
     }
 
-    if (folios.length === 0) {
-      return NextResponse.json({ error: 'No holdings to import', details: `body keys: ${Object.keys(body).join(', ')}` }, { status: 400 });
+    // Fetch staged holdings for this user + importId
+    const staged = await pool.query(
+      `SELECT * FROM cas_import_staging WHERE import_id = $1 AND user_id = $2 AND is_mf = TRUE ORDER BY id`,
+      [importId, user.id]
+    );
+
+    if (staged.rows.length === 0) {
+      return NextResponse.json({ error: 'No staged import found. Please re-upload your CAS statement.' }, { status: 404 });
     }
 
-    // Re-match scheme codes for folios that lost them in the round-trip
-    let reMatchCount = 0;
-    for (const folio of folios) {
-      if (!folio.schemeCode && folio.schemeName) {
-        const matched = await matchSchemeCode(folio.schemeName);
-        if (matched) {
-          folio.schemeCode = matched;
-          reMatchCount++;
-        }
-      }
-    }
-    const withCodeBefore = folios.filter(f => !!f.schemeCode).length;
-    console.log('[CAS-PUT] After re-match:', withCodeBefore, 'have schemeCode,', reMatchCount, 're-matched');
-
-    // Filter only mutual funds
-    const mfFolios = folios.filter(isMutualFund);
-    const nonMfCount = folios.length - mfFolios.length;
-    
-    // Extract SIP info before filtering
-    const sipInfo = extractSIPInfo(folios);
-
-    if (mfFolios.length === 0) {
-      const withCode = folios.filter(f => !!f.schemeCode).length;
-      const sampleFolios = folios.slice(0, 3).map(f => ({
-        name: f.schemeName?.substring(0, 50) || 'no-name',
-        code: f.schemeCode || 'null',
-        bal: f.closingBalance
-      }));
-      const debugMsg = `${folios.length} folios received, ${withCode} had schemeCode after re-match. Samples: ${JSON.stringify(sampleFolios)}`;
-      console.log('[CAS-PUT] 0 MF folios passed filter.', debugMsg);
-      return NextResponse.json({ 
-        success: true, imported: 0, skipped: folios.length, sipCount: 0,
-        message: debugMsg
-      });
-    }
+    console.log(`[CAS-PUT] Confirming import ${importId}: ${staged.rows.length} staged holdings`);
 
     const client = await pool.connect();
+    let importedCount = 0;
+    let errorCount = 0;
+
     try {
       await client.query('BEGIN');
 
-      // Ensure portfolio_holdings table exists
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS portfolio_holdings (
-          id SERIAL PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          scheme_code TEXT NOT NULL,
-          units NUMERIC DEFAULT 0,
-          purchase_nav NUMERIC DEFAULT 0,
-          purchase_date TIMESTAMP DEFAULT NOW(),
-          purchase_amount NUMERIC DEFAULT 0,
-          notes TEXT,
-          source TEXT DEFAULT 'manual',
-          folio_number TEXT,
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
-        )
-      `);
-
-      // Ensure cas_sip_info table exists
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS cas_sip_info (
-          id SERIAL PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          scheme_code TEXT,
-          scheme_name TEXT NOT NULL,
-          sip_amount NUMERIC DEFAULT 0,
-          frequency TEXT DEFAULT 'Monthly',
-          last_sip_date TEXT,
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `);
-
-      let importedCount = 0;
-      let errorCount = 0;
-      let errorDetails: string | null = null;
-
-      for (const folio of mfFolios) {
+      for (const row of staged.rows) {
         try {
-          // Last-chance scheme code match if still missing
-          if (!folio.schemeCode && folio.schemeName) {
-            const lastChance = await matchSchemeCode(folio.schemeName);
-            if (lastChance) folio.schemeCode = lastChance;
-          }
+          const schemeCode = row.scheme_code;
+          const holdingKey = schemeCode || `UNMATCHED:${(row.scheme_name || '').substring(0, 80).replace(/[^a-zA-Z0-9 ]/g, '')}`;
+          const encryptedFolio = encryptPII(row.folio_number || '');
 
-          // Calculate total invested and average NAV from transactions
-          let totalInvested = 0;
-          let earliestDate: Date | null = null;
-
-          const txns = Array.isArray(folio.transactions) ? folio.transactions : [];
-          for (const tx of txns) {
-            if (tx.type === 'BUY' || tx.type === 'SIP' || tx.type === 'SWITCH_IN') {
-              totalInvested += Math.abs(tx.amount);
-              try {
-                const txDate = new Date(tx.date);
-                if (!isNaN(txDate.getTime()) && (!earliestDate || txDate < earliestDate)) {
-                  earliestDate = txDate;
-                }
-              } catch { /* skip bad dates */ }
-            }
-          }
-
-          // Use closingNav * closingBalance as invested if no transactions
-          if (totalInvested === 0 && folio.costValue) {
-            totalInvested = folio.costValue;
-          }
-          if (totalInvested === 0 && folio.closingNav && folio.closingBalance) {
-            totalInvested = folio.closingBalance * folio.closingNav;
-          }
-
-          const avgNav = folio.closingNav || (folio.closingBalance > 0 && totalInvested > 0 ? totalInvested / folio.closingBalance : 0);
-
-          // Use schemeCode if available, otherwise use a sanitized schemeName as identifier
-          const holdingKey = folio.schemeCode || `UNMATCHED:${folio.schemeName.substring(0, 80).replace(/[^a-zA-Z0-9 ]/g, '')}`;
-
-          // Check if holding already exists (by scheme_code or by scheme_name for unmatched)
+          // Upsert: update if exists, insert if not
           const existing = await client.query(
             `SELECT id FROM portfolio_holdings WHERE user_id = $1 AND scheme_code = $2`,
             [user.id, holdingKey]
           );
 
-          // Encrypt PII before DB persistence (AES-256-GCM)
-          const encryptedFolio = encryptPII(folio.folioNumber);
-
           if (existing.rows.length > 0) {
             await client.query(
-              `UPDATE portfolio_holdings 
-               SET units = $1, purchase_nav = $2, purchase_amount = $3, folio_number = $4, source = 'cas', updated_at = NOW(),
-                   notes = $6
+              `UPDATE portfolio_holdings
+               SET units = $1, purchase_nav = $2, purchase_amount = $3, folio_number = $4,
+                   source = 'cas', updated_at = NOW(), notes = $6
                WHERE id = $5`,
-              [folio.closingBalance, avgNav, totalInvested, encryptedFolio, existing.rows[0].id,
-               `CAS Import - ${folio.amc} - ${folio.schemeName.substring(0, 60)}`]
+              [row.closing_balance, row.avg_nav, row.total_invested, encryptedFolio,
+               existing.rows[0].id, `CAS Import - ${row.amc || ''} - ${(row.scheme_name || '').substring(0, 60)}`]
             );
           } else {
             await client.query(
-              `INSERT INTO portfolio_holdings (user_id, scheme_code, units, purchase_nav, purchase_date, purchase_amount, notes, source, folio_number)
+              `INSERT INTO portfolio_holdings
+                (user_id, scheme_code, units, purchase_nav, purchase_date, purchase_amount, notes, source, folio_number)
                VALUES ($1, $2, $3, $4, $5, $6, $7, 'cas', $8)`,
-              [user.id, holdingKey, folio.closingBalance, avgNav, 
-               earliestDate || new Date(), totalInvested,
-               `CAS Import - ${folio.amc} - ${folio.schemeName.substring(0, 60)}`,
+              [user.id, holdingKey, row.closing_balance, row.avg_nav,
+               row.earliest_date || new Date(), row.total_invested,
+               `CAS Import - ${row.amc || ''} - ${(row.scheme_name || '').substring(0, 60)}`,
                encryptedFolio]
             );
           }
-
           importedCount++;
-        } catch (folioError) {
-          const folioErrMsg = folioError instanceof Error ? folioError.message : 'Unknown';
-          console.error(`[CAS-PUT] Error importing scheme_code=${folio.schemeCode} name=${folio.schemeName?.substring(0,40)}:`, folioErrMsg);
+        } catch (rowErr) {
+          console.error(`[CAS-PUT] Error saving ${row.scheme_name?.substring(0, 40)}:`, rowErr instanceof Error ? rowErr.message : rowErr);
           errorCount++;
-          if (!errorDetails) errorDetails = folioErrMsg;
         }
       }
 
-      // Save SIP info
+      // Extract and save SIP info from staged transactions
       let sipSaved = 0;
-      if (sipInfo.length > 0) {
-        // Clear old SIP data for this user
-        await client.query(`DELETE FROM cas_sip_info WHERE user_id = $1`, [user.id]);
-        for (const sip of sipInfo) {
-          try {
+      await client.query(`DELETE FROM cas_sip_info WHERE user_id = $1`, [user.id]);
+      for (const row of staged.rows) {
+        try {
+          const txns = row.transactions_json || [];
+          const sipTxns = txns.filter((t: any) =>
+            t.type === 'SIP' || (t.description || '').toLowerCase().includes('systematic') || (t.description || '').toLowerCase().includes('sip')
+          );
+          if (sipTxns.length >= 2) {
+            const amounts = sipTxns.map((t: any) => Math.round(Math.abs(t.amount || 0)));
+            const freq: Record<number, number> = {};
+            for (const a of amounts) freq[a] = (freq[a] || 0) + 1;
+            const sipAmount = Number(Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0]);
+            const lastSip = sipTxns[sipTxns.length - 1];
             await client.query(
               `INSERT INTO cas_sip_info (user_id, scheme_code, scheme_name, sip_amount, frequency, last_sip_date)
                VALUES ($1, $2, $3, $4, $5, $6)`,
-              [user.id, sip.schemeCode || null, sip.schemeName, sip.sipAmount, sip.frequency, sip.lastDate]
+              [user.id, row.scheme_code || null, row.scheme_name, sipAmount, 'Monthly', lastSip.date || '']
             );
             sipSaved++;
-          } catch { /* skip */ }
-        }
+          }
+        } catch { /* skip SIP extraction errors */ }
       }
 
+      // Clean up staging data after successful commit
+      await client.query(`DELETE FROM cas_import_staging WHERE import_id = $1`, [importId]);
+
       await client.query('COMMIT');
+
+      console.log(`[CAS-PUT] Import complete: ${importedCount} imported, ${errorCount} errors, ${sipSaved} SIPs`);
 
       return NextResponse.json({
         success: true,
         imported: importedCount,
-        skipped: nonMfCount,
-        errors: errorCount,
+        skipped: errorCount,
         sipCount: sipSaved,
-        message: `Imported ${importedCount} mutual fund holdings. ${sipSaved} SIPs detected. ${nonMfCount} non-MF items skipped.${errorCount > 0 ? ` ${errorCount} errors: ${errorDetails}` : ''}`
+        message: `Imported ${importedCount} mutual fund holdings. ${sipSaved} SIPs detected.${errorCount > 0 ? ` ${errorCount} failed.` : ''}`
       });
 
     } catch (error) {
@@ -956,12 +1000,10 @@ export async function PUT(request: NextRequest) {
 
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : 'Unknown';
-    const errStack = error instanceof Error ? error.stack?.split('\n').slice(0, 3).join(' | ') : '';
-    console.error('Save holdings error:', errMsg, errStack);
-    return NextResponse.json({ 
+    console.error('[CAS-PUT] Error:', errMsg);
+    return NextResponse.json({
       error: 'Failed to save holdings',
-      details: errMsg,
-      trace: errStack
+      details: errMsg
     }, { status: 500 });
   }
 }
