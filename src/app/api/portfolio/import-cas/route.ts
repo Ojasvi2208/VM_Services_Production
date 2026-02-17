@@ -648,6 +648,7 @@ async function ensureTables() {
       `ALTER TABLE portfolio_holdings ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual'`,
       `ALTER TABLE portfolio_holdings ADD COLUMN IF NOT EXISTS folio_number TEXT`,
       `ALTER TABLE portfolio_holdings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`,
+      `ALTER TABLE portfolio_holdings ADD COLUMN IF NOT EXISTS scheme_name TEXT`,
     ];
     for (const sql of alterations) {
       try { await client.query(sql); } catch { /* column may already exist */ }
@@ -1062,22 +1063,24 @@ export async function PUT(request: NextRequest) {
             [user.id, holdingKey]
           );
 
+          const schemeName = (row.scheme_name || '').substring(0, 200);
+
           if (existing.rows.length > 0) {
             await client.query(
               `UPDATE portfolio_holdings
                SET units = $1, purchase_nav = $2, purchase_amount = $3, folio_number = $4,
-                   source = 'cas', updated_at = NOW(), notes = $6
+                   source = 'cas', updated_at = NOW(), notes = $6, scheme_name = $7
                WHERE id = $5`,
               [units, avgNav, totalInvested, encryptedFolio,
-               existing.rows[0].id, notes]
+               existing.rows[0].id, notes, schemeName]
             );
           } else {
             await client.query(
               `INSERT INTO portfolio_holdings
-                (user_id, scheme_code, units, purchase_nav, purchase_date, purchase_amount, notes, source, folio_number)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, 'cas', $8)`,
+                (user_id, scheme_code, units, purchase_nav, purchase_date, purchase_amount, notes, source, folio_number, scheme_name)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, 'cas', $8, $9)`,
               [user.id, holdingKey, units, avgNav,
-               purchaseDate, totalInvested, notes, encryptedFolio]
+               purchaseDate, totalInvested, notes, encryptedFolio, schemeName]
             );
           }
 

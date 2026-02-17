@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
     const client = await pool.connect();
     
     try {
+      // Primary: JOIN on scheme_code (AMFI numeric code)
+      // Fallback: JOIN on ISIN columns (for NSDL CAS imports that store ISIN as scheme_code)
       const result = await client.query(`
         SELECT 
           ph.id,
@@ -22,14 +24,18 @@ export async function GET(request: NextRequest) {
           ph.purchase_date,
           ph.purchase_amount,
           ph.notes,
-          f.scheme_name,
-          f.latest_nav as current_nav,
-          fr.return_1y,
-          fr.cagr_3y,
-          fr.cagr_5y
+          ph.source,
+          COALESCE(f.scheme_name, f_isin.scheme_name, ph.scheme_name) as resolved_name,
+          COALESCE(f.latest_nav, f_isin.latest_nav) as current_nav,
+          COALESCE(f.scheme_code, f_isin.scheme_code) as resolved_scheme_code,
+          COALESCE(fr.return_1y, fr_isin.return_1y) as return_1y,
+          COALESCE(fr.cagr_3y, fr_isin.cagr_3y) as cagr_3y,
+          COALESCE(fr.cagr_5y, fr_isin.cagr_5y) as cagr_5y
         FROM portfolio_holdings ph
         LEFT JOIN funds f ON ph.scheme_code = f.scheme_code
-        LEFT JOIN fund_returns fr ON ph.scheme_code = fr.scheme_code
+        LEFT JOIN funds f_isin ON (f.scheme_code IS NULL AND (f_isin.isin_growth = ph.scheme_code OR f_isin.isin_div_reinvestment = ph.scheme_code))
+        LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
+        LEFT JOIN fund_returns fr_isin ON (f.scheme_code IS NULL AND f_isin.scheme_code = fr_isin.scheme_code)
         WHERE ph.user_id = $1
         ORDER BY ph.created_at DESC
       `, [user.id]);
@@ -37,19 +43,40 @@ export async function GET(request: NextRequest) {
       const holdings = result.rows.map(row => {
         const units = parseFloat(row.units) || 0;
         const purchaseNav = parseFloat(row.purchase_nav) || 0;
-        const currentNav = parseFloat(row.current_nav) || purchaseNav;
+        const currentNav = parseFloat(row.current_nav) || 0;
         const purchaseAmount = parseFloat(row.purchase_amount) || 0;
-        const currentValue = units * currentNav;
+
+        // If we have a live NAV from the DB, use it for current value
+        // Otherwise, for CAS imports, use purchaseAmount as currentValue (CAS closing_value was stored as purchase_amount)
+        let currentValue: number;
+        if (currentNav > 0) {
+          currentValue = units * currentNav;
+        } else if (row.source === 'cas') {
+          // CAS import: purchase_amount = total_invested, no live NAV available
+          // Use purchase_amount as approximate current value (better than units * bogus NAV)
+          currentValue = purchaseAmount;
+        } else {
+          currentValue = units * purchaseNav;
+        }
+
         const returns = currentValue - purchaseAmount;
         const returnsPercentage = purchaseAmount > 0 ? (returns / purchaseAmount) * 100 : 0;
 
+        // Extract display name: resolved from funds table, or from notes (CAS Import - AMC - SchemeName)
+        let schemeName = row.resolved_name;
+        if (!schemeName && row.notes) {
+          const notesMatch = row.notes.match(/^CAS Import - (?:.*? - )?(.+)$/);
+          if (notesMatch) schemeName = notesMatch[1].trim();
+        }
+        if (!schemeName) schemeName = `Fund ${row.scheme_code}`;
+
         return {
           id: row.id,
-          schemeCode: row.scheme_code,
-          schemeName: row.scheme_name || `Fund ${row.scheme_code}`,
+          schemeCode: row.resolved_scheme_code || row.scheme_code,
+          schemeName,
           units,
           purchaseNav,
-          currentNav,
+          currentNav: currentNav || purchaseNav,
           purchaseAmount,
           currentValue: Math.round(currentValue * 100) / 100,
           returns: Math.round(returns * 100) / 100,
