@@ -912,8 +912,12 @@ export async function PUT(request: NextRequest) {
     try {
       await client.query('BEGIN');
 
-      for (const row of staged.rows) {
+      for (let i = 0; i < staged.rows.length; i++) {
+        const row = staged.rows[i];
+        const sp = `sp_row_${i}`;
         try {
+          await client.query(`SAVEPOINT ${sp}`);
+
           const schemeCode = row.scheme_code;
           const holdingKey = schemeCode || `UNMATCHED:${(row.scheme_name || '').substring(0, 80).replace(/[^a-zA-Z0-9 ]/g, '')}`;
           const encryptedFolio = encryptPII(row.folio_number || '');
@@ -944,8 +948,12 @@ export async function PUT(request: NextRequest) {
                encryptedFolio]
             );
           }
+
+          await client.query(`RELEASE SAVEPOINT ${sp}`);
           importedCount++;
         } catch (rowErr) {
+          // Rollback just this row — transaction stays alive for remaining rows
+          await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
           console.error(`[CAS-PUT] Error saving ${row.scheme_name?.substring(0, 40)}:`, rowErr instanceof Error ? rowErr.message : rowErr);
           errorCount++;
         }
@@ -953,27 +961,34 @@ export async function PUT(request: NextRequest) {
 
       // Extract and save SIP info from staged transactions
       let sipSaved = 0;
-      await client.query(`DELETE FROM cas_sip_info WHERE user_id = $1`, [user.id]);
-      for (const row of staged.rows) {
-        try {
-          const txns = row.transactions_json || [];
-          const sipTxns = txns.filter((t: any) =>
-            t.type === 'SIP' || (t.description || '').toLowerCase().includes('systematic') || (t.description || '').toLowerCase().includes('sip')
-          );
-          if (sipTxns.length >= 2) {
-            const amounts = sipTxns.map((t: any) => Math.round(Math.abs(t.amount || 0)));
-            const freq: Record<number, number> = {};
-            for (const a of amounts) freq[a] = (freq[a] || 0) + 1;
-            const sipAmount = Number(Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0]);
-            const lastSip = sipTxns[sipTxns.length - 1];
-            await client.query(
-              `INSERT INTO cas_sip_info (user_id, scheme_code, scheme_name, sip_amount, frequency, last_sip_date)
-               VALUES ($1, $2, $3, $4, $5, $6)`,
-              [user.id, row.scheme_code || null, row.scheme_name, sipAmount, 'Monthly', lastSip.date || '']
+      try {
+        await client.query(`SAVEPOINT sp_sip`);
+        await client.query(`DELETE FROM cas_sip_info WHERE user_id = $1`, [user.id]);
+        for (const row of staged.rows) {
+          try {
+            const txns = row.transactions_json || [];
+            const sipTxns = txns.filter((t: any) =>
+              t.type === 'SIP' || (t.description || '').toLowerCase().includes('systematic') || (t.description || '').toLowerCase().includes('sip')
             );
-            sipSaved++;
-          }
-        } catch { /* skip SIP extraction errors */ }
+            if (sipTxns.length >= 2) {
+              const amounts = sipTxns.map((t: any) => Math.round(Math.abs(t.amount || 0)));
+              const freq: Record<number, number> = {};
+              for (const a of amounts) freq[a] = (freq[a] || 0) + 1;
+              const sipAmount = Number(Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0]);
+              const lastSip = sipTxns[sipTxns.length - 1];
+              await client.query(
+                `INSERT INTO cas_sip_info (user_id, scheme_code, scheme_name, sip_amount, frequency, last_sip_date)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [user.id, row.scheme_code || null, row.scheme_name, sipAmount, 'Monthly', lastSip.date || '']
+              );
+              sipSaved++;
+            }
+          } catch { /* skip individual SIP errors */ }
+        }
+        await client.query(`RELEASE SAVEPOINT sp_sip`);
+      } catch {
+        await client.query(`ROLLBACK TO SAVEPOINT sp_sip`);
+        console.log('[CAS-PUT] SIP extraction failed, skipping');
       }
 
       // Clean up staging data after successful commit
