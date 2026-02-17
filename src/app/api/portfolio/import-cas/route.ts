@@ -734,18 +734,35 @@ export async function PUT(request: NextRequest) {
     const folios: CASFolio[] = Array.isArray(body.folios) ? body.folios : [];
     const investorInfo = body.investorInfo as { pan?: string; email?: string } | undefined;
 
+    console.log('[CAS-PUT] Received', folios.length, 'folios. Body keys:', Object.keys(body).join(', '));
+    if (folios.length > 0) {
+      const sample = folios[0];
+      console.log('[CAS-PUT] Sample folio keys:', Object.keys(sample).join(', '));
+      console.log('[CAS-PUT] Sample folio:', JSON.stringify({
+        schemeName: sample.schemeName?.substring(0, 50),
+        schemeCode: sample.schemeCode,
+        closingBalance: sample.closingBalance,
+        hasTransactions: Array.isArray(sample.transactions) ? sample.transactions.length : 'none'
+      }));
+    }
+
     if (folios.length === 0) {
       return NextResponse.json({ error: 'No holdings to import', details: `body keys: ${Object.keys(body).join(', ')}` }, { status: 400 });
     }
 
     // Re-match scheme codes for folios that lost them in the round-trip
-    // (Android kotlinx.serialization omits null fields, so schemeCode may be missing)
+    let reMatchCount = 0;
     for (const folio of folios) {
       if (!folio.schemeCode && folio.schemeName) {
         const matched = await matchSchemeCode(folio.schemeName);
-        if (matched) folio.schemeCode = matched;
+        if (matched) {
+          folio.schemeCode = matched;
+          reMatchCount++;
+        }
       }
     }
+    const withCodeBefore = folios.filter(f => !!f.schemeCode).length;
+    console.log('[CAS-PUT] After re-match:', withCodeBefore, 'have schemeCode,', reMatchCount, 're-matched');
 
     // Filter only mutual funds
     const mfFolios = folios.filter(isMutualFund);
@@ -754,13 +771,18 @@ export async function PUT(request: NextRequest) {
     // Extract SIP info before filtering
     const sipInfo = extractSIPInfo(folios);
 
-
     if (mfFolios.length === 0) {
       const withCode = folios.filter(f => !!f.schemeCode).length;
-      const sampleNames = folios.slice(0, 3).map(f => f.schemeName?.substring(0, 40) || 'no-name');
+      const sampleFolios = folios.slice(0, 3).map(f => ({
+        name: f.schemeName?.substring(0, 50) || 'no-name',
+        code: f.schemeCode || 'null',
+        bal: f.closingBalance
+      }));
+      const debugMsg = `${folios.length} folios received, ${withCode} had schemeCode after re-match. Samples: ${JSON.stringify(sampleFolios)}`;
+      console.log('[CAS-PUT] 0 MF folios passed filter.', debugMsg);
       return NextResponse.json({ 
         success: true, imported: 0, skipped: folios.length, sipCount: 0,
-        message: `No mutual fund holdings found to import. ${folios.length} folios received, ${withCode} had schemeCode. Samples: ${sampleNames.join('; ')}` 
+        message: debugMsg
       });
     }
 
