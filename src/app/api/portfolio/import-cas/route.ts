@@ -912,6 +912,19 @@ export async function PUT(request: NextRequest) {
     try {
       await client.query('BEGIN');
 
+      // Log first staged row for diagnostics
+      if (staged.rows.length > 0) {
+        const r = staged.rows[0];
+        console.log(`[CAS-PUT] Sample staged row keys: ${Object.keys(r).join(', ')}`);
+        console.log(`[CAS-PUT] Sample: scheme_code=${r.scheme_code}, scheme_name=${String(r.scheme_name).substring(0,40)}, closing_balance=${r.closing_balance}, avg_nav=${r.avg_nav}, total_invested=${r.total_invested}, earliest_date=${r.earliest_date}, folio_number=${r.folio_number?.substring(0,10)}`);
+      }
+
+      // Check portfolio_holdings columns
+      const colCheck = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'portfolio_holdings' ORDER BY ordinal_position`
+      );
+      console.log(`[CAS-PUT] portfolio_holdings columns: ${colCheck.rows.map((r: any) => r.column_name).join(', ')}`);
+
       for (let i = 0; i < staged.rows.length; i++) {
         const row = staged.rows[i];
         const sp = `sp_row_${i}`;
@@ -921,6 +934,11 @@ export async function PUT(request: NextRequest) {
           const schemeCode = row.scheme_code;
           const holdingKey = schemeCode || `UNMATCHED:${(row.scheme_name || '').substring(0, 80).replace(/[^a-zA-Z0-9 ]/g, '')}`;
           const encryptedFolio = encryptPII(row.folio_number || '');
+          const purchaseDate = row.earliest_date ? new Date(row.earliest_date) : new Date();
+          const units = parseFloat(row.closing_balance) || 0;
+          const avgNav = parseFloat(row.avg_nav) || 0;
+          const totalInvested = parseFloat(row.total_invested) || 0;
+          const notes = `CAS Import - ${row.amc || ''} - ${(row.scheme_name || '').substring(0, 60)}`;
 
           // Upsert: update if exists, insert if not
           const existing = await client.query(
@@ -934,18 +952,16 @@ export async function PUT(request: NextRequest) {
                SET units = $1, purchase_nav = $2, purchase_amount = $3, folio_number = $4,
                    source = 'cas', updated_at = NOW(), notes = $6
                WHERE id = $5`,
-              [row.closing_balance, row.avg_nav, row.total_invested, encryptedFolio,
-               existing.rows[0].id, `CAS Import - ${row.amc || ''} - ${(row.scheme_name || '').substring(0, 60)}`]
+              [units, avgNav, totalInvested, encryptedFolio,
+               existing.rows[0].id, notes]
             );
           } else {
             await client.query(
               `INSERT INTO portfolio_holdings
                 (user_id, scheme_code, units, purchase_nav, purchase_date, purchase_amount, notes, source, folio_number)
                VALUES ($1, $2, $3, $4, $5, $6, $7, 'cas', $8)`,
-              [user.id, holdingKey, row.closing_balance, row.avg_nav,
-               row.earliest_date || new Date(), row.total_invested,
-               `CAS Import - ${row.amc || ''} - ${(row.scheme_name || '').substring(0, 60)}`,
-               encryptedFolio]
+              [user.id, holdingKey, units, avgNav,
+               purchaseDate, totalInvested, notes, encryptedFolio]
             );
           }
 
@@ -954,7 +970,12 @@ export async function PUT(request: NextRequest) {
         } catch (rowErr) {
           // Rollback just this row — transaction stays alive for remaining rows
           await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
-          console.error(`[CAS-PUT] Error saving ${row.scheme_name?.substring(0, 40)}:`, rowErr instanceof Error ? rowErr.message : rowErr);
+          const errMsg = rowErr instanceof Error ? rowErr.message : String(rowErr);
+          console.error(`[CAS-PUT] Row ${i} FAILED (${row.scheme_name?.substring(0, 40)}): ${errMsg}`);
+          if (i === 0) {
+            // Log full error for first failure to diagnose
+            console.error(`[CAS-PUT] Row 0 full error:`, rowErr);
+          }
           errorCount++;
         }
       }
