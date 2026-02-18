@@ -308,6 +308,67 @@ function parseCASText(text: string): ParsedCAS {
   // Finalize last folio
   finalizeFolio();
 
+  // ── 2.5. STRATEGY: Tabular CAMS/KFIN CAS ──
+  // Detects summary-format CAS with columns: Folio | ISIN | Name | Cost Value | Units | NAV Date | NAV | Market Value | Registrar
+  if (parsed.folios.length === 0 && fullText.match(/Cost\s+Value|Market\s+Value/i)) {
+    const flatText = fullText.replace(/\s+/g, ' ');
+    const isinRegex = /\b(INF[A-Z0-9]{9})\b/g;
+    const foundIsins = new Set<string>();
+    let m;
+    while ((m = isinRegex.exec(flatText)) !== null) {
+      foundIsins.add(m[1]);
+    }
+
+    for (const isin of foundIsins) {
+      if (parsed.folios.some(f => f.schemeCode === isin)) continue;
+      const isinIndex = flatText.indexOf(isin);
+      if (isinIndex === -1) continue;
+      const afterIsin = flatText.substring(isinIndex + isin.length, isinIndex + 600);
+
+      // CAMS tabular pattern: ...SchemeName... CostValue Units DD-MMM-YYYY NAV MarketValue Registrar
+      // CostValue=2dp, Units=3+dp, Date, NAV=2+dp, MarketValue=2dp
+      const camsPat = /([\d,]+\.\d{2})\s+([\d,]+\.\d{3,})\s+\d{2}-[A-Za-z]{3}-\d{4}\s+([\d,]+\.\d{2,})\s+([\d,]+\.\d{2})/;
+      const camsMatch = afterIsin.match(camsPat);
+      if (!camsMatch) continue;
+
+      const costValue = parseNum(camsMatch[1]);
+      const units = parseNum(camsMatch[2]);
+      const nav = parseNum(camsMatch[3]);
+      const marketValue = parseNum(camsMatch[4]);
+      if (units <= 0) continue;
+
+      // Extract scheme name: text between ISIN and the first number (cost value)
+      const beforeCost = afterIsin.substring(0, afterIsin.indexOf(camsMatch[0]));
+      let schemeName = beforeCost.replace(/\s+/g, ' ').trim()
+        .replace(/^\s*ISIN\s*/i, '').replace(/\s*\d[\d,]*\.\d+\s*$/g, '').trim();
+      if (!schemeName || schemeName.length < 5) schemeName = `Fund ${isin}`;
+
+      // Extract folio number: look before the ISIN
+      let folioNumber = isin;
+      const beforeIsin = flatText.substring(Math.max(0, isinIndex - 50), isinIndex);
+      const folioMatch = beforeIsin.match(/([\d\/]+)\s*$/);
+      if (folioMatch) folioNumber = folioMatch[1];
+
+      // Detect registrar
+      const afterNums = afterIsin.substring(afterIsin.indexOf(camsMatch[0]) + camsMatch[0].length, afterIsin.indexOf(camsMatch[0]) + camsMatch[0].length + 30);
+      const registrar = afterNums.match(/CAMS|KFIN/i)?.[0] || 'CAMS';
+
+      parsed.folios.push({
+        folioNumber,
+        amc: detectAmc(schemeName),
+        schemeName,
+        schemeCode: isin,
+        pan: parsed.pan,
+        registrar,
+        closingBalance: units,
+        closingNav: Math.round(nav * 10000) / 10000,
+        closingValue: Math.round(marketValue * 100) / 100,
+        costValue: Math.round(costValue * 100) / 100,
+        transactions: []
+      });
+    }
+  }
+
   // ── 3. STRATEGY: NSDL ISIN-based fallback (if line-by-line found nothing) ──
   if (parsed.folios.length === 0) {
     const flatText = fullText.replace(/\s+/g, ' ');
