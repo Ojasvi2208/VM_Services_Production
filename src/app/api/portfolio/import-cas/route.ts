@@ -330,10 +330,25 @@ function parseCASText(text: string): ParsedCAS {
       const numMatch = afterIsin.match(numPattern);
       if (!numMatch) continue;
 
-      const units = parseNum(numMatch[1]);
-      const nav = parseNum(numMatch[2]);
-      const value = parseNum(numMatch[3]);
+      let units = parseNum(numMatch[1]);
+      let nav = parseNum(numMatch[2]);
+      let value = parseNum(numMatch[3]);
       if (units <= 0) continue;
+
+      // Sanity check: PDF text extraction can duplicate the balance number.
+      // If nav ≈ units, the regex grabbed the balance twice — derive nav from value/units.
+      if (nav > 0 && units > 0 && Math.abs(nav - units) / units < 0.01) {
+        nav = value > 0 ? Math.round((value / units) * 10000) / 10000 : 0;
+        // value was actually the market value; try to find the real value after the match
+        const afterMatch = afterIsin.substring(afterIsin.indexOf(numMatch[0]) + numMatch[0].length);
+        const nextNum = afterMatch.match(/\s+([\d,]+\.\d{2})/);
+        if (nextNum) value = parseNum(nextNum[1]);
+      }
+
+      // Second sanity: if nav > 50000 (no Indian MF NAV is that high), it's likely wrong
+      if (nav > 50000 && value > 0 && units > 0) {
+        nav = Math.round((value / units) * 10000) / 10000;
+      }
 
       let schemeName = afterIsin.substring(0, afterIsin.indexOf(numMatch[0])).replace(/\s+/g, ' ').trim()
         .replace(/^\s*ISIN\s*/i, '').replace(/Sub Total.*$/i, '').replace(/\s*\d[\d,]*\.\d+\s*$/g, '').trim();
@@ -349,6 +364,7 @@ function parseCASText(text: string): ParsedCAS {
         closingBalance: units,
         closingNav: nav,
         closingValue: value,
+        costValue: value, // NSDL CAS has no cost basis; use market value as best approximation
         transactions: []
       });
     }
@@ -925,10 +941,24 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        if (totalInvested === 0 && folio.closingNav && folio.closingBalance) {
-          totalInvested = folio.closingBalance * folio.closingNav;
+        if (totalInvested === 0 && folio.closingValue && folio.closingValue > 0) {
+          // Best fallback: use CAS closing value (market value) as approximate invested amount
+          totalInvested = folio.closingValue;
+        } else if (totalInvested === 0 && folio.closingNav && folio.closingBalance) {
+          // Sanity: closingNav must look like an actual NAV, not like the units value
+          if (Math.abs(folio.closingNav - folio.closingBalance) / folio.closingBalance > 0.01) {
+            totalInvested = folio.closingBalance * folio.closingNav;
+          }
         }
-        const avgNav = folio.closingNav || (folio.closingBalance > 0 && totalInvested > 0 ? totalInvested / folio.closingBalance : 0);
+        let avgNav = folio.closingNav || (folio.closingBalance > 0 && totalInvested > 0 ? totalInvested / folio.closingBalance : 0);
+        // Sanity: if avgNav ≈ closingBalance (units), the parser mixed up columns — derive from value
+        if (avgNav > 0 && folio.closingBalance > 0 && Math.abs(avgNav - folio.closingBalance) / folio.closingBalance < 0.01) {
+          avgNav = folio.closingValue && folio.closingBalance > 0
+            ? Math.round((folio.closingValue / folio.closingBalance) * 10000) / 10000
+            : 0;
+        }
+        // Round totalInvested to 2 decimal places (currency)
+        totalInvested = Math.round(totalInvested * 100) / 100;
         // RCA 2: Use CAS closing_value as-is, don't re-enrich with latest NAV
         const closingValue = folio.closingValue || (folio.closingBalance * (folio.closingNav || 0));
 

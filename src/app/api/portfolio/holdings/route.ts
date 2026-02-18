@@ -40,20 +40,41 @@ export async function GET(request: NextRequest) {
         ORDER BY ph.created_at DESC
       `, [user.id]);
 
-      const holdings = result.rows.map(row => {
+      // Deduplicate: same fund can appear under AMFI code AND UNMATCHED: key
+      const rawRows = result.rows;
+      const seenFunds = new Map<string, typeof rawRows[0]>();
+      const uniqueRows: typeof rawRows = [];
+
+      for (const row of rawRows) {
+        const resolvedCode = row.resolved_scheme_code;
+        const rawCode = row.scheme_code as string;
+
+        if (resolvedCode) {
+          const existing = seenFunds.get(resolvedCode);
+          if (existing) {
+            const existingIsUnmatched = (existing.scheme_code as string).startsWith('UNMATCHED:');
+            const currentIsUnmatched = rawCode.startsWith('UNMATCHED:');
+            if (existingIsUnmatched && !currentIsUnmatched) {
+              uniqueRows[uniqueRows.indexOf(existing)] = row;
+              seenFunds.set(resolvedCode, row);
+            }
+            continue;
+          }
+          seenFunds.set(resolvedCode, row);
+        }
+        uniqueRows.push(row);
+      }
+
+      const holdings = uniqueRows.map(row => {
         const units = parseFloat(row.units) || 0;
         const purchaseNav = parseFloat(row.purchase_nav) || 0;
         const currentNav = parseFloat(row.current_nav) || 0;
         const purchaseAmount = parseFloat(row.purchase_amount) || 0;
 
-        // If we have a live NAV from the DB, use it for current value
-        // Otherwise, for CAS imports, use purchaseAmount as currentValue (CAS closing_value was stored as purchase_amount)
         let currentValue: number;
         if (currentNav > 0) {
           currentValue = units * currentNav;
         } else if (row.source === 'cas') {
-          // CAS import: purchase_amount = total_invested, no live NAV available
-          // Use purchase_amount as approximate current value (better than units * bogus NAV)
           currentValue = purchaseAmount;
         } else {
           currentValue = units * purchaseNav;
@@ -62,13 +83,20 @@ export async function GET(request: NextRequest) {
         const returns = currentValue - purchaseAmount;
         const returnsPercentage = purchaseAmount > 0 ? (returns / purchaseAmount) * 100 : 0;
 
-        // Extract display name: resolved from funds table, or from notes (CAS Import - AMC - SchemeName)
+        // Name resolution chain: funds DB → ph.scheme_name → notes parsing → UNMATCHED: extraction → fallback
         let schemeName = row.resolved_name;
         if (!schemeName && row.notes) {
           const notesMatch = row.notes.match(/^CAS Import - (?:.*? - )?(.+)$/);
           if (notesMatch) schemeName = notesMatch[1].trim();
         }
-        if (!schemeName) schemeName = `Fund ${row.scheme_code}`;
+        if (!schemeName) {
+          const rawCode = row.scheme_code as string;
+          if (rawCode.startsWith('UNMATCHED:')) {
+            schemeName = rawCode.substring('UNMATCHED:'.length).trim();
+          } else {
+            schemeName = `Fund ${rawCode}`;
+          }
+        }
 
         return {
           id: row.id,
