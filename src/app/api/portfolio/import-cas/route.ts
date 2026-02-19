@@ -171,16 +171,28 @@ function parseCASText(text: string): ParsedCAS {
   let currentRegistrar = '';
   let expectingSchemeName = false;
 
-  const folioHeaderRe = /Folio\s+No\s*[:.]?\s*([\d\/\s]+)/i;
+  const folioHeaderRe = /Folio\s+(?:No\.?|Number|#)\s*[:.]*\s*([\d\/\s\-]+)/i;
   const txnDateRe = /^(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([\-\d,]+\.?\d*)\s+([\-\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)/;
-  const closingBalRe = /Closing\s+Unit\s+Balance\s*[:.]?\s*([\d,]+\.\d+)/i;
-  const navOnDateRe = /NAV\s+on\s+\d{2}-[A-Za-z]{3}-\d{4}\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+\.\d+)/i;
-  const valuationRe = /Valuation\s+on\s+\d{2}-[A-Za-z]{3}-\d{4}\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+\.\d+)/i;
+  const closingBalRe = /(?:Closing\s+(?:Unit\s+)?Balance|Unit\s+Balance)\s*(?:\(?\s*(?:as\s+on\s+)?\d{2}-[A-Za-z]{3}-\d{4}\s*\)?\s*)?[:.]*\s*([\d,]+(?:\.\d+)?)/i;
+  const navOnDateRe = /(?:NAV|Net\s+Asset\s+Value)\s+(?:as\s+)?on\s+\d{2}-[A-Za-z]{3}-\d{4}\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+\.\d+)/i;
+  const valuationRe = /(?:Valuation|Market\s+Value|Mkt\.?\s*Value)\s+(?:as\s+)?on\s+\d{2}-[A-Za-z]{3}-\d{4}\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+\.\d+)/i;
   const registrarRe = /Registrar\s*[:.]?\s*(CAMS|KFIN(?:TECH)?|FRANKLIN|SUNDARAM|CAMS\/KFIN)/i;
   const costValueRe = /Cost\s+Value\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+\.\d+)/i;
 
   function finalizeFolio() {
-    if (currentFolio && currentFolio.closingBalance > 0) {
+    if (!currentFolio) { currentFolio = null; currentScheme = ''; return; }
+
+    // Derive closingBalance from last transaction's balance column
+    if (currentFolio.closingBalance === 0 && currentFolio.transactions.length > 0) {
+      const lastTx = currentFolio.transactions[currentFolio.transactions.length - 1];
+      if (lastTx.balance > 0) currentFolio.closingBalance = lastTx.balance;
+    }
+    // Derive closingBalance from closingValue / closingNav
+    if (currentFolio.closingBalance === 0 && currentFolio.closingValue && currentFolio.closingNav && currentFolio.closingNav > 0) {
+      currentFolio.closingBalance = Math.round((currentFolio.closingValue / currentFolio.closingNav) * 10000) / 10000;
+    }
+
+    if (currentFolio.closingBalance > 0) {
       if (!currentFolio.closingValue && currentFolio.closingNav) {
         currentFolio.closingValue = currentFolio.closingBalance * currentFolio.closingNav;
       }
@@ -212,7 +224,20 @@ function parseCASText(text: string): ParsedCAS {
         closingBalance: 0,
         transactions: []
       };
-      expectingSchemeName = true;
+
+      // Check if scheme name is on the same line (after folio + PAN info)
+      const afterFolio = line.substring(folioMatch[0].length)
+        .replace(/PAN\s*[:.]?\s*[A-Z]{5}\d{4}[A-Z]/gi, '')
+        .replace(/KYC\s*[:.]?\s*\w+/gi, '')
+        .replace(/PAN\s*[:.]?\s*Verified/gi, '')
+        .trim();
+      if (afterFolio.length > 10 && !afterFolio.match(/^\d/) && !afterFolio.match(/^(Registrar|Date|Amount)/i)) {
+        currentFolio.schemeName = afterFolio.replace(/\s*\(Advisor.*$/i, '').trim();
+        currentFolio.amc = detectAmc(currentFolio.schemeName);
+        expectingSchemeName = false;
+      } else {
+        expectingSchemeName = true;
+      }
       continue;
     }
 
@@ -956,6 +981,15 @@ export async function POST(request: NextRequest) {
       parsedData = parseCASText(textContent);
       parser = 'javascript';
       console.log(`[CAS] JS parser: ${parsedData.folios.length} folios`);
+      if (parsedData.folios.length === 0) {
+        // Diagnostic logging for zero-folio failures
+        const folioMentions = (textContent.match(/folio/gi) || []).length;
+        const closingMentions = (textContent.match(/closing/gi) || []).length;
+        const isinCount = (textContent.match(/INF[A-Z0-9]{9}/g) || []).length;
+        const balanceMentions = (textContent.match(/balance/gi) || []).length;
+        console.log(`[CAS] ZERO folios. Diagnostics: folio_mentions=${folioMentions}, closing=${closingMentions}, balance=${balanceMentions}, ISINs=${isinCount}`);
+        console.log(`[CAS] First 500 chars: ${textContent.substring(0, 500).replace(/\n/g, '|')}`);
+      }
     }
 
     if (!parsedData || parsedData.folios.length === 0) {
