@@ -166,7 +166,8 @@ export async function GET(
         exit_load as "exitLoad",
         min_investment as "minInvestment",
         min_sip as "minSip",
-        is_active as "isActive"
+        is_active as "isActive",
+        master_fund_id as "masterFundId"
       FROM funds
       WHERE scheme_code = $1`,
       [schemeCode]
@@ -299,61 +300,35 @@ export async function GET(
     const schemeCategory = mfApiMeta?.scheme_category || null;
     const schemeType = mfApiMeta?.scheme_type || null;
 
-    // Find sibling variants (same fund, different plan/option types)
-    const STRIP_WORDS = new Set([
-      // Plan/option keywords
-      'direct', 'regular', 'plan', 'growth', 'idcw', 'dividend', 'payout', 'reinvestment', 'option', 'monthly', 'quarterly', 'annual', 'weekly',
-      // Common AMC name words (not fund-specific)
-      'aditya', 'birla', 'sun', 'life', 'icici', 'prudential', 'nippon', 'india', 'franklin', 'templeton',
-      'kotak', 'mahindra', 'tata', 'hdfc', 'sbi', 'axis', 'uti', 'dsp', 'mirae', 'asset',
-      'sundaram', 'invesco', 'motilal', 'oswal', 'quant', 'canara', 'robeco', 'bandhan',
-      'bajaj', 'finserv', 'edelweiss', 'union', 'manulife', 'ppfas', 'parag', 'parikh',
-      'pgim', 'baroda', 'bnp', 'paribas', 'hsbc', 'iti', 'fund', 'scheme', 'mutual',
-      'the', 'and', 'of', 'for'
-    ]);
-    const baseWords = fund.schemeName.toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter((w: string) => w.length > 1 && !STRIP_WORDS.has(w));
-
+    // Find sibling variants (same fund family, different plan/option types)
+    // PRIMARY: Use master_fund_id (authoritative relational grouping)
+    // FALLBACK: Name-based matching if master_fund_id is NULL
     let variants: any[] = [];
     try {
-      if (baseWords.length >= 1) {
-        const variantParams: string[] = [];
-        let vp = 1;
+      const variantCols = `
+        f.scheme_code as "schemeCode",
+        f.scheme_name as "schemeName",
+        f.latest_nav as "latestNav",
+        f.latest_nav_date as "latestNavDate",
+        r.cagr_3y as "cagr3y",
+        r.cagr_5y as "cagr5y",
+        r.return_1y as "return1y"`;
+      const variantOrder = `
+        ORDER BY
+          CASE WHEN f.plan_type = 'Direct' THEN 0 ELSE 1 END,
+          CASE WHEN f.option_type = 'Growth' THEN 0 ELSE 1 END,
+          f.scheme_name`;
 
-        // AMC prefix: use fundHouse name or first word of scheme name to scope to same AMC
-        const amcPrefix = (fundHouseName || fund.schemeName || '').split(/\s/)[0].replace(/[^a-zA-Z0-9]/g, '');
-        variantParams.push(`${amcPrefix}%`);
-        const prefixCond = `f.scheme_name ILIKE $${vp++}`;
-
-        const conditions = baseWords.slice(0, 6).map((word: string) => {
-          variantParams.push(`%${word}%`);
-          return `f.scheme_name ILIKE $${vp++}`;
-        });
-
-        // Use AMC code filter if available, otherwise prefix
-        let amcFilter = '';
-        if (fund.amcCode) {
-          variantParams.push(fund.amcCode);
-          amcFilter = ` AND f.amc_code = $${vp++}`;
-        }
-
+      // Strategy 1: master_fund_id (correct relational grouping)
+      if (fund.masterFundId) {
         const variantResult = await client.query(
-          `SELECT 
-            f.scheme_code as "schemeCode",
-            f.scheme_name as "schemeName",
-            f.latest_nav as "latestNav",
-            f.latest_nav_date as "latestNavDate",
-            r.cagr_3y as "cagr3y",
-            r.cagr_5y as "cagr5y",
-            r.return_1y as "return1y"
-          FROM funds f
-          LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
-          WHERE ${prefixCond} AND ${conditions.join(' AND ')}${amcFilter}
-          ORDER BY f.scheme_name
-          LIMIT 20`,
-          variantParams
+          `SELECT ${variantCols}
+           FROM funds f
+           LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
+           WHERE f.master_fund_id = $1
+           ${variantOrder}
+           LIMIT 20`,
+          [fund.masterFundId]
         );
         variants = variantResult.rows.map((v: any) => ({
           schemeCode: v.schemeCode,
@@ -364,6 +339,44 @@ export async function GET(
           cagr5y: v.cagr5y ? parseFloat(v.cagr5y) : null,
           return1y: v.return1y ? parseFloat(v.return1y) : null,
         }));
+      }
+
+      // Strategy 2: Fallback — clean scheme name (same logic as migration) + exact match
+      if (variants.length <= 1) {
+        // Strip plan/option suffixes to get the canonical strategy name
+        const strategyName = fund.schemeName
+          .replace(/\s*-?\s*(Direct|Regular)\s*(Plan)?\s*/gi, '')
+          .replace(/\s*-?\s*(Growth|IDCW|Dividend)\s*(Option|Plan|Payout|Reinvestment)?\s*/gi, '')
+          .replace(/\s*-?\s*Option\s*$/gi, '')
+          .replace(/\s*-?\s*Plan\s*$/gi, '')
+          .replace(/\s*\(Erstwhile[^)]*\)/gi, '')
+          .replace(/\s*\(Formerly[^)]*\)/gi, '')
+          .replace(/\s*\(Advisor[^)]*\)/gi, '')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+
+        if (strategyName.length > 5) {
+          const fallbackResult = await client.query(
+            `SELECT ${variantCols}
+             FROM funds f
+             LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
+             WHERE f.scheme_name ILIKE $1
+             ${variantOrder}
+             LIMIT 20`,
+            [`${strategyName}%`]
+          );
+          if (fallbackResult.rows.length > 1) {
+            variants = fallbackResult.rows.map((v: any) => ({
+              schemeCode: v.schemeCode,
+              schemeName: v.schemeName,
+              latestNav: v.latestNav ? parseFloat(v.latestNav) : null,
+              latestNavDate: v.latestNavDate,
+              cagr3y: v.cagr3y ? parseFloat(v.cagr3y) : null,
+              cagr5y: v.cagr5y ? parseFloat(v.cagr5y) : null,
+              return1y: v.return1y ? parseFloat(v.return1y) : null,
+            }));
+          }
+        }
       }
     } catch (variantError) {
       console.warn('Could not fetch variants:', variantError);
