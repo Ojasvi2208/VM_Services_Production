@@ -363,7 +363,8 @@ function parseCASText(text: string): ParsedCAS {
     }
 
     // Find all data patterns globally: cost units date nav [marketValue] registrar
-    const dataRe = /([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s+(\d{2}-[A-Za-z]{3}-\d{4})\s+([\d,]+(?:\.\d+)?)(?:\s+([\d,]+(?:\.\d+)?))?\s+(CAMS|KFINTECH|KFIN)\b/gi;
+    // No \b after registrar — PDF text may concatenate registrar with next row's folio
+    const dataRe = /([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s+(\d{2}-[A-Za-z]{3}-\d{4})\s+([\d,]+(?:\.\d+)?)(?:\s+([\d,]+(?:\.\d+)?))?\s+(CAMS|KFINTECH|KFIN)(?=[^A-Za-z]|$)/gi;
     const dataMatches: { groups: string[]; pos: number }[] = [];
     let dm;
     while ((dm = dataRe.exec(flatText)) !== null) {
@@ -1053,8 +1054,20 @@ export async function POST(request: NextRequest) {
     }
 
     if (!parsedData || parsedData.folios.length === 0) {
+      // Diagnostic: show actual text around first ISIN so we can see the exact PDF extraction format
+      const txt = textContent || '';
+      const flat = txt.replace(/[\u00A0\u2000-\u200B]/g, ' ').replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\s+/g, ' ');
+      const isinCount = (flat.match(/INF[A-Z0-9]{9}/g) || []).length;
+      const firstIsin = (flat.match(/INF[A-Z0-9]{9}/) || [''])[0];
+      const isinIdx = firstIsin ? flat.indexOf(firstIsin) : -1;
+      const snippet = isinIdx >= 0
+        ? flat.substring(isinIdx, Math.min(flat.length, isinIdx + 200)).replace(/[^\x20-\x7E]/g, '')
+        : 'no-isin';
+      const dateCount = (flat.match(/\d{2}-[A-Za-z]{3}-\d{4}/g) || []).length;
+      const camsCount = (flat.match(/CAMS(?=[^A-Za-z]|$)/g) || []).length;
+      const diag = `[len=${txt.length},ISINs=${isinCount},dates=${dateCount},cams=${camsCount}] after_isin1="${snippet}"`;
       return NextResponse.json({
-        error: 'No holdings found in the CAS statement. Please ensure this is a mutual fund CAS from CAMS or KFintech.',
+        error: `No holdings found. ${diag}`,
       }, { status: 400 });
     }
 
