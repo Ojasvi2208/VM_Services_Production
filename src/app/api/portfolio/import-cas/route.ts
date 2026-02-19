@@ -1052,8 +1052,15 @@ export async function POST(request: NextRequest) {
       const hasCAMS = /CAMS/i.test(txt);
       const hasKFIN = /KFIN/i.test(txt);
       const first80 = txt.substring(0, 80).replace(/[^\x20-\x7E]/g, '').trim();
-      const diag = `[${txt.length}ch, ISINs=${isinCount}, cost=${hasCostVal}, mkt=${hasMktVal}, cams=${hasCAMS}, kfin=${hasKFIN}, start="${first80}"]`;
-      return NextResponse.json({ error: `No holdings found. Debug: ${diag}` }, { status: 400 });
+      // Show text around first ISIN to debug regex matching
+      const flatTxt = txt.replace(/\s+/g, ' ');
+      const firstIsin = (txt.match(/INF[A-Z0-9]{9}/) || [''])[0];
+      const isinIdx = firstIsin ? flatTxt.indexOf(firstIsin) : -1;
+      const aroundIsin = isinIdx >= 0
+        ? flatTxt.substring(Math.max(0, isinIdx - 30), isinIdx + firstIsin.length + 120).replace(/[^\x20-\x7E]/g, '')
+        : 'no ISIN context';
+      const diag = `[${txt.length}ch, ISINs=${isinCount}, cost=${hasCostVal}, mkt=${hasMktVal}] ISIN1="${aroundIsin}"`;
+      return NextResponse.json({ error: `No holdings found. ${diag}` }, { status: 400 });
     }
 
     // ── Step 2: Match every scheme to our funds DB ──
