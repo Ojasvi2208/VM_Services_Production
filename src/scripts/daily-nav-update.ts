@@ -1,19 +1,11 @@
 import { Pool } from 'pg';
-import axios from 'axios';
+import https from 'https';
 
 const RAILWAY_DB_URL = process.env.RAILWAY_DATABASE_URL || 'postgresql://postgres:zZGzhpULOgKqXvnnutWEjCengioSheMD@turntable.proxy.rlwy.net:19665/railway';
 
-// Configuration for optimal performance without crashing MFApi
-const CONFIG = {
-  CONCURRENCY: 3,           // 3 concurrent requests (safe for MFApi)
-  DELAY_BETWEEN_BATCHES: 1000, // 1 second between batches
-  REQUEST_TIMEOUT: 20000,   // 20 second timeout per request
-  MAX_RETRIES: 5,           // 5 retry attempts
-  RETRY_BASE_DELAY: 2000,   // 2 second base delay for retries
-  BATCH_SIZE: 100,          // Log progress every 100 funds
-  ERROR_PAUSE_THRESHOLD: 10, // Pause after 10 consecutive errors
-  ERROR_PAUSE_DURATION: 30000, // 30 second pause on too many errors
-};
+// AMFI NAVAll.txt — single file with ALL mutual fund NAVs (~17k schemes)
+// Format: SchemeCode;ISIN1;ISIN2;SchemeName;NAV;Date (semicolon-delimited)
+const AMFI_NAV_URL = 'https://portal.amfiindia.com/spages/NAVAll.txt';
 
 const pool = new Pool({
   connectionString: RAILWAY_DB_URL,
@@ -23,316 +15,242 @@ const pool = new Pool({
   connectionTimeoutMillis: 15000
 });
 
-function parseDate(dateStr: string): Date {
-  const [day, month, year] = dateStr.split('-');
-  return new Date(`${year}-${month}-${day}`);
+// Month abbreviation → number mapping for AMFI date format (e.g., "18-Feb-2026")
+const MONTH_MAP: Record<string, string> = {
+  Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+  Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
+};
+
+function convertAmfiDateToPostgres(dateStr: string): string | null {
+  // Input: "18-Feb-2026" → Output: "2026-02-18"
+  const match = dateStr.match(/^(\d{2})-([A-Za-z]{3})-(\d{4})$/);
+  if (!match) return null;
+  const month = MONTH_MAP[match[2]];
+  if (!month) return null;
+  return `${match[3]}-${month}-${match[1]}`;
 }
 
-function convertDateToPostgres(dateStr: string): string {
-  const [day, month, year] = dateStr.split('-');
-  return `${year}-${month}-${day}`;
+interface NavEntry {
+  schemeCode: string;
+  nav: number;
+  date: string; // Postgres format YYYY-MM-DD
 }
 
-function calculateReturn(currentNav: number, pastNav: number | null): number | null {
-  if (!pastNav || pastNav === 0) return null;
-  return ((currentNav - pastNav) / pastNav) * 100;
-}
-
-function calculateCAGR(currentNav: number, pastNav: number | null, years: number): number | null {
-  if (!pastNav || pastNav === 0 || years === 0) return null;
-  return (Math.pow(currentNav / pastNav, 1 / years) - 1) * 100;
-}
-
-function getNavAtDate(navData: any[], targetDate: Date): number | null {
-  for (const nav of navData) {
-    const navDate = parseDate(nav.date);
-    if (navDate <= targetDate) {
-      return parseFloat(nav.nav);
-    }
-  }
-  return null;
-}
-
-function calculateVolatility(navData: any[], days: number): number | null {
-  if (navData.length < days) return null;
-  const returns: number[] = [];
-  for (let i = 0; i < Math.min(days, navData.length - 1); i++) {
-    const currentNav = parseFloat(navData[i].nav);
-    const prevNav = parseFloat(navData[i + 1].nav);
-    if (prevNav > 0) {
-      returns.push((currentNav - prevNav) / prevNav);
-    }
-  }
-  if (returns.length < 10) return null;
-  const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
-  const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
-  return Math.sqrt(variance) * Math.sqrt(252) * 100; // Annualized volatility
-}
-
-function calculateMaxDrawdown(navData: any[], days: number): number | null {
-  if (navData.length < days) return null;
-  let maxNav = 0;
-  let maxDrawdown = 0;
-  for (let i = Math.min(days, navData.length - 1); i >= 0; i--) {
-    const nav = parseFloat(navData[i].nav);
-    if (nav > maxNav) maxNav = nav;
-    const drawdown = (maxNav - nav) / maxNav * 100;
-    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
-  }
-  return maxDrawdown;
-}
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function fetchWithRetry(schemeCode: string): Promise<any> {
-  for (let attempt = 1; attempt <= CONFIG.MAX_RETRIES; attempt++) {
-    try {
-      const response = await axios.get(
-        `https://api.mfapi.in/mf/${schemeCode}`,
-        { 
-          timeout: CONFIG.REQUEST_TIMEOUT,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'application/json',
-            'Connection': 'keep-alive'
-          }
-        }
-      );
-      return response.data;
-    } catch (error: any) {
-      // 404 means fund doesn't exist - don't retry
-      if (error.response?.status === 404) return null;
-      
-      // 429 Too Many Requests - wait longer
-      if (error.response?.status === 429) {
-        console.log(`   ⚠️ Rate limited on ${schemeCode}, waiting 10s...`);
-        await sleep(10000);
-        continue;
-      }
-      
-      // 500/502/503 Server errors - retry with backoff
-      if (error.response?.status >= 500) {
-        const delay = CONFIG.RETRY_BASE_DELAY * attempt;
-        if (attempt < CONFIG.MAX_RETRIES) {
-          console.log(`   ⚠️ Server error ${error.response?.status} on ${schemeCode}, retry ${attempt}/${CONFIG.MAX_RETRIES} in ${delay/1000}s`);
-          await sleep(delay);
-          continue;
+function fetchAmfiNavFile(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const request = https.get(AMFI_NAV_URL, {
+      headers: { 'Accept': 'text/plain' },
+      timeout: 60000 // 60s timeout for the full file
+    }, (response) => {
+      // Handle redirect (302)
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        const redirectUrl = response.headers.location;
+        if (redirectUrl) {
+          https.get(redirectUrl, {
+            headers: { 'Accept': 'text/plain' },
+            timeout: 60000
+          }, (res2) => {
+            let data = '';
+            res2.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+            res2.on('end', () => resolve(data));
+            res2.on('error', reject);
+          }).on('error', reject);
+          return;
         }
       }
-      
-      // Network errors - retry with backoff
-      if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
-        const delay = CONFIG.RETRY_BASE_DELAY * attempt;
-        if (attempt < CONFIG.MAX_RETRIES) {
-          console.log(`   ⚠️ Network error on ${schemeCode}, retry ${attempt}/${CONFIG.MAX_RETRIES} in ${delay/1000}s`);
-          await sleep(delay);
-          continue;
-        }
+
+      if (response.statusCode !== 200) {
+        reject(new Error(`AMFI responded with status ${response.statusCode}`));
+        return;
       }
-      
-      // Last attempt failed
-      if (attempt === CONFIG.MAX_RETRIES) {
-        return null;
-      }
-      
-      await sleep(CONFIG.RETRY_BASE_DELAY * attempt);
-    }
-  }
-  return null;
-}
 
-async function updateFundMetrics(schemeCode: string) {
-  const data = await fetchWithRetry(schemeCode);
-  if (!data?.data || data.data.length === 0) return false;
+      let data = '';
+      response.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+      response.on('end', () => resolve(data));
+      response.on('error', reject);
+    });
 
-  const navData = data.data;
-  const latestNav = parseFloat(navData[0].nav);
-  const latestDate = navData[0].date;
-  const inceptionDate = navData[navData.length - 1].date;
-  const today = parseDate(latestDate);
-
-  // Get NAV at different time periods
-  const nav1W = getNavAtDate(navData, new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000));
-  const nav1M = getNavAtDate(navData, new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000));
-  const nav3M = getNavAtDate(navData, new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000));
-  const nav6M = getNavAtDate(navData, new Date(today.getTime() - 180 * 24 * 60 * 60 * 1000));
-  const nav1Y = getNavAtDate(navData, new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000));
-  const nav2Y = getNavAtDate(navData, new Date(today.getTime() - 730 * 24 * 60 * 60 * 1000));
-  const nav3Y = getNavAtDate(navData, new Date(today.getTime() - 1095 * 24 * 60 * 60 * 1000));
-  const nav5Y = getNavAtDate(navData, new Date(today.getTime() - 1825 * 24 * 60 * 60 * 1000));
-  const nav10Y = getNavAtDate(navData, new Date(today.getTime() - 3650 * 24 * 60 * 60 * 1000));
-
-  // Calculate ALL returns
-  const return1W = calculateReturn(latestNav, nav1W);
-  const return1M = calculateReturn(latestNav, nav1M);
-  const return3M = calculateReturn(latestNav, nav3M);
-  const return6M = calculateReturn(latestNav, nav6M);
-  const return1Y = calculateReturn(latestNav, nav1Y);
-  const return2Y = calculateReturn(latestNav, nav2Y);
-  const return3Y = calculateReturn(latestNav, nav3Y);
-  const return5Y = calculateReturn(latestNav, nav5Y);
-  const return10Y = calculateReturn(latestNav, nav10Y);
-
-  // Calculate ALL CAGR
-  const cagr1Y = calculateCAGR(latestNav, nav1Y, 1);
-  const cagr2Y = calculateCAGR(latestNav, nav2Y, 2);
-  const cagr3Y = calculateCAGR(latestNav, nav3Y, 3);
-  const cagr5Y = calculateCAGR(latestNav, nav5Y, 5);
-  const cagr10Y = calculateCAGR(latestNav, nav10Y, 10);
-
-  // Calculate risk metrics
-  const volatility1Y = calculateVolatility(navData, 252);
-  const maxDrawdown = calculateMaxDrawdown(navData, 252);
-
-  // Update funds table
-  await pool.query(`
-    UPDATE funds SET
-      latest_nav = $1,
-      latest_nav_date = $2,
-      inception_date = $3,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE scheme_code = $4
-  `, [latestNav, convertDateToPostgres(latestDate), convertDateToPostgres(inceptionDate), schemeCode]);
-
-  // Update fund_returns table with ALL metrics
-  await pool.query(`
-    UPDATE fund_returns SET
-      return_1w = $1, return_1m = $2, return_3m = $3, return_6m = $4,
-      return_1y = $5, return_2y = $6, return_3y = $7, return_5y = $8, return_10y = $9,
-      cagr_1y = $10, cagr_2y = $11, cagr_3y = $12, cagr_5y = $13, cagr_10y = $14,
-      volatility_1y = $15, max_drawdown = $16,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE scheme_code = $17
-  `, [
-    return1W, return1M, return3M, return6M,
-    return1Y, return2Y, return3Y, return5Y, return10Y,
-    cagr1Y, cagr2Y, cagr3Y, cagr5Y, cagr10Y,
-    volatility1Y, maxDrawdown,
-    schemeCode
-  ]);
-
-  return true;
-}
-
-// Process funds in batches with controlled concurrency
-async function processBatch(funds: { scheme_code: string }[], startIdx: number): Promise<{ updated: number; errors: number }> {
-  const batch = funds.slice(startIdx, startIdx + CONFIG.CONCURRENCY);
-  const results = await Promise.allSettled(
-    batch.map(fund => updateFundMetrics(fund.scheme_code))
-  );
-  
-  let updated = 0;
-  let errors = 0;
-  
-  results.forEach(result => {
-    if (result.status === 'fulfilled' && result.value === true) {
-      updated++;
-    } else {
-      errors++;
-    }
+    request.on('error', reject);
+    request.on('timeout', () => {
+      request.destroy();
+      reject(new Error('AMFI request timed out after 60s'));
+    });
   });
-  
-  return { updated, errors };
+}
+
+function parseAmfiFile(rawText: string): Map<string, NavEntry> {
+  const navMap = new Map<string, NavEntry>();
+  const lines = rawText.split('\n');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Skip empty lines, headers, category lines, AMC name lines
+    if (!trimmed || !trimmed.includes(';')) continue;
+
+    const parts = trimmed.split(';');
+    // Valid data lines have exactly 6 fields
+    if (parts.length < 5) continue;
+
+    const schemeCode = parts[0].trim();
+    const navStr = parts[4].trim();
+    const dateStr = parts[5]?.trim();
+
+    // Skip header line and lines with non-numeric scheme codes
+    if (!schemeCode || !/^\d+$/.test(schemeCode)) continue;
+
+    // Skip if NAV is not a valid number (e.g., "N.A.", "-")
+    const nav = parseFloat(navStr);
+    if (isNaN(nav) || nav <= 0) continue;
+
+    // Convert date to Postgres format
+    if (!dateStr) continue;
+    const pgDate = convertAmfiDateToPostgres(dateStr);
+    if (!pgDate) continue;
+
+    navMap.set(schemeCode, { schemeCode, nav, date: pgDate });
+  }
+
+  return navMap;
 }
 
 async function runDailyUpdate() {
   const startTime = Date.now();
-  console.log('🔄 DAILY NAV UPDATE - ROBUST VERSION');
-  console.log(`⏱️  Started at: ${new Date().toISOString()}`);
-  console.log(`⚙️  Config: ${CONFIG.CONCURRENCY} concurrent requests, ${CONFIG.DELAY_BETWEEN_BATCHES}ms delay between batches`);
-  console.log('');
-  
-  // Get ALL funds to update
-  const result = await pool.query(`
-    SELECT scheme_code FROM funds 
-    WHERE latest_nav IS NOT NULL
-    ORDER BY scheme_code
-  `);
-
-  const funds = result.rows;
-  console.log(`📊 Total funds to update: ${funds.length}`);
-  console.log(`📦 Batch size: ${CONFIG.CONCURRENCY} | Estimated batches: ${Math.ceil(funds.length / CONFIG.CONCURRENCY)}`);
+  console.log('DAILY NAV UPDATE - AMFI BULK DOWNLOAD');
+  console.log(`Started at: ${new Date().toISOString()}`);
   console.log('');
 
-  let totalUpdated = 0;
-  let totalErrors = 0;
-  let consecutiveErrors = 0;
+  // Step 1: Fetch the full AMFI NAVAll.txt file (single HTTP request, ~1MB in memory)
+  console.log('Step 1: Fetching AMFI NAVAll.txt...');
+  let rawText: string;
+  try {
+    rawText = await fetchAmfiNavFile();
+  } catch (error: any) {
+    console.error(`Failed to fetch AMFI file: ${error.message}`);
+    await pool.end();
+    process.exit(1);
+  }
+  const fetchTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`  Fetched ${(rawText.length / 1024).toFixed(0)} KB in ${fetchTime}s`);
 
-  for (let i = 0; i < funds.length; i += CONFIG.CONCURRENCY) {
-    try {
-      const { updated, errors } = await processBatch(funds, i);
-      totalUpdated += updated;
-      totalErrors += errors;
-      
-      // Track consecutive errors
-      if (errors === CONFIG.CONCURRENCY) {
-        consecutiveErrors += CONFIG.CONCURRENCY;
-      } else {
-        consecutiveErrors = 0;
-      }
-      
-      // Pause if too many consecutive errors (MFApi might be overloaded)
-      if (consecutiveErrors >= CONFIG.ERROR_PAUSE_THRESHOLD) {
-        console.log(`   ⏸️  ${consecutiveErrors} consecutive errors - pausing ${CONFIG.ERROR_PAUSE_DURATION/1000}s to let MFApi recover...`);
-        await sleep(CONFIG.ERROR_PAUSE_DURATION);
-        consecutiveErrors = 0;
-      }
+  // Step 2: Parse the file in memory
+  console.log('Step 2: Parsing NAV data...');
+  const navMap = parseAmfiFile(rawText);
+  console.log(`  Parsed ${navMap.size} schemes with valid NAV data`);
+  // Release the raw text from memory
+  rawText = '';
 
-      // Progress logging
-      const processed = Math.min(i + CONFIG.CONCURRENCY, funds.length);
-      if (processed % CONFIG.BATCH_SIZE === 0 || processed === funds.length) {
-        const elapsed = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
-        const rate = totalUpdated / (Date.now() - startTime) * 1000 * 60;
-        const remaining = rate > 0 ? ((funds.length - processed) / rate).toFixed(1) : '?';
-        const percent = ((processed / funds.length) * 100).toFixed(1);
-        
-        console.log(`   ✅ ${processed}/${funds.length} (${percent}%) | ${totalUpdated} updated, ${totalErrors} errors | ${elapsed}min elapsed, ~${remaining}min remaining`);
-      }
+  // Step 3: Get all scheme_codes from our DB
+  console.log('Step 3: Fetching scheme codes from database...');
+  const dbResult = await pool.query('SELECT scheme_code FROM funds');
+  const dbSchemeCodes = dbResult.rows.map((r: { scheme_code: string }) => r.scheme_code);
+  console.log(`  Found ${dbSchemeCodes.length} funds in database`);
 
-      // Delay between batches to avoid overwhelming MFApi
-      await sleep(CONFIG.DELAY_BETWEEN_BATCHES);
-      
-    } catch (error: any) {
-      console.error(`   ❌ Batch error at index ${i}:`, error.message);
-      totalErrors += CONFIG.CONCURRENCY;
-      await sleep(CONFIG.ERROR_PAUSE_DURATION);
+  // Step 4: Match and batch update
+  console.log('Step 4: Updating NAVs in database...');
+  let updated = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  const matchedFunds: NavEntry[] = [];
+
+  for (const schemeCode of dbSchemeCodes) {
+    const navEntry = navMap.get(schemeCode);
+    if (navEntry) {
+      matchedFunds.push(navEntry);
+    } else {
+      skipped++;
     }
   }
 
-  const totalTime = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
-  const successRate = ((totalUpdated / funds.length) * 100).toFixed(1);
-  
+  console.log(`  Matched ${matchedFunds.length} funds, ${skipped} not in AMFI file (closed/merged funds)`);
+
+  // Bulk UPDATE using unnest — sends all data in a single query per batch (1 roundtrip vs 500)
+  const BATCH_SIZE = 2000;
+
+  for (let i = 0; i < matchedFunds.length; i += BATCH_SIZE) {
+    const batch = matchedFunds.slice(i, i + BATCH_SIZE);
+    const codes: string[] = [];
+    const navs: number[] = [];
+    const dates: string[] = [];
+
+    for (const entry of batch) {
+      codes.push(entry.schemeCode);
+      navs.push(entry.nav);
+      dates.push(entry.date);
+    }
+
+    try {
+      await pool.query(`
+        UPDATE funds AS f SET
+          latest_nav = v.nav,
+          latest_nav_date = v.nav_date::date,
+          updated_at = CURRENT_TIMESTAMP
+        FROM (
+          SELECT unnest($1::text[]) AS scheme_code,
+                 unnest($2::numeric[]) AS nav,
+                 unnest($3::text[]) AS nav_date
+        ) AS v
+        WHERE f.scheme_code = v.scheme_code
+      `, [codes, navs, dates]);
+
+      updated += batch.length;
+    } catch (batchError: any) {
+      console.error(`  Batch error at index ${i}: ${batchError.message}`);
+      errors += batch.length;
+    }
+
+    const processed = Math.min(i + BATCH_SIZE, matchedFunds.length);
+    const percent = ((processed / matchedFunds.length) * 100).toFixed(1);
+    console.log(`  ${processed}/${matchedFunds.length} (${percent}%) updated`);
+  }
+
+  // Summary
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  // Find the most common NAV date (should be yesterday's date for most funds)
+  const dateCounts = new Map<string, number>();
+  for (const f of matchedFunds) {
+    dateCounts.set(f.date, (dateCounts.get(f.date) || 0) + 1);
+  }
+  let navDate = 'N/A';
+  let maxCount = 0;
+  for (const [date, count] of dateCounts) {
+    if (count > maxCount) { navDate = date; maxCount = count; }
+  }
+
   console.log('');
-  console.log('═'.repeat(60));
-  console.log('✨ DAILY NAV UPDATE COMPLETE');
-  console.log('═'.repeat(60));
-  console.log(`   ⏱️  Total time: ${totalTime} minutes`);
-  console.log(`   ✅ Successfully updated: ${totalUpdated} funds (${successRate}%)`);
-  console.log(`   ❌ Errors/Skipped: ${totalErrors} funds`);
-  console.log(`   📊 Rate: ${(totalUpdated / parseFloat(totalTime)).toFixed(1)} funds/minute`);
-  console.log(`   🏁 Finished at: ${new Date().toISOString()}`);
-  console.log('═'.repeat(60));
+  console.log('='.repeat(60));
+  console.log('DAILY NAV UPDATE COMPLETE');
+  console.log('='.repeat(60));
+  console.log(`  NAV Date: ${navDate}`);
+  console.log(`  Total time: ${totalTime}s`);
+  console.log(`  Updated: ${updated} funds`);
+  console.log(`  Skipped: ${skipped} (not in AMFI file)`);
+  console.log(`  Errors: ${errors}`);
+  console.log(`  Finished at: ${new Date().toISOString()}`);
+  console.log('='.repeat(60));
 
   await pool.end();
+
+  if (errors > 0 && updated === 0) {
+    process.exit(1);
+  }
 }
 
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n⚠️  Received SIGINT, closing database connection...');
+  console.log('\nReceived SIGINT, closing database connection...');
   await pool.end();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('\n⚠️  Received SIGTERM, closing database connection...');
+  console.log('\nReceived SIGTERM, closing database connection...');
   await pool.end();
   process.exit(0);
 });
 
 runDailyUpdate().catch(async (error) => {
-  console.error('❌ Fatal error:', error);
+  console.error('Fatal error:', error);
   await pool.end();
   process.exit(1);
 });

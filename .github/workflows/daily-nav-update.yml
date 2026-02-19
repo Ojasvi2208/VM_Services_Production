@@ -2,16 +2,17 @@ name: Daily NAV Update
 
 on:
   schedule:
-    # Runs at 5:00 AM IST (23:30 UTC previous day) every day
+    # Runs at 5:00 AM IST (23:30 UTC previous day) — Tuesday to Saturday only
     # AMFI publishes NAVs ~9:30 PM IST, RTAs finalize by ~1 AM IST
     # 5 AM gives 4+ hour buffer after RTA finalization
-    - cron: '30 23 * * *'
+    # Cron days: Mon-Fri UTC = Tue-Sat IST mornings (no NAV on Sat/Sun)
+    - cron: '30 23 * * 1-5'
   workflow_dispatch: # Allow manual trigger
 
 jobs:
   update-nav:
     runs-on: ubuntu-latest
-    timeout-minutes: 180 # 3 hours max
+    timeout-minutes: 15 # AMFI bulk download takes <1 minute, 15 min safety margin
 
     steps:
       - name: Checkout repository

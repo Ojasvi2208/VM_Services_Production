@@ -309,6 +309,38 @@ async function searchUnified(
       });
     }
 
+    // Levenshtein distance fallback (handles typos: "HFDC" → "HDFC", "Focussed" → "Focused")
+    // Requires fuzzystrmatch extension (CREATE EXTENSION IF NOT EXISTS fuzzystrmatch)
+    const levenshteinResult = await pool.query(
+      `SELECT
+        master_fund_id AS "masterFundId", strategy_name AS "strategyName",
+        fund_house AS "fundHouse", category, sub_category AS "subCategory",
+        variant_count AS "variantCount",
+        canonical_scheme_code AS "schemeCode", canonical_scheme_name AS "schemeName",
+        canonical_nav AS "latestNav", canonical_nav_date AS "latestNavDate",
+        return_1y AS "return1y", cagr_3y AS "cagr3y", cagr_5y AS "cagr5y",
+        cagr_3y_min AS "cagr3yMin", cagr_3y_max AS "cagr3yMax",
+        cagr_5y_min AS "cagr5yMin", cagr_5y_max AS "cagr5yMax",
+        sharpe_ratio AS "sharpeRatio", variants,
+        levenshtein(LOWER(LEFT(strategy_name, 50)), LOWER(LEFT($1, 50))) AS edit_dist
+      FROM mv_unified_search
+      WHERE levenshtein(LOWER(LEFT(strategy_name, 50)), LOWER(LEFT($1, 50))) <= 5
+      ORDER BY edit_dist ASC, cagr_3y DESC NULLS LAST
+      LIMIT $2`,
+      [trigramQuery, pageSize]
+    );
+
+    if (levenshteinResult.rows.length > 0) {
+      return NextResponse.json({
+        success: true,
+        funds: levenshteinResult.rows.map(formatRow),
+        total: levenshteinResult.rows.length,
+        page: 1, pageSize, totalPages: 1,
+        query: query, engine: 'unified', hint: 'levenshtein_fuzzy',
+        suggestion: `Showing closest matches for "${query}"`
+      });
+    }
+
     // Last resort: drop last word and retry (e.g. "sbi small cap fund" → "sbi small cap")
     if (words.length > 1) {
       const shorter = words.slice(0, -1).join(' ');
