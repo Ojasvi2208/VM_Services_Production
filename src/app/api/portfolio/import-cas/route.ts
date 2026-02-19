@@ -346,107 +346,149 @@ function parseCASText(text: string): ParsedCAS {
   finalizeFolio();
 
   // ── 2.5. STRATEGY: Tabular CAMS/KFIN CAS ──
-  // Detects summary-format CAS with columns: Folio | ISIN | Name | Cost Value | Units | NAV Date | NAV | Market Value | Registrar
-  // Uses global pattern extraction + proximity matching (robust against varying PDF text extraction order)
+  // Detects Consolidated Account Summary with columns: Folio | ISIN | Name | Cost | Units | NAV Date | NAV | Market Value | Registrar
+  // Approach A: Split text by folio+ISIN transitions (inspired by pdfplumber section-based parsing)
+  // Approach B: Global pattern matching fallback
   if (parsed.folios.length === 0 && fullText.match(/Cost\s+Value|Market\s+Value/i)) {
     const flatText = fullText
       .replace(/[\u00A0\u2000-\u200B]/g, ' ')  // normalize non-breaking/special spaces
       .replace(/[\u2010-\u2015\u2212]/g, '-')   // normalize dashes to hyphen
       .replace(/\s+/g, ' ');
 
-    // Find all ISINs — no \b boundary (folio may be concatenated: "91034227882/0INF247L01BV9")
-    const isinRegex = /(INF[A-Z0-9]{9})/g;
-    const isinPositions: { isin: string; pos: number }[] = [];
-    let m;
-    while ((m = isinRegex.exec(flatText)) !== null) {
-      isinPositions.push({ isin: m[1], pos: m.index });
+    // ── Approach A: Section-based split by folio+ISIN ──
+    // Splits on patterns like "29470091/86 INF179K01574" or "91034227882/0INF247L01BV9"
+    const sectionParts = flatText.split(/(\d{5,}\/[\dA-Z]+\s*INF[A-Z0-9]{9})/i);
+
+    if (sectionParts.length >= 3) {
+      for (let i = 1; i < sectionParts.length; i += 2) {
+        const header = sectionParts[i].trim();
+        const dataBlock = (sectionParts[i + 1] || '').trim();
+
+        const headerMatch = header.match(/(\d{5,}\/[\dA-Z]+)\s*(INF[A-Z0-9]{9})/i);
+        if (!headerMatch) continue;
+        const folio = headerMatch[1];
+        const isin = headerMatch[2];
+        if (parsed.folios.some(f => f.schemeCode === isin)) continue;
+
+        // Truncate data block at registrar to avoid picking up totals/next-section numbers
+        const regIdx = dataBlock.search(/CAMS|KFINTECH|KFIN/i);
+        const fundData = regIdx >= 0 ? dataBlock.substring(0, regIdx + 10) : dataBlock.substring(0, 500);
+
+        // Find all decimal numbers — dates (DD-Mon-YYYY) are naturally excluded (no decimal point)
+        const rawNumbers = fundData.match(/[\d,]+\.\d+/g) || [];
+        const numbers = rawNumbers.map(n => parseNum(n));
+        if (numbers.length < 3) continue;
+
+        // Registrar detection
+        const registrar = /KFIN/i.test(dataBlock) ? 'KFINTECH' : 'CAMS';
+
+        // Scheme name: text before first decimal number in data block
+        const firstNumIdx = fundData.search(/[\d,]+\.\d+/);
+        let schemeName = firstNumIdx > 0
+          ? fundData.substring(0, firstNumIdx).replace(/\s+/g, ' ').trim()
+          : '';
+        schemeName = schemeName
+          .replace(/^\s*ISIN\s*/i, '')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+        if (!schemeName || schemeName.length < 5) schemeName = `Fund ${isin}`;
+
+        // Position-based extraction from table columns:
+        // After ISIN: [Scheme Name] CostValue UnitBalance [NAVDate] NAV MarketValue Registrar
+        // Decimal numbers in order: [CostValue, Units, NAV, MarketValue]
+        const costValue = numbers[0];
+        const units = numbers[1];
+        const nav = numbers.length >= 4 ? numbers[numbers.length - 2] : numbers[2];
+        const marketValue = numbers.length >= 4
+          ? numbers[numbers.length - 1]
+          : Math.round(numbers[1] * numbers[2] * 100) / 100;
+
+        if (units <= 0) continue;
+
+        parsed.folios.push({
+          folioNumber: folio,
+          amc: detectAmc(schemeName),
+          schemeName,
+          schemeCode: isin,
+          pan: parsed.pan,
+          registrar,
+          closingBalance: units,
+          closingNav: Math.round(nav * 10000) / 10000,
+          closingValue: Math.round(marketValue * 100) / 100,
+          costValue: Math.round(costValue * 100) / 100,
+          transactions: []
+        });
+      }
     }
 
-    // Find all data patterns globally: cost units date nav [marketValue] registrar
-    // No \b after registrar — PDF text may concatenate registrar with next row's folio
-    const dataRe = /([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s+(\d{2}-[A-Za-z]{3}-\d{4})\s+([\d,]+(?:\.\d+)?)(?:\s+([\d,]+(?:\.\d+)?))?\s+(CAMS|KFINTECH|KFIN)(?=[^A-Za-z]|$)/gi;
-    const dataMatches: { groups: string[]; pos: number }[] = [];
-    let dm;
-    while ((dm = dataRe.exec(flatText)) !== null) {
-      dataMatches.push({ groups: [...dm], pos: dm.index });
-    }
+    // ── Approach B: Global pattern matching (fallback if section split found nothing) ──
+    if (parsed.folios.length === 0) {
+      const isinRegex = /(INF[A-Z0-9]{9})/g;
+      const isinPositions: { isin: string; pos: number }[] = [];
+      let m;
+      while ((m = isinRegex.exec(flatText)) !== null) {
+        isinPositions.push({ isin: m[1], pos: m.index });
+      }
 
-    // Associate each data match with the nearest preceding ISIN (within 1000 chars)
-    const processedIsins = new Set<string>();
-    for (const data of dataMatches) {
-      let bestIsin: { isin: string; pos: number } | null = null;
-      let bestDistance = Infinity;
-      for (const ip of isinPositions) {
-        const distance = data.pos - (ip.pos + ip.isin.length);
-        if (distance >= 0 && distance < 1000 && distance < bestDistance) {
-          bestDistance = distance;
-          bestIsin = ip;
+      const dataRe = /([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s+(\d{2}-[A-Za-z]{3}-\d{4})\s+([\d,]+(?:\.\d+)?)(?:\s+([\d,]+(?:\.\d+)?))?\s+(CAMS|KFINTECH|KFIN)(?=[^A-Za-z]|$)/gi;
+      const dataMatches: { groups: string[]; pos: number }[] = [];
+      let dm;
+      while ((dm = dataRe.exec(flatText)) !== null) {
+        dataMatches.push({ groups: [...dm], pos: dm.index });
+      }
+
+      const processedIsins = new Set<string>();
+      for (const data of dataMatches) {
+        let bestIsin: { isin: string; pos: number } | null = null;
+        let bestDistance = Infinity;
+        for (const ip of isinPositions) {
+          const distance = data.pos - (ip.pos + ip.isin.length);
+          if (distance >= 0 && distance < 1000 && distance < bestDistance) {
+            bestDistance = distance;
+            bestIsin = ip;
+          }
         }
+        if (!bestIsin) continue;
+        if (processedIsins.has(bestIsin.isin)) continue;
+        if (parsed.folios.some(f => f.schemeCode === bestIsin!.isin)) continue;
+        processedIsins.add(bestIsin.isin);
+
+        const costValue = parseNum(data.groups[1]);
+        const units = parseNum(data.groups[2]);
+        const nav = parseNum(data.groups[4]);
+        const registrar = data.groups[6].toUpperCase();
+        const marketValue = data.groups[5]
+          ? parseNum(data.groups[5])
+          : Math.round(units * nav * 100) / 100;
+
+        if (units <= 0) continue;
+
+        let folioNumber = bestIsin.isin;
+        const beforeIsin = flatText.substring(Math.max(0, bestIsin.pos - 500), bestIsin.pos);
+        const concatFolioMatch = beforeIsin.match(/(\d{5,}\/\d+)\s*$/);
+        const spacedFolioMatch = beforeIsin.match(/\b(\d{5,}\/\d+)\b/);
+        if (concatFolioMatch) folioNumber = concatFolioMatch[1];
+        else if (spacedFolioMatch) folioNumber = spacedFolioMatch[1];
+
+        const isinEnd = bestIsin.pos + bestIsin.isin.length;
+        let schemeName = flatText.substring(isinEnd, data.pos).replace(/\s+/g, ' ').trim()
+          .replace(/^\s*ISIN\s*/i, '').replace(/\s*\d[\d,]*\.\d+\s*$/g, '').trim();
+        if (!schemeName || schemeName.length < 5) schemeName = `Fund ${bestIsin.isin}`;
+
+        parsed.folios.push({
+          folioNumber,
+          amc: detectAmc(schemeName),
+          schemeName,
+          schemeCode: bestIsin.isin,
+          pan: parsed.pan,
+          registrar,
+          closingBalance: units,
+          closingNav: Math.round(nav * 10000) / 10000,
+          closingValue: Math.round(marketValue * 100) / 100,
+          costValue: Math.round(costValue * 100) / 100,
+          transactions: []
+        });
       }
-      if (!bestIsin) continue;
-      if (processedIsins.has(bestIsin.isin)) continue;
-      if (parsed.folios.some(f => f.schemeCode === bestIsin!.isin)) continue;
-      processedIsins.add(bestIsin.isin);
-
-      const costValue = parseNum(data.groups[1]);
-      const units = parseNum(data.groups[2]);
-      const nav = parseNum(data.groups[4]);
-      const registrar = data.groups[6].toUpperCase();
-      let marketValue: number;
-      if (data.groups[5]) {
-        marketValue = parseNum(data.groups[5]);
-      } else {
-        marketValue = Math.round(units * nav * 100) / 100;
-      }
-
-      if (units <= 0) continue;
-
-      // Extract scheme name from text between ISIN and data numbers
-      const isinEnd = bestIsin.pos + bestIsin.isin.length;
-      const betweenText = flatText.substring(isinEnd, data.pos).trim();
-      let schemeName = betweenText
-        .replace(/^\s*ISIN\s*/i, '')
-        .replace(/\s*\d[\d,]*\.\d+\s*$/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      // If scheme name is empty/short, look BEFORE the ISIN (CAMS Summary has name before ISIN)
-      if (!schemeName || schemeName.length < 5) {
-        const beforeIsinText = flatText.substring(Math.max(0, bestIsin.pos - 400), bestIsin.pos);
-        const preMatch = beforeIsinText.match(/[A-Z0-9]+\s*-\s*(.+?)(?:\s*\([^)]*\)\s*)*\s*$/i);
-        if (preMatch) {
-          schemeName = preMatch[1].replace(/\s+/g, ' ').trim()
-            .replace(/\s*\d[\d,]+\.\d+\s*/g, ' ')
-            .replace(/\s*-\s*-\s*/g, ' - ')
-            .replace(/\s{2,}/g, ' ').trim();
-        }
-      }
-      if (!schemeName || schemeName.length < 5) schemeName = `Fund ${bestIsin.isin}`;
-
-      // Extract folio: check for concatenated folio+ISIN, then spaced folio
-      let folioNumber = bestIsin.isin;
-      const beforeIsin = flatText.substring(Math.max(0, bestIsin.pos - 500), bestIsin.pos);
-      const concatFolioMatch = beforeIsin.match(/(\d{5,}\/\d+)\s*$/);
-      const spacedFolioMatch = beforeIsin.match(/\b(\d{5,}\/\d+)\b/);
-      if (concatFolioMatch) {
-        folioNumber = concatFolioMatch[1];
-      } else if (spacedFolioMatch) {
-        folioNumber = spacedFolioMatch[1];
-      }
-
-      parsed.folios.push({
-        folioNumber,
-        amc: detectAmc(schemeName),
-        schemeName,
-        schemeCode: bestIsin.isin,
-        pan: parsed.pan,
-        registrar,
-        closingBalance: units,
-        closingNav: Math.round(nav * 10000) / 10000,
-        closingValue: Math.round(marketValue * 100) / 100,
-        costValue: Math.round(costValue * 100) / 100,
-        transactions: []
-      });
     }
   }
 
