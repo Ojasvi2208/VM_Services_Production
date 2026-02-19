@@ -174,10 +174,10 @@ function parseCASText(text: string): ParsedCAS {
   const folioHeaderRe = /Folio\s+(?:No\.?|Number|#)\s*[:.]*\s*([\d\/\s\-]+)/i;
   const txnDateRe = /^(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([\-\d,]+\.?\d*)\s+([\-\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)/;
   const closingBalRe = /(?:Closing\s+(?:Unit\s+)?Balance|Unit\s+Balance)\s*(?:\(?\s*(?:as\s+on\s+)?\d{2}-[A-Za-z]{3}-\d{4}\s*\)?\s*)?[:.]*\s*([\d,]+(?:\.\d+)?)/i;
-  const navOnDateRe = /(?:NAV|Net\s+Asset\s+Value)\s+(?:as\s+)?on\s+\d{2}-[A-Za-z]{3}-\d{4}\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+\.\d+)/i;
-  const valuationRe = /(?:Valuation|Market\s+Value|Mkt\.?\s*Value)\s+(?:as\s+)?on\s+\d{2}-[A-Za-z]{3}-\d{4}\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+\.\d+)/i;
+  const navOnDateRe = /(?:NAV|Net\s+Asset\s+Value)\s+(?:as\s+)?on\s+\d{2}-[A-Za-z]{3}-\d{4}\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+(?:\.\d+)?)/i;
+  const valuationRe = /(?:Valuation|Market\s+Value|Mkt\.?\s*Value)\s+(?:as\s+)?on\s+\d{2}-[A-Za-z]{3}-\d{4}\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+(?:\.\d+)?)/i;
   const registrarRe = /Registrar\s*[:.]?\s*(CAMS|KFIN(?:TECH)?|FRANKLIN|SUNDARAM|CAMS\/KFIN)/i;
-  const costValueRe = /Cost\s+Value\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+\.\d+)/i;
+  const costValueRe = /Cost\s+Value\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+(?:\.\d+)?)/i;
 
   function finalizeFolio() {
     if (!currentFolio) { currentFolio = null; currentScheme = ''; return; }
@@ -295,17 +295,29 @@ function parseCASText(text: string): ParsedCAS {
         continue;
       }
 
-      // NAV on date
+      // NAV on date (with date) or simple "NAV: value" / "NAV (₹): value"
       const navMatch = line.match(navOnDateRe);
       if (navMatch) {
         currentFolio.closingNav = parseNum(navMatch[1]);
         continue;
       }
+      const simpleNavRe = /\bNAV\s*(?:\([^)]*\))?\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+(?:\.\d+)?)\b/i;
+      const simpleNavMatch = !currentFolio.closingNav && line.match(simpleNavRe);
+      if (simpleNavMatch && !line.match(/folio|scheme|plan|isin/i)) {
+        currentFolio.closingNav = parseNum(simpleNavMatch[1]);
+        continue;
+      }
 
-      // Valuation
+      // Valuation (with date) or simple "Valuation: value" / "Market Value: value"
       const valMatch = line.match(valuationRe);
       if (valMatch) {
         currentFolio.closingValue = parseNum(valMatch[1]);
+        continue;
+      }
+      const simpleValRe = /(?:Valuation|Market\s+Value|Mkt\.?\s*Value)\s*[:.]?\s*(?:INR\s+)?(?:₹\s*)?([\d,]+(?:\.\d+)?)/i;
+      const simpleValMatch = !currentFolio.closingValue && line.match(simpleValRe);
+      if (simpleValMatch) {
+        currentFolio.closingValue = parseNum(simpleValMatch[1]);
         continue;
       }
 
@@ -917,6 +929,10 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    if (buffer.length < 100) {
+      return NextResponse.json({ error: 'PDF file is too small or corrupted' }, { status: 400 });
+    }
+
     // ── Step 1: Parse PDF (Python casparser primary, JS fallback) ──
     let parsedData: ParsedCAS | null = null;
     let parser = 'unknown';
@@ -977,7 +993,7 @@ export async function POST(request: NextRequest) {
         console.log(`[CAS] PDF text too short (${textContent?.length || 0} chars)`);
         return NextResponse.json({ error: 'Could not extract text from PDF. The file may be scanned or image-based.' }, { status: 400 });
       }
-      console.log(`[CAS] Extracted ${textContent.length} chars from PDF. First 200: ${textContent.substring(0, 200).replace(/\n/g, '|')}`);
+      console.log(`[CAS] Extracted ${textContent.length} chars from PDF`);
       parsedData = parseCASText(textContent);
       parser = 'javascript';
       console.log(`[CAS] JS parser: ${parsedData.folios.length} folios`);
@@ -988,7 +1004,6 @@ export async function POST(request: NextRequest) {
         const isinCount = (textContent.match(/INF[A-Z0-9]{9}/g) || []).length;
         const balanceMentions = (textContent.match(/balance/gi) || []).length;
         console.log(`[CAS] ZERO folios. Diagnostics: folio_mentions=${folioMentions}, closing=${closingMentions}, balance=${balanceMentions}, ISINs=${isinCount}`);
-        console.log(`[CAS] First 500 chars: ${textContent.substring(0, 500).replace(/\n/g, '|')}`);
       }
     }
 
@@ -1020,6 +1035,13 @@ export async function POST(request: NextRequest) {
     // ── Step 3: Filter MF folios and compute financials ──
     const mfFolios = parsedData.folios.filter(isMutualFund);
     const nonMfCount = parsedData.folios.length - mfFolios.length;
+    if (nonMfCount > 0) {
+      console.log(`[CAS] Filtered out ${nonMfCount} non-MF folios from ${parsedData.folios.length} total`);
+    }
+    if (mfFolios.length === 0 && parsedData.folios.length > 0) {
+      console.log(`[CAS] All ${parsedData.folios.length} folios filtered as non-MF. Names: ${parsedData.folios.map(f => f.schemeName).join(' | ')}`);
+      return NextResponse.json({ error: `No mutual fund holdings found. ${parsedData.folios.length} folio(s) were detected but classified as non-MF.` }, { status: 400 });
+    }
 
     // ── Step 4: Stage all MF holdings in DB with a unique importId ──
     const importId = randomUUID();
