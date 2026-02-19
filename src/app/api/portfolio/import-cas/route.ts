@@ -862,6 +862,9 @@ function isMutualFund(folio: CASFolio): boolean {
   return mfSignals.some(s => name.includes(s)) && folio.closingBalance > 0;
 }
 
+// Next.js route config — extend function timeout for PDF processing
+export const maxDuration = 60; // seconds (Netlify caps at plan limit)
+
 // ════════════════════════════════════════════════════════════════════
 //  POST — Parse PDF, match codes, stage in DB, return importId + preview
 //  The app NEVER receives raw folio data. Only a preview summary.
@@ -883,6 +886,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
+    console.log(`[CAS] Received PDF: ${file.name || 'unnamed'}, size=${file.size} bytes, password=${obfuscatedPassword ? 'provided' : 'none'}`);
+
     const password = obfuscatedPassword ? deobfuscateFromTransport(obfuscatedPassword) : undefined;
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -891,14 +896,17 @@ export async function POST(request: NextRequest) {
     let parsedData: ParsedCAS | null = null;
     let parser = 'unknown';
 
-    // Try Python casparser first
-    parsedData = await parseCASWithPython(buffer, password);
+    // Skip Python on serverless (Netlify/Vercel) — no Python runtime available
+    const isServerless = !!(process.env.NETLIFY || process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+    if (!isServerless) {
+      parsedData = await parseCASWithPython(buffer, password);
+    }
     if (parsedData && parsedData.folios && parsedData.folios.length > 0) {
       parser = 'casparser';
       console.log(`[CAS] Python casparser: ${parsedData.folios.length} folios`);
     } else {
-      // Fallback to JS parser
-      console.log('[CAS] Python casparser unavailable, falling back to JS parser');
+      // JS parser
+      console.log(`[CAS] Using JS parser (serverless=${isServerless})`);
       let textContent = '';
       try {
         const pdf = await getDocumentProxy(new Uint8Array(buffer), { password: password || undefined });
@@ -906,17 +914,45 @@ export async function POST(request: NextRequest) {
         textContent = result.text;
       } catch (pdfError) {
         const errorMessage = pdfError instanceof Error ? pdfError.message : 'Unknown error';
+        console.log(`[CAS] PDF extraction failed: ${errorMessage}`);
+
+        // If password was provided but failed, it might be the wrong password
         if (errorMessage.includes('password') || errorMessage.includes('encrypted') || errorMessage.includes('Incorrect Password')) {
-          return NextResponse.json({
-            error: 'This PDF is password protected. Please enter the correct password (usually your PAN like ABCDE1234F or DOB like 01011990).',
-            requiresPassword: true
-          }, { status: 400 });
+          // Try common password formats: lowercase PAN, DOB formats
+          if (password) {
+            const altPasswords = [
+              password.toLowerCase(),
+              password.toUpperCase(),
+            ].filter(p => p !== password);
+
+            for (const altPwd of altPasswords) {
+              try {
+                const pdf2 = await getDocumentProxy(new Uint8Array(buffer), { password: altPwd });
+                const result2 = await extractText(pdf2, { mergePages: true });
+                if (result2.text && result2.text.trim().length > 100) {
+                  textContent = result2.text;
+                  console.log(`[CAS] PDF opened with alt password format`);
+                  break;
+                }
+              } catch { /* try next */ }
+            }
+          }
+
+          if (!textContent) {
+            return NextResponse.json({
+              error: 'This PDF is password protected. Please enter the correct password (usually your PAN like ABCDE1234F or DOB like 01011990).',
+              requiresPassword: true
+            }, { status: 400 });
+          }
+        } else {
+          return NextResponse.json({ error: `Could not parse PDF: ${errorMessage}`, details: errorMessage }, { status: 400 });
         }
-        return NextResponse.json({ error: 'Could not parse PDF.', details: errorMessage }, { status: 400 });
       }
       if (!textContent || textContent.trim().length < 100) {
+        console.log(`[CAS] PDF text too short (${textContent?.length || 0} chars)`);
         return NextResponse.json({ error: 'Could not extract text from PDF. The file may be scanned or image-based.' }, { status: 400 });
       }
+      console.log(`[CAS] Extracted ${textContent.length} chars from PDF. First 200: ${textContent.substring(0, 200).replace(/\n/g, '|')}`);
       parsedData = parseCASText(textContent);
       parser = 'javascript';
       console.log(`[CAS] JS parser: ${parsedData.folios.length} folios`);
@@ -1080,10 +1116,10 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('[CAS-POST] Error:', error instanceof Error ? error.message : error);
+    console.error('[CAS-POST] Error:', error instanceof Error ? `${error.message}\n${error.stack}` : error);
     return NextResponse.json({
-      error: 'Failed to parse CAS statement',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: `Failed to parse CAS statement: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      details: error instanceof Error ? error.stack?.substring(0, 300) : 'Unknown error'
     }, { status: 500 });
   }
 }
