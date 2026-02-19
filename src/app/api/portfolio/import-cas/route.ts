@@ -970,6 +970,7 @@ export async function POST(request: NextRequest) {
     // ── Step 1: Parse PDF (Python casparser primary, JS fallback) ──
     let parsedData: ParsedCAS | null = null;
     let parser = 'unknown';
+    let textContent = '';  // hoisted for diagnostics
 
     // Skip Python on serverless (Netlify/Vercel) — no Python runtime available
     const isServerless = !!(process.env.NETLIFY || process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
@@ -982,7 +983,7 @@ export async function POST(request: NextRequest) {
     } else {
       // JS parser
       console.log(`[CAS] Using JS parser (serverless=${isServerless})`);
-      let textContent = '';
+      textContent = '';
       try {
         const pdf = await getDocumentProxy(new Uint8Array(buffer), { password: password || undefined });
         const result = await extractText(pdf, { mergePages: true });
@@ -1043,7 +1044,16 @@ export async function POST(request: NextRequest) {
     }
 
     if (!parsedData || parsedData.folios.length === 0) {
-      return NextResponse.json({ error: 'No holdings found in the CAS statement.' }, { status: 400 });
+      // Include diagnostics in error so user/dev can see what text was extracted
+      const txt = textContent || '';
+      const isinCount = (txt.match(/INF[A-Z0-9]{9}/g) || []).length;
+      const hasCostVal = /Cost\s+Value/i.test(txt);
+      const hasMktVal = /Market\s+Value/i.test(txt);
+      const hasCAMS = /CAMS/i.test(txt);
+      const hasKFIN = /KFIN/i.test(txt);
+      const first80 = txt.substring(0, 80).replace(/[^\x20-\x7E]/g, '').trim();
+      const diag = `[${txt.length}ch, ISINs=${isinCount}, cost=${hasCostVal}, mkt=${hasMktVal}, cams=${hasCAMS}, kfin=${hasKFIN}, start="${first80}"]`;
+      return NextResponse.json({ error: `No holdings found. Debug: ${diag}` }, { status: 400 });
     }
 
     // ── Step 2: Match every scheme to our funds DB ──
