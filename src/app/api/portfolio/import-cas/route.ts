@@ -993,12 +993,13 @@ export async function POST(request: NextRequest) {
 
         // If password was provided but failed, it might be the wrong password
         if (errorMessage.includes('password') || errorMessage.includes('encrypted') || errorMessage.includes('Incorrect Password')) {
-          // Try common password formats: lowercase PAN, DOB formats
-          if (password) {
+          // Try common password formats: case variants, email (CAMS uses email as password)
+          {
             const altPasswords = [
-              password.toLowerCase(),
-              password.toUpperCase(),
-            ].filter(p => p !== password);
+              ...(password ? [password.toLowerCase(), password.toUpperCase()] : []),
+              // CAMS CAS uses email as password
+              ...(user?.email ? [user.email, user.email.toLowerCase(), user.email.toUpperCase()] : []),
+            ].filter((p, i, arr) => p !== password && p !== undefined && arr.indexOf(p) === i);
 
             for (const altPwd of altPasswords) {
               try {
@@ -1015,7 +1016,7 @@ export async function POST(request: NextRequest) {
 
           if (!textContent) {
             return NextResponse.json({
-              error: 'This PDF is password protected. Please enter the correct password (usually your PAN like ABCDE1234F or DOB like 01011990).',
+              error: 'This PDF is password protected. NSDL CAS uses your PAN (e.g. ABCDE1234F). CAMS CAS uses your email address as the password.',
               requiresPassword: true
             }, { status: 400 });
           }
