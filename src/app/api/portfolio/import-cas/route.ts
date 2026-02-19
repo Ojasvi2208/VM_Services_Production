@@ -362,33 +362,67 @@ function parseCASText(text: string): ParsedCAS {
       if (isinIndex === -1) continue;
       const afterIsin = flatText.substring(isinIndex + isin.length, isinIndex + 600);
 
-      // CAMS tabular pattern: ...SchemeName... CostValue Units DD-MMM-YYYY NAV MarketValue Registrar
-      // CostValue=2dp, Units=3+dp, Date, NAV=2+dp, MarketValue=2dp
-      const camsPat = /([\d,]+\.\d{2})\s+([\d,]+\.\d{3,})\s+\d{2}-[A-Za-z]{3}-\d{4}\s+([\d,]+\.\d{2,})\s+([\d,]+\.\d{2})/;
+      // Pattern A: Full tabular — CostValue Units DD-MMM-YYYY NAV MarketValue (all inline)
+      const camsPat = /([\d,]+\.\d{2,})\s+([\d,]+\.\d{3,})\s+\d{2}-[A-Za-z]{3}-\d{4}\s+([\d,]+\.\d{2,})\s+([\d,]+\.\d{2,})/;
       const camsMatch = afterIsin.match(camsPat);
-      if (!camsMatch) continue;
 
-      const costValue = parseNum(camsMatch[1]);
-      const units = parseNum(camsMatch[2]);
-      const nav = parseNum(camsMatch[3]);
-      const marketValue = parseNum(camsMatch[4]);
+      // Pattern B: CAMS/KFintech Summary — CostValue Units DD-MMM-YYYY NAV Registrar (no inline market value)
+      const summaryPat = /([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s+(\d{2}-[A-Za-z]{3}-\d{4})\s+([\d,]+(?:\.\d+)?)\s+(CAMS|KFINTECH|KFIN)\b/i;
+      const summaryMatch = !camsMatch ? afterIsin.match(summaryPat) : null;
+
+      if (!camsMatch && !summaryMatch) continue;
+
+      let costValue: number, units: number, nav: number, marketValue: number;
+      let registrar: string;
+
+      if (camsMatch) {
+        costValue = parseNum(camsMatch[1]);
+        units = parseNum(camsMatch[2]);
+        nav = parseNum(camsMatch[3]);
+        marketValue = parseNum(camsMatch[4]);
+        // Detect registrar from text after the matched numbers
+        const afterNums = afterIsin.substring(afterIsin.indexOf(camsMatch[0]) + camsMatch[0].length, afterIsin.indexOf(camsMatch[0]) + camsMatch[0].length + 30);
+        registrar = afterNums.match(/CAMS|KFIN/i)?.[0] || 'CAMS';
+      } else {
+        // Summary format: cost units date nav registrar
+        costValue = parseNum(summaryMatch![1]);
+        units = parseNum(summaryMatch![2]);
+        nav = parseNum(summaryMatch![4]);
+        registrar = summaryMatch![5].toUpperCase();
+
+        // Market value: look in text before ISIN (appears on the folio header line)
+        const beforeIsinForMv = flatText.substring(Math.max(0, isinIndex - 300), isinIndex);
+        const mvMatch = beforeIsinForMv.match(/([\d,]+\.\d{2})\s*[^\d]*$/);
+        marketValue = mvMatch ? parseNum(mvMatch[1]) : Math.round(units * nav * 100) / 100;
+      }
+
       if (units <= 0) continue;
 
-      // Extract scheme name: text between ISIN and the first number (cost value)
-      const beforeCost = afterIsin.substring(0, afterIsin.indexOf(camsMatch[0]));
+      // Extract scheme name: first try text between ISIN and the numbers (after ISIN)
+      const matchedPat = camsMatch || summaryMatch!;
+      const beforeCost = afterIsin.substring(0, afterIsin.indexOf(matchedPat[0]));
       let schemeName = beforeCost.replace(/\s+/g, ' ').trim()
         .replace(/^\s*ISIN\s*/i, '').replace(/\s*\d[\d,]*\.\d+\s*$/g, '').trim();
+
+      // If scheme name is empty/short, look BEFORE the ISIN (CAMS Summary has name before ISIN)
+      if (!schemeName || schemeName.length < 5) {
+        const beforeIsinText = flatText.substring(Math.max(0, isinIndex - 400), isinIndex);
+        // Match: "SCHEME_CODE - Scheme Name ... (details)" pattern
+        const preMatch = beforeIsinText.match(/[A-Z0-9]+\s*-\s*(.+?)(?:\s*\([^)]*\)\s*)*\s*$/i);
+        if (preMatch) {
+          schemeName = preMatch[1].replace(/\s+/g, ' ').trim()
+            .replace(/\s*\d[\d,]+\.\d+\s*/g, ' ')  // strip embedded market value numbers
+            .replace(/\s*-\s*-\s*/g, ' - ')          // collapse double dashes from removed numbers
+            .replace(/\s{2,}/g, ' ').trim();
+        }
+      }
       if (!schemeName || schemeName.length < 5) schemeName = `Fund ${isin}`;
 
-      // Extract folio number: look before the ISIN
+      // Extract folio number: look before the ISIN (extend to 500 chars for Summary format)
       let folioNumber = isin;
-      const beforeIsin = flatText.substring(Math.max(0, isinIndex - 50), isinIndex);
-      const folioMatch = beforeIsin.match(/([\d\/]+)\s*$/);
+      const beforeIsin = flatText.substring(Math.max(0, isinIndex - 500), isinIndex);
+      const folioMatch = beforeIsin.match(/\b(\d{5,}\/\d+)\b/);
       if (folioMatch) folioNumber = folioMatch[1];
-
-      // Detect registrar
-      const afterNums = afterIsin.substring(afterIsin.indexOf(camsMatch[0]) + camsMatch[0].length, afterIsin.indexOf(camsMatch[0]) + camsMatch[0].length + 30);
-      const registrar = afterNums.match(/CAMS|KFIN/i)?.[0] || 'CAMS';
 
       parsed.folios.push({
         folioNumber,
