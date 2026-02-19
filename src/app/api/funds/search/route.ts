@@ -74,7 +74,18 @@ const AMC_ALIASES: Record<string, string[]> = {
 };
 
 // ── Compound Word Expansions — split common MF jargon ──
+// Includes standalone category keywords (e.g. "small" → "small cap")
+// so "sbi small" becomes words=['sbi','small','cap'] matching "sbi small cap fund"
 const COMPOUND_SPLITS: Record<string, string> = {
+  // Standalone category keywords → full category name
+  'small':     'small cap',
+  'mid':       'mid cap',
+  'large':     'large cap',
+  'flexi':     'flexi cap',
+  'multi':     'multi cap',
+  'micro':     'micro cap',
+  'blue':      'blue chip',
+  // Compound words (no space)
   'smallcap':  'small cap',
   'midcap':    'mid cap',
   'largecap':  'large cap',
@@ -308,8 +319,30 @@ async function searchUnified(
   const totalPages = Math.ceil(total / pageSize);
   const offset = (page - 1) * pageSize;
 
+  // ── Relevance-weighted ORDER BY when query is present ──
+  // Priority: exact phrase → starts with → contains → fallback, then shorter name, then CAGR
+  let orderBy: string;
+  const dataParams = [...params];
+  if (query && !topPerformers) {
+    const { words } = normalizeQuery(query);
+    const phrase = words.join(' ');
+    dataParams.push(phrase, phrase + '%', '%' + phrase + '%');
+    const exactIdx = p++;
+    const prefixIdx = p++;
+    const containsIdx = p++;
+    orderBy = `ORDER BY
+      CASE WHEN search_text = $${exactIdx} THEN 0
+           WHEN search_text LIKE $${prefixIdx} THEN 1
+           WHEN search_text LIKE $${containsIdx} THEN 2
+           ELSE 3 END,
+      LENGTH(strategy_name) ASC,
+      cagr_3y DESC NULLS LAST`;
+  } else {
+    orderBy = 'ORDER BY cagr_3y DESC NULLS LAST';
+  }
+  dataParams.push(pageSize, offset);
+
   // ── Paginated results ──
-  const dataParams = [...params, pageSize, offset];
   const result = await pool.query(
     `SELECT
       master_fund_id    AS "masterFundId",
@@ -333,7 +366,7 @@ async function searchUnified(
       variants
     FROM mv_unified_search
     ${where}
-    ORDER BY cagr_3y DESC NULLS LAST
+    ${orderBy}
     LIMIT $${p} OFFSET $${p + 1}`,
     dataParams
   );
@@ -414,7 +447,26 @@ async function searchLegacy(
   const totalPages = Math.ceil(total / pageSize);
   const offset = (page - 1) * pageSize;
 
-  const dataParams = [...params, pageSize, offset];
+  // Relevance-weighted ORDER BY for legacy search
+  let orderBy: string;
+  const dataParams = [...params];
+  if (query) {
+    const phrase = query.trim().toLowerCase();
+    dataParams.push(phrase, phrase + '%', '%' + phrase + '%');
+    const exactIdx = p++;
+    const prefixIdx = p++;
+    const containsIdx = p++;
+    orderBy = `ORDER BY
+      CASE WHEN LOWER(f.scheme_name) LIKE $${containsIdx} THEN
+        CASE WHEN LOWER(f.scheme_name) LIKE $${prefixIdx} THEN 0 ELSE 1 END
+        ELSE 2 END,
+      LENGTH(f.scheme_name) ASC,
+      r.cagr_3y DESC NULLS LAST`;
+  } else {
+    orderBy = 'ORDER BY r.cagr_3y DESC NULLS LAST';
+  }
+  dataParams.push(pageSize, offset);
+
   const result = await pool.query(
     `SELECT
       f.scheme_code AS "schemeCode", f.scheme_name AS "schemeName",
@@ -424,7 +476,7 @@ async function searchLegacy(
     FROM funds f
     LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
     ${where}
-    ORDER BY r.cagr_3y DESC NULLS LAST
+    ${orderBy}
     LIMIT $${p} OFFSET $${p + 1}`,
     dataParams
   );

@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
           ph.source,
           ph.scheme_name,
           COALESCE(f.latest_nav, f_isin.latest_nav) as current_nav,
+          COALESCE(f.latest_nav_date, f_isin.latest_nav_date) as nav_date,
           COALESCE(f.scheme_code, f_isin.scheme_code) as resolved_scheme_code
         FROM portfolio_holdings ph
         LEFT JOIN funds f ON ph.scheme_code = f.scheme_code
@@ -65,6 +66,7 @@ export async function GET(request: NextRequest) {
 
       let totalInvested = 0;
       let currentValue = 0;
+      let oldestNavDate: string | null = null;
 
       for (const holding of uniqueHoldings) {
         const purchaseAmount = parseFloat(holding.purchase_amount) || 0;
@@ -76,10 +78,19 @@ export async function GET(request: NextRequest) {
         if (nav > 0) {
           currentValue += units * nav;
         } else if (holding.source === 'cas') {
-          // CAS import without live NAV: use purchase_amount as approximate current value
           currentValue += purchaseAmount;
         } else {
           currentValue += units * (parseFloat(holding.purchase_nav) || 0);
+        }
+
+        // Track the oldest NAV date across all holdings
+        if (holding.nav_date) {
+          const dateStr = typeof holding.nav_date === 'string'
+            ? holding.nav_date
+            : new Date(holding.nav_date).toISOString().split('T')[0];
+          if (!oldestNavDate || dateStr < oldestNavDate) {
+            oldestNavDate = dateStr;
+          }
         }
       }
 
@@ -93,7 +104,8 @@ export async function GET(request: NextRequest) {
           currentValue: Math.round(currentValue * 100) / 100,
           totalReturns: Math.round(totalReturns * 100) / 100,
           returnsPercentage: Math.round(returnsPercentage * 100) / 100,
-          holdingsCount: uniqueHoldings.length
+          holdingsCount: uniqueHoldings.length,
+          oldestNavDate
         }
       });
 

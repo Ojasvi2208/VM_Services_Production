@@ -2,8 +2,8 @@ name: "Fund Metrics Pipeline"
 
 on:
   schedule:
-    # Daily 6:00 AM IST = 00:30 UTC
-    - cron: "30 0 * * *"
+    # Daily 7:00 AM IST = 01:30 UTC (runs AFTER daily-nav-update at 5 AM IST)
+    - cron: "30 1 * * *"
   workflow_dispatch:
     inputs:
       batch_size:
