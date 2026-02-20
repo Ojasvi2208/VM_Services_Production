@@ -156,7 +156,8 @@ function calcMACD(closes: number[]): { macd: (number | null)[]; signal: (number 
 interface TechnicalSignal {
   indicator: string;
   signal: 'Bullish' | 'Bearish' | 'Neutral';
-  detail: string;
+  value: string;
+  description: string;
 }
 
 function generateSignals(
@@ -182,9 +183,9 @@ function generateSignals(
   if (last50 !== null) {
     const pctFrom50 = ((lastClose - last50) / last50) * 100;
     if (lastClose > last50) {
-      signals.push({ indicator: '50 DMA', signal: 'Bullish', detail: `Trading ${pctFrom50.toFixed(1)}% above 50 DMA (${last50.toLocaleString()})` });
+      signals.push({ indicator: '50 DMA', signal: 'Bullish', value: last50.toLocaleString(), description: `Trading ${pctFrom50.toFixed(1)}% above 50 DMA (${last50.toLocaleString()})` });
     } else {
-      signals.push({ indicator: '50 DMA', signal: 'Bearish', detail: `Trading ${Math.abs(pctFrom50).toFixed(1)}% below 50 DMA (${last50.toLocaleString()})` });
+      signals.push({ indicator: '50 DMA', signal: 'Bearish', value: last50.toLocaleString(), description: `Trading ${Math.abs(pctFrom50).toFixed(1)}% below 50 DMA (${last50.toLocaleString()})` });
     }
   }
 
@@ -192,9 +193,9 @@ function generateSignals(
   if (last200 !== null) {
     const pctFrom200 = ((lastClose - last200) / last200) * 100;
     if (lastClose > last200) {
-      signals.push({ indicator: '200 DMA', signal: 'Bullish', detail: `Trading ${pctFrom200.toFixed(1)}% above 200 DMA (${last200.toLocaleString()}) — long-term uptrend` });
+      signals.push({ indicator: '200 DMA', signal: 'Bullish', value: last200.toLocaleString(), description: `Trading ${pctFrom200.toFixed(1)}% above 200 DMA (${last200.toLocaleString()}) — long-term uptrend` });
     } else {
-      signals.push({ indicator: '200 DMA', signal: 'Bearish', detail: `Trading ${Math.abs(pctFrom200).toFixed(1)}% below 200 DMA (${last200.toLocaleString()}) — long-term downtrend` });
+      signals.push({ indicator: '200 DMA', signal: 'Bearish', value: last200.toLocaleString(), description: `Trading ${Math.abs(pctFrom200).toFixed(1)}% below 200 DMA (${last200.toLocaleString()}) — long-term downtrend` });
     }
   }
 
@@ -204,13 +205,13 @@ function generateSignals(
     const prev200 = dma200[dma200.length - 5];
     if (prev50 !== null && prev200 !== null) {
       if (last50 > last200 && prev50 <= prev200) {
-        signals.push({ indicator: 'Golden Cross', signal: 'Bullish', detail: '50 DMA crossed above 200 DMA — strong bullish signal' });
+        signals.push({ indicator: 'Golden Cross', signal: 'Bullish', value: '', description: '50 DMA crossed above 200 DMA — strong bullish signal' });
       } else if (last50 < last200 && prev50 >= prev200) {
-        signals.push({ indicator: 'Death Cross', signal: 'Bearish', detail: '50 DMA crossed below 200 DMA — strong bearish signal' });
+        signals.push({ indicator: 'Death Cross', signal: 'Bearish', value: '', description: '50 DMA crossed below 200 DMA — strong bearish signal' });
       } else if (last50 > last200) {
-        signals.push({ indicator: 'DMA Alignment', signal: 'Bullish', detail: '50 DMA above 200 DMA — bullish alignment' });
+        signals.push({ indicator: 'DMA Alignment', signal: 'Bullish', value: '', description: '50 DMA above 200 DMA — bullish alignment' });
       } else {
-        signals.push({ indicator: 'DMA Alignment', signal: 'Bearish', detail: '50 DMA below 200 DMA — bearish alignment' });
+        signals.push({ indicator: 'DMA Alignment', signal: 'Bearish', value: '', description: '50 DMA below 200 DMA — bearish alignment' });
       }
     }
   }
@@ -218,28 +219,28 @@ function generateSignals(
   // RSI
   if (lastRSI !== null) {
     if (lastRSI > 70) {
-      signals.push({ indicator: 'RSI (14)', signal: 'Bearish', detail: `RSI at ${lastRSI} — overbought territory (>70), may see pullback` });
+      signals.push({ indicator: 'RSI (14)', signal: 'Bearish', value: `${lastRSI}`, description: `RSI at ${lastRSI} — overbought territory (>70), may see pullback` });
     } else if (lastRSI < 30) {
-      signals.push({ indicator: 'RSI (14)', signal: 'Bullish', detail: `RSI at ${lastRSI} — oversold territory (<30), may see bounce` });
+      signals.push({ indicator: 'RSI (14)', signal: 'Bullish', value: `${lastRSI}`, description: `RSI at ${lastRSI} — oversold territory (<30), may see bounce` });
     } else if (lastRSI > 55) {
-      signals.push({ indicator: 'RSI (14)', signal: 'Bullish', detail: `RSI at ${lastRSI} — moderate bullish momentum` });
+      signals.push({ indicator: 'RSI (14)', signal: 'Bullish', value: `${lastRSI}`, description: `RSI at ${lastRSI} — moderate bullish momentum` });
     } else if (lastRSI < 45) {
-      signals.push({ indicator: 'RSI (14)', signal: 'Bearish', detail: `RSI at ${lastRSI} — moderate bearish momentum` });
+      signals.push({ indicator: 'RSI (14)', signal: 'Bearish', value: `${lastRSI}`, description: `RSI at ${lastRSI} — moderate bearish momentum` });
     } else {
-      signals.push({ indicator: 'RSI (14)', signal: 'Neutral', detail: `RSI at ${lastRSI} — neutral zone` });
+      signals.push({ indicator: 'RSI (14)', signal: 'Neutral', value: `${lastRSI}`, description: `RSI at ${lastRSI} — neutral zone` });
     }
   }
 
   // MACD
   if (lastMACD !== null && lastSignal !== null) {
     if (lastMACD > lastSignal && (prevHist !== null && lastHist !== null && lastHist > prevHist)) {
-      signals.push({ indicator: 'MACD', signal: 'Bullish', detail: 'MACD above signal line with increasing momentum' });
+      signals.push({ indicator: 'MACD', signal: 'Bullish', value: `${lastMACD}`, description: 'MACD above signal line with increasing momentum' });
     } else if (lastMACD > lastSignal) {
-      signals.push({ indicator: 'MACD', signal: 'Bullish', detail: 'MACD above signal line' });
+      signals.push({ indicator: 'MACD', signal: 'Bullish', value: `${lastMACD}`, description: 'MACD above signal line' });
     } else if (lastMACD < lastSignal && (prevHist !== null && lastHist !== null && lastHist < prevHist)) {
-      signals.push({ indicator: 'MACD', signal: 'Bearish', detail: 'MACD below signal line with increasing selling pressure' });
+      signals.push({ indicator: 'MACD', signal: 'Bearish', value: `${lastMACD}`, description: 'MACD below signal line with increasing selling pressure' });
     } else {
-      signals.push({ indicator: 'MACD', signal: 'Bearish', detail: 'MACD below signal line' });
+      signals.push({ indicator: 'MACD', signal: 'Bearish', value: `${lastMACD}`, description: 'MACD below signal line' });
     }
   }
 
@@ -251,17 +252,17 @@ function generateSignals(
     if (recent50[i] !== null && recent5[i] > recent50[i]!) above++;
   }
   if (above >= 4) {
-    signals.push({ indicator: 'Trend', signal: 'Bullish', detail: `Price consistently above 50 DMA (${above}/5 days) — strong uptrend` });
+    signals.push({ indicator: 'Trend', signal: 'Bullish', value: `${above}/5`, description: `Price consistently above 50 DMA (${above}/5 days) — strong uptrend` });
   } else if (above <= 1) {
-    signals.push({ indicator: 'Trend', signal: 'Bearish', detail: `Price consistently below 50 DMA (${5 - above}/5 days) — strong downtrend` });
+    signals.push({ indicator: 'Trend', signal: 'Bearish', value: `${5 - above}/5`, description: `Price consistently below 50 DMA (${5 - above}/5 days) — strong downtrend` });
   } else {
-    signals.push({ indicator: 'Trend', signal: 'Neutral', detail: 'Price oscillating around 50 DMA — sideways/consolidation' });
+    signals.push({ indicator: 'Trend', signal: 'Neutral', value: `${above}/5`, description: 'Price oscillating around 50 DMA — sideways/consolidation' });
   }
 
   return signals;
 }
 
-function getOverallOutlook(signals: TechnicalSignal[]): { outlook: string; strength: number; summary: string } {
+function getOverallOutlook(signals: TechnicalSignal[]): { overall: string; strength: number; summary: string } {
   let bullish = 0, bearish = 0;
   for (const s of signals) {
     if (s.signal === 'Bullish') bullish++;
@@ -270,26 +271,26 @@ function getOverallOutlook(signals: TechnicalSignal[]): { outlook: string; stren
   const total = signals.length;
   const strength = total > 0 ? Math.round(Math.abs(bullish - bearish) / total * 100) : 0;
 
-  let outlook: string;
+  let overall: string;
   let summary: string;
   if (bullish > bearish + 1) {
-    outlook = 'Bullish';
+    overall = 'Bullish';
     summary = `${bullish} of ${total} indicators are bullish. The index shows positive momentum with favorable technical setup.`;
   } else if (bearish > bullish + 1) {
-    outlook = 'Bearish';
+    overall = 'Bearish';
     summary = `${bearish} of ${total} indicators are bearish. The index is under selling pressure with weak technical setup.`;
   } else if (bullish > bearish) {
-    outlook = 'Mildly Bullish';
+    overall = 'Mildly Bullish';
     summary = `${bullish} of ${total} indicators lean bullish. Cautiously optimistic outlook, watch key support levels.`;
   } else if (bearish > bullish) {
-    outlook = 'Mildly Bearish';
+    overall = 'Mildly Bearish';
     summary = `${bearish} of ${total} indicators lean bearish. Exercise caution, watch for reversal signals.`;
   } else {
-    outlook = 'Neutral';
+    overall = 'Neutral';
     summary = `Indicators are evenly split. The index is in a consolidation phase, wait for a clear breakout direction.`;
   }
 
-  return { outlook, strength, summary };
+  return { overall, strength, summary };
 }
 
 // ─── Main handler ──────────────────────────────────────────────────────────
@@ -434,12 +435,19 @@ export async function GET(request: NextRequest) {
       histogram: macd.histogram[macd.histogram.length - 1],
     };
 
-    // Build DMA overlay arrays (only for daily candles, last N points matching chart)
-    const dmaOverlay = rangeConfig.interval === '1d' ? {
-      dma50: dma50.slice(-candles.length),
-      dma100: dma100.slice(-candles.length),
-      dma200: dma200.slice(-candles.length),
-    } : null;
+    // Build DMA overlay as array of point objects (Android expects List<DMAOverlayPoint>)
+    const dmaOverlay: { timestamp: number; dma50: number | null; dma200: number | null }[] = [];
+    if (rangeConfig.interval === '1d') {
+      const sliced50 = dma50.slice(-candles.length);
+      const sliced200 = dma200.slice(-candles.length);
+      for (let i = 0; i < candles.length; i++) {
+        const d50 = sliced50[i] ?? null;
+        const d200 = sliced200[i] ?? null;
+        if (d50 !== null || d200 !== null) {
+          dmaOverlay.push({ timestamp: candles[i].timestamp, dma50: d50, dma200: d200 });
+        }
+      }
+    }
 
     const responseData = {
       success: true,
