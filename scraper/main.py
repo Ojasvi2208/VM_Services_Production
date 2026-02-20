@@ -74,6 +74,48 @@ def mark_stale_in_db(cache_key: str):
         logger.error(f"DB mark_stale failed for {cache_key}: {e}")
 
 
+def persist_benchmark_data(data: dict, benchmark_name: str = "NIFTY50"):
+    """Extract index close price from scraped data and insert into benchmark_data table.
+
+    This feeds the calc_beta/calc_alpha/calc_tracking_error DB functions.
+    The benchmark_data table schema: (benchmark_name, date, value) with UNIQUE(benchmark_name, date).
+    """
+    try:
+        as_of = data.get("as_of", "")
+        # as_of is ISO format like "2026-02-20T15:30:00+05:30" — extract date part
+        if "T" in as_of:
+            date_str = as_of.split("T")[0]
+        else:
+            date_str = as_of
+
+        if not date_str:
+            return
+
+        # index_value is the index close price (e.g., NIFTY 50 = 22500.35)
+        # extracted from NSE API response in scrape_index_movers()
+        index_value = data.get("index_value")
+        if not index_value:
+            return
+
+        conn = _get_db_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO benchmark_data (benchmark_name, date, value)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (benchmark_name, date) DO UPDATE SET
+                value = EXCLUDED.value
+            """,
+            (benchmark_name, date_str, index_value),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        logger.info(f"Persisted {benchmark_name} = {index_value} for {date_str}")
+    except Exception as e:
+        logger.error(f"Benchmark persist failed: {e}")
+
+
 async def refresh_all():
     """Run all scrapers, update cache + DB. Called by APScheduler every 30 min."""
     scrapers = [
@@ -89,6 +131,12 @@ async def refresh_all():
             cache.set(cache_key, data, is_stale=False)
             persist_to_db(cache_key, data, source_url)
             logger.info(f"Refreshed {cache_key}")
+
+            # Persist index close prices to benchmark_data for Alpha/Beta calculations
+            if cache_key == "index_movers_nifty":
+                persist_benchmark_data(data, "NIFTY50")
+            elif cache_key == "index_movers_banknifty":
+                persist_benchmark_data(data, "NIFTYBANK")
         except Exception as e:
             cache.mark_stale(cache_key)
             mark_stale_in_db(cache_key)

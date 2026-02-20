@@ -204,6 +204,52 @@ async function runDailyUpdate() {
     console.log(`  ${processed}/${matchedFunds.length} (${percent}%) updated`);
   }
 
+  // Step 5: Insert into nav_history (AMFI-direct time-series engine)
+  console.log('Step 5: Populating nav_history...');
+  const HISTORY_BATCH = 5000;
+  let historyInserted = 0;
+
+  for (let i = 0; i < matchedFunds.length; i += HISTORY_BATCH) {
+    const batch = matchedFunds.slice(i, i + HISTORY_BATCH);
+    const hCodes = batch.map(f => f.schemeCode);
+    const hDates = batch.map(f => f.date);
+    const hNavs = batch.map(f => f.nav);
+
+    try {
+      const res = await pool.query(`
+        INSERT INTO nav_history (scheme_code, nav_date, nav_value, source)
+        SELECT unnest($1::text[]), unnest($2::date[]), unnest($3::numeric[]), 'A'
+        ON CONFLICT (scheme_code, nav_date) DO UPDATE SET
+          nav_value = EXCLUDED.nav_value,
+          source = EXCLUDED.source
+      `, [hCodes, hDates, hNavs]);
+      historyInserted += res.rowCount || 0;
+    } catch (hErr: any) {
+      // Non-fatal: nav_history_v2 might not exist yet (pre-migration)
+      if (hErr.message?.includes('does not exist')) {
+        console.log('  nav_history table not found (run migration 004 first). Skipping.');
+        break;
+      }
+      console.error(`  nav_history batch error: ${hErr.message}`);
+    }
+  }
+  console.log(`  Inserted/updated ${historyInserted} rows in nav_history`);
+
+  // Step 6: Refresh materialized views
+  console.log('Step 6: Refreshing materialized views...');
+  try {
+    await pool.query(`REFRESH MATERIALIZED VIEW CONCURRENTLY mv_unified_search`);
+    console.log('  mv_unified_search refreshed');
+  } catch (mvErr: any) {
+    console.log(`  mv_unified_search refresh skipped: ${mvErr.message}`);
+  }
+  try {
+    await pool.query(`REFRESH MATERIALIZED VIEW CONCURRENTLY mv_top_funds`);
+    console.log('  mv_top_funds refreshed');
+  } catch (mvErr: any) {
+    console.log(`  mv_top_funds refresh skipped: ${mvErr.message}`);
+  }
+
   // Summary
   const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
   // Find the most common NAV date (should be yesterday's date for most funds)
@@ -224,6 +270,7 @@ async function runDailyUpdate() {
   console.log(`  NAV Date: ${navDate}`);
   console.log(`  Total time: ${totalTime}s`);
   console.log(`  Updated: ${updated} funds`);
+  console.log(`  nav_history: ${historyInserted} rows`);
   console.log(`  Skipped: ${skipped} (not in AMFI file)`);
   console.log(`  Errors: ${errors}`);
   console.log(`  Finished at: ${new Date().toISOString()}`);

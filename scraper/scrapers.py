@@ -224,9 +224,11 @@ async def scrape_index_movers(index_name: str = "NIFTY 50") -> dict:
     # First pass: collect raw data and compute total ffmc for weight normalization
     raw_stocks = []
     total_ffmc = 0.0
+    index_value = 0.0  # The index close price (e.g., NIFTY 50 = 22500.35)
     for stock in data.get("data", []):
         symbol = stock.get("symbol", "")
         if symbol == index_name:
+            index_value = stock.get("lastPrice", 0.0)
             continue
 
         p_change = stock.get("pChange", 0.0)
@@ -261,6 +263,7 @@ async def scrape_index_movers(index_name: str = "NIFTY 50") -> dict:
     return {
         "as_of": datetime.now(timezone.utc).isoformat(),
         "index_name": index_name,
+        "index_value": round(index_value, 2),
         "top_gainers": top_gainers,
         "top_losers": top_losers,
     }
