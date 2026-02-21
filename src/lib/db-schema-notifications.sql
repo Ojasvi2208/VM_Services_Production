@@ -10,9 +10,14 @@ CREATE TABLE IF NOT EXISTS device_tokens (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Location tracking for targeted fuel/weather notifications
+ALTER TABLE device_tokens ADD COLUMN IF NOT EXISTS last_known_state VARCHAR(100);
+ALTER TABLE device_tokens ADD COLUMN IF NOT EXISTS last_known_city VARCHAR(100);
+
 -- Index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_device_tokens_user_id ON device_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_device_tokens_platform ON device_tokens(platform);
+CREATE INDEX IF NOT EXISTS idx_device_tokens_state ON device_tokens(last_known_state);
 
 -- Notification preferences
 CREATE TABLE IF NOT EXISTS notification_preferences (
@@ -26,7 +31,8 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
         "price_alert": true,
         "news_alert": true,
         "portfolio_update": true,
-        "daily_briefing": true
+        "daily_briefing": true,
+        "fuel_alert": true
     }',
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()

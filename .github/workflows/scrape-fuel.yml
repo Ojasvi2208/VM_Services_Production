@@ -1,25 +1,30 @@
-name: Fuel Price Cache Warm
+name: Fuel Price Daily Update
 
 on:
   schedule:
-    # 6:30 AM IST = 01:00 UTC — warm cache before users wake up
-    - cron: '0 1 * * *'
+    # 7:00 AM IST = 01:30 UTC — prices update at 6 AM, cache warm + notify by 7 AM
+    - cron: '30 1 * * *'
   workflow_dispatch:
 
 jobs:
-  warm:
+  update:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
       - name: Warm fuel price cache
         run: |
-          echo "Warming fuel price cache..."
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "https://www.vmfinancialservices.com/api/fuel-prices?all=true")
-          echo "Response code: $RESPONSE"
-          if [ "$RESPONSE" -eq 200 ]; then
-            echo "Cache warmed successfully"
-          else
-            echo "Warning: Got HTTP $RESPONSE"
-            exit 1
+          echo "Step 1: Warming fuel price cache..."
+          CACHE_RESP=$(curl -s -o /dev/null -w "%{http_code}" "https://www.vmfinancialservices.com/api/fuel-prices?all=true")
+          echo "Cache warm response: HTTP $CACHE_RESP"
+          if [ "$CACHE_RESP" -ne 200 ]; then
+            echo "Warning: Cache warm got HTTP $CACHE_RESP"
           fi
+
+      - name: Send fuel price change alerts
+        run: |
+          echo "Step 2: Checking for price changes and sending alerts..."
+          ALERT_RESP=$(curl -s -w "\nHTTP_CODE:%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://www.vmfinancialservices.com/api/cron/fuel-alert")
+          echo "Alert response: $ALERT_RESP"
