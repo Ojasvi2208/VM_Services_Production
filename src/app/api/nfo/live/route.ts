@@ -1,34 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getNFOCache, setNFOCache, type NFOCacheData, type NFOCacheItem } from '@/lib/nfo-cache';
 
-// Recently Launched Funds — real data from AMFI NAV file
-// Detects funds with NAV close to face value (₹10) launched in last 90 days
-// NO fake/hardcoded data. Returns empty if none found.
+// Cache-first NFO endpoint — cron populates cache, this only reads.
+// Fallback chain: module singleton → /tmp file → emergency inline fetch
 
-interface NFOData {
-  id: string;
-  schemeName: string;
-  amcName: string;
-  category: string;
-  subCategory: string;
-  fundType: 'Open-ended' | 'Close-ended' | 'Interval';
-  openDate: string;
-  closeDate: string;
-  minInvestment: number;
-  minSIP?: number;
-  riskLevel: 'Low' | 'Moderate' | 'Moderately High' | 'High' | 'Very High';
-  investmentObjective: string;
-  status: 'open' | 'upcoming' | 'closed';
-  daysLeft?: number;
-  url: string;
-  isNew?: boolean;
-  isTrending?: boolean;
-}
+// ── Emergency fallback: inline AMFI fetch (only on first-ever deploy before cron runs) ──
 
-// Cache for 6 hours (AMFI updates daily)
-let nfoCache: { nfos: NFOData[]; timestamp: number } | null = null;
-const CACHE_TTL = 6 * 60 * 60 * 1000;
-
-function categorizeScheme(name: string): { category: string; subCategory: string; riskLevel: NFOData['riskLevel'] } {
+function categorizeScheme(name: string): { category: string; subCategory: string; riskLevel: string } {
   const n = name.toLowerCase();
   if (n.includes('overnight')) return { category: 'Debt', subCategory: 'Overnight', riskLevel: 'Low' };
   if (n.includes('liquid')) return { category: 'Debt', subCategory: 'Liquid', riskLevel: 'Low' };
@@ -53,22 +31,17 @@ function cleanSchemeName(name: string): string {
     .trim();
 }
 
-async function fetchRecentlyLaunchedFunds(): Promise<NFOData[]> {
-  const nfos: NFOData[] = [];
-
+async function emergencyFetchFromAMFI(): Promise<NFOCacheItem[]> {
+  const nfos: NFOCacheItem[] = [];
   try {
     const response = await fetch('https://portal.amfiindia.com/spages/NAVAll.txt', {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VMFinancial/1.0)' },
+      signal: AbortSignal.timeout(30000),
     });
-
-    if (!response.ok) {
-      console.error('AMFI fetch failed:', response.status);
-      return [];
-    }
+    if (!response.ok) return [];
 
     const text = await response.text();
     const lines = text.split('\n');
-
     const today = new Date();
     const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
     let currentAMC = '';
@@ -76,12 +49,10 @@ async function fetchRecentlyLaunchedFunds(): Promise<NFOData[]> {
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
-
       if (!trimmed.includes(';') && (trimmed.endsWith('Mutual Fund') || trimmed.endsWith('Mutual Fund '))) {
         currentAMC = trimmed.trim();
         continue;
       }
-
       const parts = trimmed.split(';');
       if (parts.length < 6) continue;
 
@@ -89,23 +60,19 @@ async function fetchRecentlyLaunchedFunds(): Promise<NFOData[]> {
       const schemeName = parts[3]?.trim() || '';
       const navStr = parts[4]?.trim() || '0';
       const navDateStr = parts[5]?.trim() || '';
-
       if (!schemeName || !navDateStr || !schemeCode) continue;
 
       const nav = parseFloat(navStr);
       if (isNaN(nav) || nav < 9.0 || nav > 11.5) continue;
-
       if (!schemeName.includes('Direct')) continue;
       const nameLower = schemeName.toLowerCase();
       if (!nameLower.includes('growth')) continue;
       if (nameLower.includes('idcw') || nameLower.includes('dividend')) continue;
 
       const navDate = new Date(navDateStr);
-      if (isNaN(navDate.getTime())) continue;
-      if (navDate < ninetyDaysAgo) continue;
+      if (isNaN(navDate.getTime()) || navDate < ninetyDaysAgo) continue;
 
       const { category, subCategory, riskLevel } = categorizeScheme(schemeName);
-
       nfos.push({
         id: schemeCode,
         schemeName: cleanSchemeName(schemeName),
@@ -119,15 +86,15 @@ async function fetchRecentlyLaunchedFunds(): Promise<NFOData[]> {
         riskLevel,
         investmentObjective: `Recently launched ${category.toLowerCase()} fund — ${subCategory}`,
         status: 'open',
-        url: `https://www.amfiindia.com/mutual-fund-scheme-details/${schemeCode}`,
         isNew: true,
+        isTrending: false,
+        nav,
       });
     }
   } catch (error) {
-    console.error('AMFI NFO Live fetch error:', error);
+    console.error('Emergency AMFI fetch error:', error);
   }
-
-  nfos.sort((a, b) => new Date(b.closeDate).getTime() - new Date(a.closeDate).getTime());
+  nfos.sort((a, b) => (b.closeDate || '').localeCompare(a.closeDate || ''));
   return nfos.slice(0, 20);
 }
 
@@ -138,27 +105,29 @@ export async function GET(request: NextRequest) {
   const amc = searchParams.get('amc');
 
   try {
-    if (nfoCache && Date.now() - nfoCache.timestamp < CACHE_TTL) {
-      let nfos = nfoCache.nfos;
-      if (status !== 'all') nfos = nfos.filter(n => n.status === status);
-      if (category) nfos = nfos.filter(n => n.category.toLowerCase() === category.toLowerCase());
-      if (amc) nfos = nfos.filter(n => n.amcName.toLowerCase().includes(amc.toLowerCase()));
+    // 1. Hot path: module-level cache (<1ms)
+    let cache = getNFOCache();
 
-      return NextResponse.json({
-        success: true,
-        nfos,
-        total: nfos.length,
-        source: 'cache',
-        timestamp: new Date().toISOString(),
-      });
+    // 2. Cold start fallback: /tmp file (<5ms)
+    if (!cache) {
+      try {
+        const fs = await import('fs');
+        const raw = fs.readFileSync('/tmp/nfo-cache.json', 'utf-8');
+        cache = JSON.parse(raw) as NFOCacheData;
+        setNFOCache(cache);
+      } catch { /* no /tmp file yet */ }
     }
 
-    let nfos = await fetchRecentlyLaunchedFunds();
+    // 3. Emergency: inline AMFI fetch (first-ever deploy only)
+    if (!cache) {
+      console.log('NFO Live: no cache — emergency inline AMFI fetch');
+      const nfos = await emergencyFetchFromAMFI();
+      cache = { nfos, fetchedAt: new Date().toISOString(), source: 'emergency-inline' };
+      setNFOCache(cache);
+    }
 
-    console.log(`NFO Live API: found ${nfos.length} recently launched funds from AMFI`);
-
-    nfoCache = { nfos, timestamp: Date.now() };
-
+    // 4. Apply query filters
+    let nfos = cache.nfos;
     if (status !== 'all') nfos = nfos.filter(n => n.status === status);
     if (category) nfos = nfos.filter(n => n.category.toLowerCase() === category.toLowerCase());
     if (amc) nfos = nfos.filter(n => n.amcName.toLowerCase().includes(amc.toLowerCase()));
@@ -167,13 +136,13 @@ export async function GET(request: NextRequest) {
       success: true,
       nfos,
       total: nfos.length,
-      openCount: nfos.length,
-      upcomingCount: 0,
+      openCount: nfos.filter(n => n.status === 'open').length,
+      upcomingCount: nfos.filter(n => n.status === 'upcoming').length,
       categories: [...new Set(nfos.map(n => n.category))],
       amcs: [...new Set(nfos.map(n => n.amcName))],
-      source: 'amfi',
+      source: cache.source,
+      cachedAt: cache.fetchedAt,
       timestamp: new Date().toISOString(),
-      nextUpdate: new Date(Date.now() + CACHE_TTL).toISOString(),
     });
 
   } catch (error) {

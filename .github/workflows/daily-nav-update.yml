@@ -32,5 +32,13 @@ jobs:
           RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
         run: npx tsx src/scripts/daily-nav-update.ts
 
+      - name: Refresh NFO Intelligence Cache
+        run: |
+          echo "Refreshing NFO cache + checking close date alerts..."
+          NFO_RESP=$(curl -s -w "\nHTTP_CODE:%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://www.vmfinancialservices.com/api/cron/nfo-refresh")
+          echo "NFO refresh response: $NFO_RESP"
+
       - name: Log completion
-        run: echo "NAV update completed at $(date)"
+        run: echo "NAV update + NFO refresh completed at $(date)"
