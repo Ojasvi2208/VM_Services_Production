@@ -1,30 +1,25 @@
-name: Daily Fuel Price Scrape
+name: Fuel Price Cache Warm
 
 on:
   schedule:
-    # 6:15 AM IST = 00:45 UTC
-    - cron: '45 0 * * *'
-  workflow_dispatch: # Allow manual trigger
+    # 6:30 AM IST = 01:00 UTC — warm cache before users wake up
+    - cron: '0 1 * * *'
+  workflow_dispatch:
 
 jobs:
-  scrape:
+  warm:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: pip install cloudscraper beautifulsoup4 requests
-
-      - name: Run fuel scraper
-        env:
-          BACKEND_URL: https://www.vmfinancialservices.com
-          FUEL_SCRAPE_SECRET: ${{ secrets.FUEL_SCRAPE_SECRET }}
-        run: python scripts/scrape-fuel-prices.py
+      - name: Warm fuel price cache
+        run: |
+          echo "Warming fuel price cache..."
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "https://www.vmfinancialservices.com/api/fuel-prices?all=true")
+          echo "Response code: $RESPONSE"
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "Cache warmed successfully"
+          else
+            echo "Warning: Got HTTP $RESPONSE"
+            exit 1
+          fi
