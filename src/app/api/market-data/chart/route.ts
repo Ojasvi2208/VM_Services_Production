@@ -449,6 +449,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Period change: current price vs first candle's open (shows change for selected range)
+    const periodOpen = candles.length > 0 ? candles[0].open : null;
+    const periodChange = periodOpen != null ? currentPrice - periodOpen : null;
+    const periodChangePercent = (periodOpen != null && periodOpen !== 0)
+      ? ((currentPrice - periodOpen) / periodOpen) * 100 : null;
+
     const responseData = {
       success: true,
       symbol,
@@ -458,6 +464,8 @@ export async function GET(request: NextRequest) {
       previousClose: previousClose != null ? Number(previousClose.toFixed(2)) : null,
       dayChange: dayChange != null ? Number(dayChange.toFixed(2)) : null,
       dayChangePercent: dayChangePercent != null ? Number(dayChangePercent.toFixed(2)) : null,
+      periodChange: periodChange != null ? Number(periodChange.toFixed(2)) : null,
+      periodChangePercent: periodChangePercent != null ? Number(periodChangePercent.toFixed(2)) : null,
       fiftyTwoWeekHigh: Number(fiftyTwoWeekHigh.toFixed(2)),
       fiftyTwoWeekLow: Number(fiftyTwoWeekLow.toFixed(2)),
       fiftyTwoWeekRangePosition: rangePosition != null ? Number(rangePosition.toFixed(1)) : null,
