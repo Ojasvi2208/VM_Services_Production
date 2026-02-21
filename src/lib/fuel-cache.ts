@@ -40,7 +40,6 @@ export interface ScrapedCityPrice {
   petrolChange: string;
   dieselChange: string;
   cng?: number;
-  lpg?: number;
 }
 
 export interface ScrapedStatePrice {
@@ -49,7 +48,6 @@ export interface ScrapedStatePrice {
   petrolChange: string;
   dieselChange: string;
   cng?: number;
-  lpg?: number;
 }
 
 export interface ScrapedFuelData {

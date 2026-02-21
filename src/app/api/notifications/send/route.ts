@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Pool } from 'pg';
+import pool from '@/lib/postgres-db';
 import { sendPushNotificationBatch, isFirebaseConfigured } from '@/lib/firebase-admin';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
 
 interface NotificationPayload {
   title: string;

@@ -145,7 +145,6 @@ async function fetchRapidAPIStates(): Promise<ScrapedFuelData | null> {
       petrolChange: String(sp.fuel?.petrol?.retailPriceChange || 0),
       dieselChange: String(sp.fuel?.diesel?.retailPriceChange || 0),
       cng: sp.fuel?.cng?.retailPrice || undefined,
-      lpg: sp.fuel?.lpg?.retailPrice || undefined,
     };
   }
 
@@ -181,7 +180,6 @@ async function fetchRapidAPICities(stateSlug: string): Promise<Record<string, Sc
         petrolChange: String(cp.fuel?.petrol?.retailPriceChange || 0),
         dieselChange: String(cp.fuel?.diesel?.retailPriceChange || 0),
         cng: cp.fuel?.cng?.retailPrice || undefined,
-        lpg: cp.fuel?.lpg?.retailPrice || undefined,
       };
     }
     return cities;
@@ -326,7 +324,6 @@ export async function GET(request: NextRequest) {
           dieselPrice: data.diesel,
           dieselChange: parseFloat(data.dieselChange) || 0,
           cngPrice: data.cng || null,
-          lpgPrice: data.lpg || null,
           petrolVatPercent: vat?.pVat ?? null,
           dieselVatPercent: vat?.dVat ?? null,
         };
@@ -373,7 +370,6 @@ export async function GET(request: NextRequest) {
     let petrolChange = 0;
     let dieselChange = 0;
     let cngPrice: number | null = null;
-    let lpgPrice: number | null = null;
     let resolvedCityName = '';
 
     // Try 1: city match
@@ -392,7 +388,6 @@ export async function GET(request: NextRequest) {
       petrolChange = parseFloat(scrapedCity.petrolChange) || 0;
       dieselChange = parseFloat(scrapedCity.dieselChange) || 0;
       cngPrice = scrapedCity.cng || null;
-      lpgPrice = scrapedCity.lpg || null;
     } else if (petrolPriceParam > 0) {
       // Try 2: app-provided prices (backward compat)
       petrolRetail = petrolPriceParam;
@@ -407,15 +402,11 @@ export async function GET(request: NextRequest) {
       petrolChange = parseFloat(scrapedState.petrolChange) || 0;
       dieselChange = parseFloat(scrapedState.dieselChange) || 0;
       if (!cngPrice) cngPrice = scrapedState.cng || null;
-      if (!lpgPrice) lpgPrice = scrapedState.lpg || null;
     }
 
-    // Fill CNG/LPG from state if city didn't have it
+    // Fill CNG from state if city didn't have it
     if (!cngPrice && scraped.states[resolvedState]?.cng) {
       cngPrice = scraped.states[resolvedState].cng || null;
-    }
-    if (!lpgPrice && scraped.states[resolvedState]?.lpg) {
-      lpgPrice = scraped.states[resolvedState].lpg || null;
     }
 
     if (petrolRetail === 0 && dieselRetail === 0) {
@@ -441,7 +432,6 @@ export async function GET(request: NextRequest) {
       petrolChange,
       dieselChange,
       cngPrice,
-      lpgPrice,
       petrol,
       diesel,
       summary: {

@@ -10,13 +10,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { Pool } from 'pg';
+import pool from '@/lib/postgres-db';
 import { sendPushNotificationBatch, isFirebaseConfigured } from '@/lib/firebase-admin';
 import { setScrapedFuelCache, type ScrapedFuelData, type ScrapedStatePrice } from '@/lib/fuel-cache';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
 
 const RAPIDAPI_HOST = 'daily-petrol-diesel-lpg-cng-fuel-prices-in-india.p.rapidapi.com';
 const RAPIDAPI_BASE = `https://${RAPIDAPI_HOST}/v1/fuel-prices/today/india`;
@@ -28,7 +24,6 @@ interface StateChange {
   petrolChange: number;
   dieselChange: number;
   cngPrice?: number;
-  lpgPrice?: number;
 }
 
 function verifyCronSecret(request: NextRequest): boolean {
@@ -65,7 +60,6 @@ async function fetchFreshPrices(): Promise<{ states: Record<string, ScrapedState
         petrolChange: String(petrolChange),
         dieselChange: String(dieselChange),
         cng: sp.fuel?.cng?.retailPrice || undefined,
-        lpg: sp.fuel?.lpg?.retailPrice || undefined,
         petrolChangeNum: petrolChange,
         dieselChangeNum: dieselChange,
       };
@@ -76,7 +70,6 @@ async function fetchFreshPrices(): Promise<{ states: Record<string, ScrapedState
         petrolChange: String(petrolChange),
         dieselChange: String(dieselChange),
         cng: sp.fuel?.cng?.retailPrice || undefined,
-        lpg: sp.fuel?.lpg?.retailPrice || undefined,
       };
     }
 
@@ -130,7 +123,6 @@ export async function GET(request: NextRequest) {
           petrolChange: data.petrolChangeNum,
           dieselChange: data.dieselChangeNum,
           cngPrice: data.cng,
-          lpgPrice: data.lpg,
         });
       }
     }

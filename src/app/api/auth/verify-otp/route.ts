@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Pool } from 'pg';
+import pool from '@/lib/postgres-db';
 import crypto from 'crypto';
 import { sendWelcomeEmail } from '@/lib/email';
 import { otpStore } from '@/lib/otp-store';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
 
 // JWT secret for token generation
 const JWT_SECRET = process.env.JWT_SECRET || 'vm-financial-secret-key-change-in-production';
