@@ -224,54 +224,48 @@ export async function getLatestNav(schemeCode: string): Promise<NAVRecord | null
 }
 
 /**
- * Get NAV history for a scheme (fetched from MFApi, not stored in DB)
+ * Get NAV history for a scheme from local nav_history table (Data Sovereign)
  */
 export async function getNavHistory(
   schemeCode: string,
   startDate?: string,
   endDate?: string
 ): Promise<NAVRecord[]> {
+  const client = await pool.connect();
   try {
-    // Fetch from MFApi since we don't store NAV history in DB
-    const response = await fetch(`https://api.mfapi.in/mf/${schemeCode}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
-    
-    if (!response.ok) return [];
-    
-    const data = await response.json();
-    if (!data?.data) return [];
-    
-    let navData = data.data;
-    
-    // Filter by date range if provided
-    if (startDate || endDate) {
-      navData = navData.filter((item: any) => {
-        const [day, month, year] = item.date.split('-');
-        const itemDate = new Date(`${year}-${month}-${day}`);
-        
-        if (startDate && endDate) {
-          return itemDate >= new Date(startDate) && itemDate <= new Date(endDate);
-        } else if (startDate) {
-          return itemDate >= new Date(startDate);
-        } else if (endDate) {
-          return itemDate <= new Date(endDate);
-        }
-        return true;
-      });
+    let query = `
+      SELECT nh.nav_date::text AS date, nh.nav_value AS nav,
+             f.scheme_name, f.amc_code, f.scheme_type
+      FROM nav_history nh
+      JOIN funds f ON f.scheme_code = nh.scheme_code
+      WHERE nh.scheme_code = $1`;
+    const params: any[] = [schemeCode];
+
+    if (startDate) {
+      params.push(startDate);
+      query += ` AND nh.nav_date >= $${params.length}::date`;
     }
-    
-    return navData.map((item: any) => ({
+    if (endDate) {
+      params.push(endDate);
+      query += ` AND nh.nav_date <= $${params.length}::date`;
+    }
+
+    query += ` ORDER BY nh.nav_date DESC LIMIT 2000`;
+
+    const result = await client.query(query, params);
+    return result.rows.map((row: any) => ({
       schemeCode,
-      schemeName: data.meta?.scheme_name || '',
-      nav: parseFloat(item.nav),
-      date: item.date,
-      amcCode: data.meta?.fund_house || '',
-      schemeType: data.meta?.scheme_type || '',
+      schemeName: row.scheme_name || '',
+      nav: parseFloat(row.nav),
+      date: row.date,
+      amcCode: row.amc_code || '',
+      schemeType: row.scheme_type || '',
     }));
   } catch (error) {
-    console.error('Error fetching NAV history from MFApi:', error);
+    console.error('Error fetching NAV history:', error);
     return [];
+  } finally {
+    client.release();
   }
 }
 

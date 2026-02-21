@@ -34,7 +34,12 @@ interface FundRow {
 
 async function getFundsToProcess(): Promise<FundRow[]> {
   const result = await pool.query(`
-    SELECT DISTINCT f.scheme_code, f.inception_date::text
+    SELECT f.scheme_code, f.inception_date::text,
+           CASE
+             WHEN fr.scheme_code IS NULL THEN 0
+             WHEN fr.volatility_1y IS NULL THEN 1
+             ELSE 2
+           END AS priority
     FROM funds f
     INNER JOIN nav_history nh ON nh.scheme_code = f.scheme_code
     LEFT JOIN fund_returns fr ON fr.scheme_code = f.scheme_code
@@ -43,15 +48,9 @@ async function getFundsToProcess(): Promise<FundRow[]> {
       OR fr.updated_at < NOW() - INTERVAL '7 days'
       OR fr.volatility_1y IS NULL
       OR fr.rolling_return_1y_avg IS NULL
-    GROUP BY f.scheme_code, f.inception_date
+    GROUP BY f.scheme_code, f.inception_date, fr.scheme_code, fr.updated_at, fr.volatility_1y, fr.rolling_return_1y_avg
     HAVING COUNT(nh.scheme_code) >= 10
-    ORDER BY
-      CASE
-        WHEN fr.scheme_code IS NULL THEN 0
-        WHEN fr.volatility_1y IS NULL THEN 1
-        ELSE 2
-      END,
-      f.scheme_code
+    ORDER BY priority, f.scheme_code
   `);
   return result.rows;
 }
