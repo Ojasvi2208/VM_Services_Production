@@ -15,23 +15,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dailyNavUpdate } from '@/lib/daily-nav-update';
 
-// Secret token for cron job authentication
-const CRON_SECRET = process.env.CRON_SECRET || 'your-secret-token-here';
+const CRON_SECRET = process.env.CRON_SECRET;
 
 /**
  * GET handler for daily cron job
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify cron secret
-    const authHeader = request.headers.get('authorization');
-    const token = authHeader?.replace('Bearer ', '');
-    
-    if (token !== CRON_SECRET) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    // Verify cron secret (skip auth if CRON_SECRET not configured)
+    if (CRON_SECRET) {
+      const authHeader = request.headers.get('authorization');
+      if (authHeader !== `Bearer ${CRON_SECRET}`) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
     }
     
     console.log('🕐 Daily cron job triggered: NAV update');

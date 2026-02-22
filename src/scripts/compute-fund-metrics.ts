@@ -14,8 +14,11 @@
 
 import { Pool } from 'pg';
 
-const DB_URL = process.env.DATABASE_URL || process.env.RAILWAY_DATABASE_URL
-  || 'postgresql://postgres:zZGzhpULOgKqXvnnutWEjCengioSheMD@turntable.proxy.rlwy.net:19665/railway';
+const DB_URL = process.env.DATABASE_URL || process.env.RAILWAY_DATABASE_URL;
+if (!DB_URL) {
+  console.error('DATABASE_URL or RAILWAY_DATABASE_URL environment variable is required');
+  process.exit(1);
+}
 
 const pool = new Pool({
   connectionString: DB_URL,

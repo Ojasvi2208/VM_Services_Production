@@ -1,0 +1,14 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/daily-update",
+      "schedule": "0 20 * * *",
+      "description": "Daily NAV update (incremental, 1:30 AM IST)"
+    },
+    {
+      "path": "/api/cron/evaluate-goals",
+      "schedule": "0 16 * * *",
+      "description": "Autonomous goal evaluation (9:30 PM IST)"
+    }
+  ]
+}

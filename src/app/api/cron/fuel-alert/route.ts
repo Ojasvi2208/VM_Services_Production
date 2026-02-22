@@ -34,7 +34,8 @@ function verifyCronSecret(request: NextRequest): boolean {
 }
 
 async function fetchFreshPrices(): Promise<{ states: Record<string, ScrapedStatePrice & { petrolChangeNum: number; dieselChangeNum: number }>; raw: ScrapedFuelData } | null> {
-  const apiKey = process.env.RAPIDAPI_FUEL_KEY || 'a9309157camshfb4a238482cf839p11f04bjsnfa603976250f';
+  const apiKey = process.env.RAPIDAPI_FUEL_KEY;
+  if (!apiKey) return null;
   try {
     const resp = await fetch(`${RAPIDAPI_BASE}/states`, {
       headers: {

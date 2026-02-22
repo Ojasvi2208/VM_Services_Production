@@ -1,7 +1,11 @@
 import { Pool } from 'pg';
 import https from 'https';
 
-const RAILWAY_DB_URL = process.env.RAILWAY_DATABASE_URL || 'postgresql://postgres:zZGzhpULOgKqXvnnutWEjCengioSheMD@turntable.proxy.rlwy.net:19665/railway';
+const RAILWAY_DB_URL = process.env.RAILWAY_DATABASE_URL;
+if (!RAILWAY_DB_URL) {
+  console.error('RAILWAY_DATABASE_URL environment variable is required');
+  process.exit(1);
+}
 
 // AMFI NAVAll.txt — single file with ALL mutual fund NAVs (~17k schemes)
 // Format: SchemeCode;ISIN1;ISIN2;SchemeName;NAV;Date (semicolon-delimited)

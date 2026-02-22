@@ -7,8 +7,8 @@ import { Pool } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const DB_URL = process.env.RAILWAY_DATABASE_URL || process.env.DATABASE_URL ||
-  'postgresql://postgres:zZGzhpULOgKqXvnnutWEjCengioSheMD@turntable.proxy.rlwy.net:19665/railway';
+const DB_URL = process.env.RAILWAY_DATABASE_URL || process.env.DATABASE_URL;
+if (!DB_URL) { console.error('RAILWAY_DATABASE_URL or DATABASE_URL required'); process.exit(1); }
 
 const pool = new Pool({
   connectionString: DB_URL,

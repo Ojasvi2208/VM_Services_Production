@@ -11,6 +11,12 @@ interface CurrencyRate {
   lastUpdated: string;
 }
 
+// ── Previous-rate tracking: store last known rates to compute REAL deltas ──
+// On first fetch of the day (or after cold start), change = 0 (honest).
+// On subsequent fetches, change = current - previous (real movement).
+let previousRates: Record<string, number> = {};
+let previousRatesDate: string = ''; // YYYY-MM-DD of when previousRates was captured
+
 // Cache for 30 minutes
 let ratesCache: { rates: CurrencyRate[]; timestamp: number } | null = null;
 const CACHE_TTL = 30 * 60 * 1000;
@@ -40,30 +46,43 @@ async function fetchCurrencyRates(): Promise<CurrencyRate[]> {
     if (response.ok) {
       const data = await response.json();
       if (data.result === 'success' && data.rates) {
+        const today = new Date().toISOString().split('T')[0];
+        const currentRates: Record<string, number> = {};
+
         for (const currency of targetCurrencies) {
           const rateValue = data.rates[currency];
           if (rateValue) {
-            // This gives INR -> foreign. We want 1 foreign = X INR
-            const inrPerUnit = 1 / rateValue;
-            
-            // Simulate previous close (small random variation for change display)
-            const variation = (Math.random() - 0.5) * 0.4;
-            const prevRate = inrPerUnit - variation;
-            const change = inrPerUnit - prevRate;
-            const changePercent = (change / prevRate) * 100;
+            const inrPerUnit = Math.round((1 / rateValue) * 100) / 100;
+            currentRates[currency] = inrPerUnit;
+
+            // Compute real change from previous fetch
+            const prevRate = previousRates[currency];
+            const change = prevRate ? Math.round((inrPerUnit - prevRate) * 100) / 100 : 0;
+            const changePercent = prevRate ? Math.round((change / prevRate) * 10000) / 100 : 0;
 
             rates.push({
               pair: `${currency}/INR`,
               from: currency,
               to: 'INR',
-              rate: Math.round(inrPerUnit * 100) / 100,
-              change: Math.round(change * 100) / 100,
-              changePercent: Math.round(changePercent * 100) / 100,
+              rate: inrPerUnit,
+              change,
+              changePercent,
               flag: CURRENCY_FLAGS[currency] || '🏳️',
               lastUpdated: data.time_last_update_utc || new Date().toISOString(),
             });
           }
         }
+
+        // Rotate: current rates become "previous" for next comparison
+        // Reset daily so first fetch of a new day shows 0 change (honest cold start)
+        if (previousRatesDate !== today && Object.keys(previousRates).length > 0) {
+          // New day — previous day's final rates are now the baseline
+          previousRatesDate = today;
+        } else if (Object.keys(previousRates).length === 0) {
+          // Very first fetch (cold start) — seed baseline, change = 0 is shown
+          previousRatesDate = today;
+        }
+        previousRates = currentRates;
       }
     }
   } catch (error) {

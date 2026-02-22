@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
 
 export async function GET(request: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET;
   const secret = request.nextUrl.searchParams.get('secret');
-  if (secret !== 'vmfs2024') {
+  if (!cronSecret || secret !== cronSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

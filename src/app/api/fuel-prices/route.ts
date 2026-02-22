@@ -124,7 +124,7 @@ let cityCache: Record<string, { cities: Record<string, ScrapedCityPrice>; fetche
 
 // ── RapidAPI fetch: all states ──
 async function fetchRapidAPIStates(): Promise<ScrapedFuelData | null> {
-  const apiKey = process.env.RAPIDAPI_FUEL_KEY || 'a9309157camshfb4a238482cf839p11f04bjsnfa603976250f';
+  const apiKey = process.env.RAPIDAPI_FUEL_KEY || '';
   const resp = await fetch(`${RAPIDAPI_BASE}/states`, {
     headers: {
       'x-rapidapi-host': RAPIDAPI_HOST,
@@ -158,7 +158,7 @@ async function fetchRapidAPIStates(): Promise<ScrapedFuelData | null> {
 
 // ── RapidAPI fetch: cities for a state ──
 async function fetchRapidAPICities(stateSlug: string): Promise<Record<string, ScrapedCityPrice>> {
-  const apiKey = process.env.RAPIDAPI_FUEL_KEY || 'a9309157camshfb4a238482cf839p11f04bjsnfa603976250f';
+  const apiKey = process.env.RAPIDAPI_FUEL_KEY || '';
   try {
     const resp = await fetch(`${RAPIDAPI_BASE}/${stateSlug}/cities`, {
       headers: {

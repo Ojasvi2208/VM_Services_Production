@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import https from 'https';
 
 const pool = new Pool({
-  connectionString: process.env.RAILWAY_DATABASE_URL || 'postgresql://postgres:zZGzhpULOgKqXvnnutWEjCengioSheMD@turntable.proxy.rlwy.net:19665/railway',
+  connectionString: process.env.RAILWAY_DATABASE_URL || (() => { console.error('RAILWAY_DATABASE_URL required'); process.exit(1); return ''; })(),
   ssl: { rejectUnauthorized: false }
 });
 
