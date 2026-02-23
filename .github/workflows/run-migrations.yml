@@ -1,0 +1,37 @@
+name: Run Database Migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      migrations:
+        description: 'Comma-separated migration numbers (e.g. 006,007,009)'
+        type: string
+        required: true
+        default: '006,007,009'
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          IFS=',' read -ra NUMS <<< "${{ inputs.migrations }}"
+          for NUM in "${NUMS[@]}"; do
+            NUM=$(echo "$NUM" | xargs)  # trim whitespace
+            FILE=$(ls migrations/${NUM}_*.sql 2>/dev/null | head -1)
+            if [ -z "$FILE" ]; then
+              echo "Migration file for ${NUM} not found, skipping"
+              continue
+            fi
+            echo "=== Running $FILE ==="
+            psql "$DATABASE_URL" -f "$FILE" 2>&1
+            echo "=== Done with $FILE ==="
+            echo ""
+          done
+          echo "All migrations complete."
