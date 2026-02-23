@@ -16,9 +16,9 @@ export async function GET(request: NextRequest) {
 
     const client = await pool.connect();
     try {
-      // Fetch goals with linked funds
+      // Fetch goals with linked funds + linked holdings value
       const goalsResult = await client.query(`
-        SELECT 
+        SELECT
           g.*,
           COALESCE(
             json_agg(
@@ -30,18 +30,24 @@ export async function GET(request: NextRequest) {
               )
             ) FILTER (WHERE gfl.id IS NOT NULL), '[]'
           ) as linked_funds,
-          COALESCE(SUM(gc.amount), 0) as total_contributed
+          COALESCE((SELECT SUM(gc2.amount) FROM goal_contributions gc2 WHERE gc2.goal_id = g.id), 0) as total_contributed,
+          COALESCE((
+            SELECT SUM(ph.units * COALESCE(f2.latest_nav, ph.purchase_nav) * ghl.allocation_pct / 100.0)
+            FROM goal_holding_links ghl
+            JOIN portfolio_holdings ph ON ghl.holding_id = ph.id
+            LEFT JOIN funds f2 ON ph.scheme_code = f2.scheme_code
+            WHERE ghl.goal_id = g.id
+          ), 0) as linked_holdings_value
         FROM goals g
         LEFT JOIN goal_fund_links gfl ON g.id = gfl.goal_id
         LEFT JOIN funds f ON gfl.scheme_code = f.scheme_code
-        LEFT JOIN goal_contributions gc ON g.id = gc.goal_id
         WHERE g.user_id = $1 AND g.is_active = true
         GROUP BY g.id
-        ORDER BY 
-          CASE g.criticality 
-            WHEN 'critical' THEN 0 
-            WHEN 'important' THEN 1 
-            ELSE 2 
+        ORDER BY
+          CASE g.criticality
+            WHEN 'critical' THEN 0
+            WHEN 'important' THEN 1
+            ELSE 2
           END,
           g.target_date ASC
       `, [user.id]);
@@ -179,7 +185,9 @@ export async function POST(request: NextRequest) {
 
 function formatGoal(row: any) {
   const targetAmount = parseFloat(row.target_amount) || 0;
-  const currentValue = parseFloat(row.current_value) || 0;
+  const manualValue = parseFloat(row.current_value) || 0;
+  const linkedHoldingsValue = parseFloat(row.linked_holdings_value) || 0;
+  const currentValue = manualValue + linkedHoldingsValue;
   return {
     id: row.id,
     name: row.name,

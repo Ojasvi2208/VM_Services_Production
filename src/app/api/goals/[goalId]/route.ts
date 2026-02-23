@@ -26,11 +26,17 @@ export async function GET(
             'id', gfl.id, 'schemeCode', gfl.scheme_code, 'allocationPct', gfl.allocation_pct,
             'schemeName', f.scheme_name, 'currentNav', f.latest_nav
           )) FILTER (WHERE gfl.id IS NOT NULL), '[]') as linked_funds,
-          COALESCE(SUM(gc.amount), 0) as total_contributed
+          COALESCE((SELECT SUM(gc2.amount) FROM goal_contributions gc2 WHERE gc2.goal_id = g.id), 0) as total_contributed,
+          COALESCE((
+            SELECT SUM(ph.units * COALESCE(f2.latest_nav, ph.purchase_nav) * ghl.allocation_pct / 100.0)
+            FROM goal_holding_links ghl
+            JOIN portfolio_holdings ph ON ghl.holding_id = ph.id
+            LEFT JOIN funds f2 ON ph.scheme_code = f2.scheme_code
+            WHERE ghl.goal_id = g.id
+          ), 0) as linked_holdings_value
         FROM goals g
         LEFT JOIN goal_fund_links gfl ON g.id = gfl.goal_id
         LEFT JOIN funds f ON gfl.scheme_code = f.scheme_code
-        LEFT JOIN goal_contributions gc ON g.id = gc.goal_id
         WHERE g.id = $1 AND g.user_id = $2
         GROUP BY g.id
       `, [params.goalId, user.id]);
@@ -216,7 +222,9 @@ export async function DELETE(
 
 function formatGoal(row: any) {
   const targetAmount = parseFloat(row.target_amount) || 0;
-  const currentValue = parseFloat(row.current_value) || 0;
+  const manualValue = parseFloat(row.current_value) || 0;
+  const linkedHoldingsValue = parseFloat(row.linked_holdings_value) || 0;
+  const currentValue = manualValue + linkedHoldingsValue;
   return {
     id: row.id, name: row.name, icon: row.icon, color: row.color,
     targetAmount, targetDate: row.target_date, criticality: row.criticality,
