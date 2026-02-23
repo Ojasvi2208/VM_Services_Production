@@ -1,0 +1,36 @@
+name: Admin Task
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task to run'
+        type: choice
+        options:
+          - set-premium
+          - reset-premium
+      email:
+        description: 'User email'
+        type: string
+        default: 'ojasvi.malik@outlook.com'
+
+jobs:
+  run-task:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Set Premium
+        if: ${{ inputs.task == 'set-premium' }}
+        run: |
+          curl -s -X POST "https://www.vmfinancialservices.com/api/admin/set-premium" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"${{ inputs.email }}\",\"isPremium\":true}" | jq .
+
+      - name: Reset Premium
+        if: ${{ inputs.task == 'reset-premium' }}
+        run: |
+          curl -s -X POST "https://www.vmfinancialservices.com/api/admin/set-premium" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"${{ inputs.email }}\",\"isPremium\":false}" | jq .
