@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     // Find user
     const result = await pool.query(
-      'SELECT id, email, full_name, password_hash, phone FROM users WHERE email = $1',
+      'SELECT id, email, full_name, password_hash, phone, is_premium FROM users WHERE email = $1',
       [email.toLowerCase()]
     );
 
@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
         email: user.email,
         fullName: user.full_name,
         phone: user.phone,
+        isPremium: user.is_premium || false,
       },
     });
 

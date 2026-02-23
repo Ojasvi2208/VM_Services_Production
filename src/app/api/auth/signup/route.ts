@@ -75,7 +75,8 @@ export async function POST(request: NextRequest) {
       user: {
         id: result.userId,
         email,
-        fullName
+        fullName,
+        isPremium: false
       }
     });
 

@@ -42,7 +42,9 @@ export async function createSession(userId: string, ipAddress?: string, userAgen
 // Get user from session token
 export async function getUserFromSession(token: string): Promise<any | null> {
   const result = await pool.query(
-    `SELECT u.id, u.email, u.full_name, u.phone, u.created_at, u.email_verified
+    `SELECT u.id, u.email, u.full_name, u.phone, u.created_at, u.email_verified,
+            u.is_premium, u.premium_expires_at,
+            u.income_range, u.occupation_type, u.tax_regime, u.pan_status
      FROM users u
      JOIN user_sessions s ON u.id = s.user_id
      WHERE s.token = $1 AND s.expires_at > NOW() AND u.is_active = true`,
@@ -77,7 +79,7 @@ async function getUserFromJWT(token: string): Promise<any | null> {
   const payload = verifyJWT(token);
   if (!payload) return null;
   const result = await pool.query(
-    'SELECT id, email, full_name, phone, created_at, email_verified FROM users WHERE id = $1 AND is_active = true',
+    'SELECT id, email, full_name, phone, created_at, email_verified, is_premium, premium_expires_at, income_range, occupation_type, tax_regime, pan_status FROM users WHERE id = $1 AND is_active = true',
     [payload.userId]
   );
   return result.rows.length > 0 ? result.rows[0] : null;

@@ -9,6 +9,11 @@
       "path": "/api/cron/evaluate-goals",
       "schedule": "0 16 * * *",
       "description": "Autonomous goal evaluation (9:30 PM IST)"
+    },
+    {
+      "path": "/api/cron/goal-drift",
+      "schedule": "30 23 * * *",
+      "description": "Goal drift calculation (5:00 AM IST)"
     }
   ]
 }

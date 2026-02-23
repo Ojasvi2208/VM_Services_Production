@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
     } else {
       // Sign in existing user
       const userResult = await pool.query(
-        'SELECT id, email, full_name FROM users WHERE email = $1',
+        'SELECT id, email, full_name, is_premium FROM users WHERE email = $1',
         [email.toLowerCase()]
       );
 
@@ -134,6 +134,7 @@ export async function POST(request: NextRequest) {
           id: user.id,
           email: user.email,
           fullName: user.full_name,
+          isPremium: user.is_premium || false,
         },
       });
     }

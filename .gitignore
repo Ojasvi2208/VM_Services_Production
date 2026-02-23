@@ -65,6 +65,9 @@ env-local-template.txt
 requirements.txt
 vercel.json
 
+# Old mobile codebase (archived)
+vijaymalik-mobile_old/
+
 # Cache and temporary files
 .cache/
 *.pyc

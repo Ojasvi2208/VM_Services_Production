@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { dailyNavUpdate } from '@/lib/daily-nav-update';
+import pool from '@/lib/postgres-db';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -36,6 +37,16 @@ export async function GET(request: NextRequest) {
     const result = await dailyNavUpdate();
     
     if (result.success) {
+      // Refresh category average materialized view after successful NAV sync
+      try {
+        await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY mv_category_avg_returns');
+      } catch (mvErr: any) {
+        // Non-critical: view may not exist yet or first refresh needs non-concurrent
+        try {
+          await pool.query('REFRESH MATERIALIZED VIEW mv_category_avg_returns');
+        } catch { /* View not created yet — skip */ }
+      }
+
       return NextResponse.json({
         success: true,
         message: 'Daily NAV update completed successfully',

@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
         fullName: user.full_name,
         phone: user.phone,
         emailVerified: user.email_verified,
-        createdAt: user.created_at
+        createdAt: user.created_at,
+        isPremium: user.is_premium || false,
       }
     });
 

@@ -36,8 +36,10 @@ function convertAmfiDateToPostgres(dateStr: string): string | null {
 
 interface NavEntry {
   schemeCode: string;
+  schemeName: string;
   nav: number;
   date: string; // Postgres format YYYY-MM-DD
+  category: string;
 }
 
 function fetchAmfiNavFile(): Promise<string> {
@@ -85,17 +87,27 @@ function fetchAmfiNavFile(): Promise<string> {
 function parseAmfiFile(rawText: string): Map<string, NavEntry> {
   const navMap = new Map<string, NavEntry>();
   const lines = rawText.split('\n');
+  let currentCategory = '';
 
   for (const line of lines) {
     const trimmed = line.trim();
-    // Skip empty lines, headers, category lines, AMC name lines
-    if (!trimmed || !trimmed.includes(';')) continue;
+    if (!trimmed) continue;
+
+    // Category header lines (e.g., "Open Ended Schemes(Debt Scheme - Banking and PSU Fund)")
+    if (!trimmed.includes(';')) {
+      const catMatch = trimmed.match(/\((.+)\)/);
+      if (catMatch) {
+        currentCategory = catMatch[1].trim();
+      }
+      continue;
+    }
 
     const parts = trimmed.split(';');
     // Valid data lines have exactly 6 fields
     if (parts.length < 5) continue;
 
     const schemeCode = parts[0].trim();
+    const schemeName = parts[3]?.trim() || '';
     const navStr = parts[4].trim();
     const dateStr = parts[5]?.trim();
 
@@ -111,7 +123,7 @@ function parseAmfiFile(rawText: string): Map<string, NavEntry> {
     const pgDate = convertAmfiDateToPostgres(dateStr);
     if (!pgDate) continue;
 
-    navMap.set(schemeCode, { schemeCode, nav, date: pgDate });
+    navMap.set(schemeCode, { schemeCode, schemeName, nav, date: pgDate, category: currentCategory });
   }
 
   return navMap;
@@ -149,15 +161,68 @@ async function runDailyUpdate() {
   const dbSchemeCodes = dbResult.rows.map((r: { scheme_code: string }) => r.scheme_code);
   console.log(`  Found ${dbSchemeCodes.length} funds in database`);
 
+  // Step 3.5: Insert new funds from AMFI that aren't in our database
+  console.log('Step 3.5: Checking for new funds in AMFI...');
+  const dbCodeSet = new Set(dbSchemeCodes);
+  const newFunds: NavEntry[] = [];
+  for (const [code, entry] of navMap) {
+    if (!dbCodeSet.has(code) && entry.schemeName) {
+      newFunds.push(entry);
+    }
+  }
+
+  if (newFunds.length > 0) {
+    console.log(`  Found ${newFunds.length} new funds in AMFI, inserting...`);
+    const INSERT_BATCH = 2000;
+
+    for (let i = 0; i < newFunds.length; i += INSERT_BATCH) {
+      const batch = newFunds.slice(i, i + INSERT_BATCH);
+      const codes = batch.map(f => f.schemeCode);
+      const names = batch.map(f => f.schemeName);
+      const navs = batch.map(f => f.nav);
+      const dates = batch.map(f => f.date);
+      const categories = batch.map(f => f.category);
+      const planTypes = batch.map(f => {
+        if (/direct/i.test(f.schemeName)) return 'Direct';
+        if (/regular/i.test(f.schemeName)) return 'Regular';
+        return '';
+      });
+      const optionTypes = batch.map(f => {
+        if (/growth/i.test(f.schemeName)) return 'Growth';
+        if (/idcw|dividend/i.test(f.schemeName)) return 'IDCW';
+        return '';
+      });
+
+      try {
+        await pool.query(`
+          INSERT INTO funds (scheme_code, scheme_name, latest_nav, latest_nav_date, category, plan_type, option_type, is_active, created_at, updated_at)
+          SELECT unnest($1::text[]), unnest($2::text[]), unnest($3::numeric[]), unnest($4::date[]),
+                 unnest($5::text[]), unnest($6::text[]), unnest($7::text[]), true, NOW(), NOW()
+          ON CONFLICT (scheme_code) DO NOTHING
+        `, [codes, names, navs, dates, categories, planTypes, optionTypes]);
+      } catch (insertErr: any) {
+        console.error(`  Insert batch error: ${insertErr.message}`);
+      }
+    }
+
+    console.log(`  Inserted ${newFunds.length} new funds`);
+  } else {
+    console.log('  No new funds to insert');
+  }
+
   // Step 4: Match and batch update
   console.log('Step 4: Updating NAVs in database...');
   let updated = 0;
   let skipped = 0;
   let errors = 0;
 
+  // Re-fetch DB codes to include newly inserted funds
+  const dbResult2 = await pool.query('SELECT scheme_code FROM funds');
+  const allDbCodes = dbResult2.rows.map((r: { scheme_code: string }) => r.scheme_code);
+
   const matchedFunds: NavEntry[] = [];
 
-  for (const schemeCode of dbSchemeCodes) {
+  for (const schemeCode of allDbCodes) {
     const navEntry = navMap.get(schemeCode);
     if (navEntry) {
       matchedFunds.push(navEntry);
