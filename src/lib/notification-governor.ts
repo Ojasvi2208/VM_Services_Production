@@ -25,6 +25,7 @@ const CATEGORY_MAP: Record<string, NotifCategory> = {
   fuel_alert:     'TRANSACTIONAL',
   nfo_close:      'TRANSACTIONAL',
   price_alert:    'TRANSACTIONAL',
+  market_pulse:   'TRANSACTIONAL',  // volatility trigger — own daily dedup in route
 
   // MARKETING — max 1 per 48 hours per user
   daily_briefing: 'MARKETING',
@@ -33,6 +34,7 @@ const CATEGORY_MAP: Record<string, NotifCategory> = {
   premium_upsell: 'MARKETING',
   feature_promo:  'MARKETING',
   nfo_alert:      'MARKETING',
+  eod_pulse:      'MARKETING',      // personalized EOD sector insight
 };
 
 function resolveCategory(type: string): NotifCategory {

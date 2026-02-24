@@ -19,6 +19,16 @@
       "path": "/api/cron/flush-queue",
       "schedule": "35 1 * * *",
       "description": "Flush DND notification queue (7:05 AM IST)"
+    },
+    {
+      "path": "/api/cron/market-update",
+      "schedule": "*/5 3-10 * * 1-5",
+      "description": "Volatility pulse check every 5 min (9:00 AM–4:30 PM IST, Mon–Fri)"
+    },
+    {
+      "path": "/api/cron/eod-pulse",
+      "schedule": "15 10 * * 1-5",
+      "description": "EOD personalized sector pulse (3:45 PM IST, Mon–Fri)"
     }
   ]
 }
