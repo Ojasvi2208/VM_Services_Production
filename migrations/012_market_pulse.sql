@@ -10,12 +10,12 @@ CREATE TABLE IF NOT EXISTS market_pulse_state (
   triggered_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Fast "was a market_pulse sent today?" lookup
-CREATE INDEX IF NOT EXISTS idx_notif_ledger_pulse_today
-  ON notification_ledger (type, (sent_at::date))
+-- Partial indexes for fast pulse/eod_pulse lookups on notification_ledger
+-- (Dedup for market_pulse uses market_pulse_state table; these are for analytics)
+CREATE INDEX IF NOT EXISTS idx_notif_ledger_pulse
+  ON notification_ledger (type, sent_at DESC)
   WHERE type = 'market_pulse';
 
--- Fast per-user eod_pulse dedup
-CREATE INDEX IF NOT EXISTS idx_notif_ledger_eod_today
-  ON notification_ledger (user_id, type, (sent_at::date))
+CREATE INDEX IF NOT EXISTS idx_notif_ledger_eod
+  ON notification_ledger (user_id, type, sent_at DESC)
   WHERE type = 'eod_pulse';
