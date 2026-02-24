@@ -27,8 +27,13 @@ const COMMODITY_SYMBOLS = [
   { yahoo: 'BZ=F',  name: 'Brent Crude',      unit: '/barrel', exchange: 'ICE',    flag: '🛢️', currency: 'USD' },
   { yahoo: 'GC=F',  name: 'Gold',             unit: '/oz',     exchange: 'COMEX',  flag: '🥇', currency: 'USD' },
   { yahoo: 'SI=F',  name: 'Silver',           unit: '/oz',     exchange: 'COMEX',  flag: '🥈', currency: 'USD' },
+  { yahoo: 'PL=F',  name: 'Platinum',         unit: '/oz',     exchange: 'NYMEX',  flag: '⚪', currency: 'USD' },
   { yahoo: 'NG=F',  name: 'Natural Gas',      unit: '/MMBtu',  exchange: 'NYMEX',  flag: '🔥', currency: 'USD' },
   { yahoo: 'HG=F',  name: 'Copper',           unit: '/lb',     exchange: 'COMEX',  flag: '🔶', currency: 'USD' },
+  { yahoo: 'ALI=F', name: 'Aluminum',         unit: '/lb',     exchange: 'COMEX',  flag: '🔩', currency: 'USD' },
+  { yahoo: 'ZW=F',  name: 'Wheat',            unit: '/bu',     exchange: 'CBOT',   flag: '🌾', currency: 'USD' },
+  { yahoo: 'CT=F',  name: 'Cotton',           unit: '/lb',     exchange: 'ICE',    flag: '🧶', currency: 'USD' },
+  { yahoo: 'SB=F',  name: 'Sugar',            unit: '/lb',     exchange: 'ICE',    flag: '🍬', currency: 'USD' },
 ];
 
 let commodityCache: { commodities: CommodityData[]; usdInr: number; timestamp: number } | null = null;
@@ -62,7 +67,7 @@ async function fetchAllCommodities(): Promise<{ commodities: CommodityData[]; us
   // Fetch USD/INR rate + all commodities in parallel batches
   const usdInr = await fetchUSDINR();
 
-  const BATCH = 5;
+  const BATCH = 6;
   const results: (any | null)[] = [];
   for (let i = 0; i < COMMODITY_SYMBOLS.length; i += BATCH) {
     const batch = COMMODITY_SYMBOLS.slice(i, i + BATCH);

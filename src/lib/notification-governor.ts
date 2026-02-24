@@ -26,6 +26,7 @@ const CATEGORY_MAP: Record<string, NotifCategory> = {
   nfo_close:      'TRANSACTIONAL',
   price_alert:    'TRANSACTIONAL',
   market_pulse:   'TRANSACTIONAL',  // volatility trigger — own daily dedup in route
+  secure_the_bag: 'TRANSACTIONAL',  // goal ≥90% + equity-heavy — protective lock-in alert
 
   // MARKETING — max 1 per 48 hours per user
   daily_briefing: 'MARKETING',
@@ -35,6 +36,7 @@ const CATEGORY_MAP: Record<string, NotifCategory> = {
   feature_promo:  'MARKETING',
   nfo_alert:      'MARKETING',
   eod_pulse:      'MARKETING',      // personalized EOD sector insight
+  ltcg_teaser:    'MARKETING',      // Jan-Mar free-user Pro upsell for tax harvesting
 };
 
 function resolveCategory(type: string): NotifCategory {

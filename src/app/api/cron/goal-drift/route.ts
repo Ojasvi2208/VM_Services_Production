@@ -196,6 +196,8 @@ export async function GET(request: NextRequest) {
                 AND (f.category = 'Equity' OR COALESCE(f.equity_allocation_pct, 0) >= 65)
             `, [goal.goal_id]);
 
+            let newSuggestionsCreated = 0;
+
             for (const eh of equityHoldings.rows) {
               // Check if suggestion already exists
               const existing = await client.query(
@@ -252,6 +254,25 @@ export async function GET(request: NextRequest) {
                 stp.monthlyAmount > 0 ? stp.monthlyAmount : null,
                 stp.months > 0 ? stp.months : null,
               ]);
+              newSuggestionsCreated++;
+            }
+
+            // Dispatch "Secure the Bag" push if new transition suggestions were created
+            if (newSuggestionsCreated > 0 && equityHoldings.rows.length > 0) {
+              const progressDisplay = Math.round(progressPct);
+              const pushResult = await dispatchPush({
+                userId: goal.user_id,
+                type: 'secure_the_bag',
+                title: `${goal.goal_name} is ${progressDisplay}% funded`,
+                body: `You're almost there — but still in aggressive equity. Lock in your gains with a tax-smart transition to safety.`,
+                deepLink: `goal_detail/${goal.goal_id}`,
+                data: {
+                  goalId: goal.goal_id,
+                  progressPct: String(progressDisplay),
+                  equityHoldings: String(equityHoldings.rows.length),
+                },
+              });
+              if (pushResult.sent) stats.notificationsSent++;
             }
           } catch (transErr: any) {
             stats.errors.push(`Transition for goal ${goal.goal_id}: ${transErr.message}`);

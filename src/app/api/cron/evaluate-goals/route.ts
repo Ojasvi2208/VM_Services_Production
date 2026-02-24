@@ -338,6 +338,57 @@ export async function GET(request: NextRequest) {
       } catch (ltcgErr: any) {
         stats.errors.push(`LTCG harvest: ${ltcgErr.message}`);
       }
+
+      // ═══ LTCG Teaser for Free Users (Jan–Mar) — Pro Upsell ═══
+      try {
+        const freeUsers = await client.query(`
+          SELECT u.id as user_id
+          FROM users u
+          WHERE (u.is_premium = false OR u.is_premium IS NULL)
+            AND u.is_active = true
+        `);
+
+        for (const fu of freeUsers.rows) {
+          // Check if user has any equity holdings held > 12 months with unrealized gains
+          const harvestable = await client.query(`
+            SELECT COUNT(*) as fund_count,
+                   SUM(
+                     CASE WHEN (COALESCE(f.latest_nav, ph.purchase_nav) - ph.purchase_nav) * ph.units > 0
+                       THEN (COALESCE(f.latest_nav, ph.purchase_nav) - ph.purchase_nav) * ph.units
+                       ELSE 0
+                     END
+                   ) as total_unrealized_ltcg
+            FROM portfolio_holdings ph
+            LEFT JOIN funds f ON ph.scheme_code = f.scheme_code
+            WHERE ph.user_id = $1
+              AND ph.purchase_date < NOW() - INTERVAL '365 days'
+              AND (f.category = 'Equity' OR COALESCE(f.equity_allocation_pct, 0) >= 65)
+              AND ph.units > 0
+          `, [fu.user_id]);
+
+          const fundCount = parseInt(harvestable.rows[0]?.fund_count || '0');
+          const totalGain = parseFloat(harvestable.rows[0]?.total_unrealized_ltcg || '0');
+          if (fundCount === 0 || totalGain <= 0) continue;
+
+          const gainDisplay = totalGain >= 100000
+            ? `${(totalGain / 100000).toFixed(1)}L`
+            : `${Math.round(totalGain).toLocaleString('en-IN')}`;
+
+          await dispatchPush({
+            userId: fu.user_id,
+            type: 'ltcg_teaser',
+            title: 'You may be leaving tax-free gains on the table',
+            body: `Your portfolio has unrealized gains that could be harvested tax-free before March 31. Pro members save an avg of ₹${gainDisplay}. Tap to learn more.`,
+            deepLink: 'premium',
+            data: {
+              unrealizedGain: String(Math.round(totalGain)),
+              fundCount: String(fundCount),
+            },
+          });
+        }
+      } catch (teaserErr: any) {
+        stats.errors.push(`LTCG teaser: ${teaserErr.message}`);
+      }
     }
 
     // ── Record token usage ──
