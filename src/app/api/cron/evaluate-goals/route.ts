@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
 import { runMonteCarlo, portfolioDrift, findRecommendedSip } from '@/lib/monte-carlo';
 import { evaluateGoalWithGemini, generateMonthlyNarrative, checkTokenBudget, recordTokenUsage } from '@/lib/gemini-evaluator';
-import { sendPushNotificationBatch } from '@/lib/firebase-admin';
+import { dispatchPush } from '@/lib/notification-governor';
 import { classifyFund, getCurrentFY, getMonthsLeftInFY } from '@/lib/tax-calculator';
 import type { GBMOutput } from '@/lib/gemini-evaluator';
 
@@ -320,25 +320,19 @@ export async function GET(request: NextRequest) {
             ]);
           }
 
-          // Send FCM push if there's harvestable LTCG
+          // Send push via Notification Governor if there's harvestable LTCG
           if (totalHarvestable > 0) {
-            const tokensResult = await client.query(
-              'SELECT device_token FROM device_tokens WHERE user_id = $1',
-              [pu.user_id]
-            );
-            if (tokensResult.rows.length > 0) {
-              const tokens = tokensResult.rows.map((r: any) => r.device_token);
-              const remainingDisplay = remaining >= 100000
-                ? `₹${(remaining / 100000).toFixed(1)}L`
-                : `₹${remaining.toLocaleString('en-IN')}`;
+            const remainingDisplay = remaining >= 100000
+              ? `₹${(remaining / 100000).toFixed(1)}L`
+              : `₹${remaining.toLocaleString('en-IN')}`;
 
-              await sendPushNotificationBatch(
-                tokens,
-                `💰 ${remainingDisplay} left in tax-free LTCG quota`,
-                `${monthsLeft} months left in ${fy}. Switch off-track funds to reset cost basis tax-free.`,
-                { type: 'ltcg_harvest' }
-              );
-            }
+            await dispatchPush({
+              userId: pu.user_id,
+              type: 'ltcg_harvest',
+              title: `💰 ${remainingDisplay} left in tax-free LTCG quota`,
+              body: `${monthsLeft} months left in ${fy}. Switch off-track funds to reset cost basis tax-free.`,
+              deepLink: 'portfolio',
+            });
           }
         }
       } catch (ltcgErr: any) {

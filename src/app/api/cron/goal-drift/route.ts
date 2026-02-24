@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
-import { sendPushNotificationBatch } from '@/lib/firebase-admin';
+import { dispatchPush } from '@/lib/notification-governor';
 import {
   classifyFund, calculateRedemptionTax, calculateSwapBenefit,
   calculateTaxOptimizedSTP, incomeRangeToMidpoint, getCurrentFY, getMonthsLeftInFY,
@@ -164,33 +164,20 @@ export async function GET(request: NextRequest) {
         if (driftPct > 10) {
           stats.driftingGoals++;
 
-          const tokensResult = await client.query(
-            'SELECT device_token FROM device_tokens WHERE user_id = $1',
-            [goal.user_id]
-          );
+          const topupDisplay = suggestedTopupSip
+            ? `A top-up SIP of ₹${suggestedTopupSip.toLocaleString('en-IN')}/mo can get you back on track.`
+            : 'Review your goal allocation.';
 
-          if (tokensResult.rows.length > 0) {
-            const tokens = tokensResult.rows.map((r: any) => r.device_token);
-            const topupDisplay = suggestedTopupSip
-              ? `A top-up SIP of ₹${suggestedTopupSip.toLocaleString('en-IN')}/mo can get you back on track.`
-              : 'Review your goal allocation.';
+          const pushResult = await dispatchPush({
+            userId: goal.user_id,
+            type: 'goal_drift',
+            title: `🎯 ${goal.goal_name} — ${Math.round(driftPct)}% behind target`,
+            body: topupDisplay,
+            deepLink: `goal_detail/${goal.goal_id}`,
+            data: { goalId: goal.goal_id },
+          });
 
-            const result = await sendPushNotificationBatch(
-              tokens,
-              `🎯 ${goal.goal_name} — ${Math.round(driftPct)}% behind target`,
-              topupDisplay,
-              { type: 'goal_drift', goalId: goal.goal_id }
-            );
-
-            stats.notificationsSent += result.success;
-
-            // Clean up invalid tokens
-            if (result.invalidTokens.length > 0) {
-              for (const token of result.invalidTokens) {
-                await client.query('DELETE FROM device_tokens WHERE device_token = $1', [token]);
-              }
-            }
-          }
+          if (pushResult.sent) stats.notificationsSent++;
         }
 
         // ═══ Goal Transition: "Secure the Bag" (≥90% progress) ═══
