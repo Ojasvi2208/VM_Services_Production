@@ -114,8 +114,11 @@ function parseRSSItems(xml: string): { title: string; link: string; pubDate: str
   while ((match = itemRegex.exec(xml)) !== null) {
     const block = match[1];
     const getTag = (tag: string) => {
-      const m = block.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));
-      return (m?.[1] || m?.[2] || '').trim();
+      const m = block.match(new RegExp(`<${tag}[^>]*>\\s*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>\\s*<\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));
+      let val = (m?.[1] || m?.[2] || '').trim();
+      // Strip any residual CDATA markers (nested or malformed)
+      val = val.replace(/<!\[CDATA\[/g, '').replace(/\]\]>/g, '');
+      return val.trim();
     };
 
     const title = getTag('title');
