@@ -88,7 +88,7 @@ async function fetchCorporateActions(): Promise<CorporateAction[]> {
 
     const data = await response.json();
     const quotes = data?.quoteResponse?.result || [];
-    const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
     let idx = 0;
 
     // Start of today (midnight UTC)
@@ -105,7 +105,7 @@ async function fetchCorporateActions(): Promise<CorporateAction[]> {
       const exDivEpoch = quote.exDividendDate;
       if (exDivEpoch) {
         const exDivMs = exDivEpoch * 1000;
-        if (exDivMs >= todayMs && exDivMs < todayMs + sixtyDaysMs) {
+        if (exDivMs >= todayMs && exDivMs < todayMs + sevenDaysMs) {
           const exDate = new Date(exDivMs).toISOString().split('T')[0];
           const divDateEpoch = quote.dividendDate;
           const payDate = divDateEpoch ? new Date(divDateEpoch * 1000).toISOString().split('T')[0] : undefined;
@@ -129,7 +129,7 @@ async function fetchCorporateActions(): Promise<CorporateAction[]> {
       const earningsEpoch = quote.earningsTimestamp || quote.earningsTimestampStart;
       if (earningsEpoch) {
         const earningsMs = earningsEpoch * 1000;
-        if (earningsMs >= todayMs && earningsMs < todayMs + sixtyDaysMs) {
+        if (earningsMs >= todayMs && earningsMs < todayMs + sevenDaysMs) {
           const earningsDate = new Date(earningsMs).toISOString().split('T')[0];
           const endEpoch = quote.earningsTimestampEnd;
           const rangeEnd = endEpoch ? new Date(endEpoch * 1000).toISOString().split('T')[0] : undefined;

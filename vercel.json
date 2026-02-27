@@ -29,6 +29,16 @@
       "path": "/api/cron/eod-pulse",
       "schedule": "15 10 * * 1-5",
       "description": "EOD personalized sector pulse (3:45 PM IST, Mon–Fri)"
+    },
+    {
+      "path": "/api/cron/sync-macro",
+      "schedule": "0 22 * * *",
+      "description": "Macro data sync — currencies + commodities (3:30 AM IST)"
+    },
+    {
+      "path": "/api/cron/engagement-dispatch",
+      "schedule": "*/15 1-17 * * *",
+      "description": "High-frequency engagement rotation every 15 min (IST ~6:30 AM–11:30 PM)"
     }
   ]
 }

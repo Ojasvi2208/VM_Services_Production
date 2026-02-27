@@ -15,6 +15,7 @@ interface NewsArticle {
   category: string;
   imageUrl?: string;
   isBreaking?: boolean;
+  feedSource: 'google' | 'premium';
 }
 
 // ─── Cache (1 hour) ─────────────────────────────────────────────────────────
@@ -146,6 +147,7 @@ interface DirectFeedConfig {
 }
 
 const DIRECT_FEEDS: DirectFeedConfig[] = [
+  // Premium Indian publishers
   { url: 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms', sourceName: 'Economic Times', defaultCategory: 'Markets' },
   { url: 'https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms', sourceName: 'Economic Times', defaultCategory: 'Stocks' },
   { url: 'https://economictimes.indiatimes.com/mf/rssfeeds/2352498.cms', sourceName: 'Economic Times', defaultCategory: 'Mutual Funds' },
@@ -154,6 +156,9 @@ const DIRECT_FEEDS: DirectFeedConfig[] = [
   { url: 'https://www.livemint.com/rss/money', sourceName: 'Livemint', defaultCategory: 'Mutual Funds' },
   { url: 'https://www.livemint.com/rss/industry', sourceName: 'Livemint', defaultCategory: 'Stocks' },
   { url: 'https://feeds.feedburner.com/ndtvprofit-latest', sourceName: 'NDTV Profit', defaultCategory: 'Markets' },
+  // Premium global publishers
+  { url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html', sourceName: 'CNBC', defaultCategory: 'Global' },
+  { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Business.xml', sourceName: 'New York Times', defaultCategory: 'Global' },
 ];
 
 async function fetchDirectFeed(config: DirectFeedConfig): Promise<NewsArticle[]> {
@@ -175,6 +180,7 @@ async function fetchDirectFeed(config: DirectFeedConfig): Promise<NewsArticle[]>
         publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
         category: category === 'Markets' ? config.defaultCategory : category,
         imageUrl: item.imageUrl,
+        feedSource: 'premium' as const,
       };
     });
   } catch (error: any) {
@@ -215,6 +221,7 @@ async function fetchGoogleNewsRSS(query: string): Promise<NewsArticle[]> {
         publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
         category: categorizeArticle(cleanTitle, item.description),
         imageUrl: item.imageUrl, // Will be undefined for Google News
+        feedSource: 'google' as const,
       };
     });
   } catch (error: any) {
@@ -373,11 +380,20 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const category = searchParams.get('category') || 'all';
   const limit = parseInt(searchParams.get('limit') || '50');
+  const feed = searchParams.get('feed') || 'all'; // 'home' | 'premium' | 'all'
 
   try {
     const allArticles = await getArticles();
 
     let filtered = allArticles;
+
+    // Feed source filter: home = Google News only, premium = publisher feeds only
+    if (feed === 'home') {
+      filtered = filtered.filter(a => a.feedSource === 'google');
+    } else if (feed === 'premium') {
+      filtered = filtered.filter(a => a.feedSource === 'premium');
+    }
+
     if (category !== 'all') {
       filtered = filtered.filter(a => a.category.toLowerCase() === category.toLowerCase());
     }

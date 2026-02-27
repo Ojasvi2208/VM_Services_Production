@@ -3,8 +3,8 @@
  *
  * Centralized push dispatch with:
  *   - Per-user audit ledger (notification_ledger)
- *   - DND window: 11 PM – 6:30 AM IST (queued to notification_queue, flushed at 7:05 AM)
- *   - Rate limiting: MARKETING max 1 per 48h per user; TRANSACTIONAL exempt
+ *   - DND window: 11:30 PM – 6:30 AM IST (queued to notification_queue, flushed at 7:05 AM)
+ *   - Rate limiting: MARKETING max 1/48h; ENGAGEMENT max 4/hr; TRANSACTIONAL exempt
  *   - Invalid token cleanup after every send
  *
  * All cron routes MUST call dispatchPush() or dispatchBroadcast() instead of
@@ -16,7 +16,7 @@ import { sendPushNotificationBatch, isFirebaseConfigured } from '@/lib/firebase-
 
 // ─── Category Classification ────────────────────────────────────────────────
 
-type NotifCategory = 'TRANSACTIONAL' | 'MARKETING';
+type NotifCategory = 'TRANSACTIONAL' | 'MARKETING' | 'ENGAGEMENT';
 
 const CATEGORY_MAP: Record<string, NotifCategory> = {
   // TRANSACTIONAL — exempt from rate limiting
@@ -37,6 +37,12 @@ const CATEGORY_MAP: Record<string, NotifCategory> = {
   nfo_alert:      'MARKETING',
   eod_pulse:      'MARKETING',      // personalized EOD sector insight
   ltcg_teaser:    'MARKETING',      // Jan-Mar free-user Pro upsell for tax harvesting
+
+  // ENGAGEMENT — max 4 per hour per user (high-frequency rotation)
+  market_snapshot:          'ENGAGEMENT',
+  breaking_headline:        'ENGAGEMENT',
+  stock_mover:              'ENGAGEMENT',
+  premium_upsell_rotation:  'ENGAGEMENT',  // 1x/day max enforced in cron
 };
 
 function resolveCategory(type: string): NotifCategory {
@@ -54,8 +60,8 @@ function getISTTime(): { hour: number; minute: number } {
 
 function isDNDWindow(): boolean {
   const { hour, minute } = getISTTime();
-  // DND: 23:00 – 06:29 IST
-  return hour >= 23 || hour < 6 || (hour === 6 && minute < 30);
+  // DND: 23:30 – 06:29 IST
+  return (hour === 23 && minute >= 30) || hour < 6 || (hour === 6 && minute < 30);
 }
 
 // ─── Token helpers ──────────────────────────────────────────────────────────
@@ -99,8 +105,9 @@ export async function dispatchPush(params: DispatchPushParams): Promise<Dispatch
     return { sent: false, reason: 'queued_dnd' };
   }
 
-  // 2. Rate limit check (MARKETING only — max 1 per 48h per user)
+  // 2. Rate limit check
   if (category === 'MARKETING') {
+    // MARKETING: max 1 per 48h per user
     const recent = await pool.query(
       `SELECT 1 FROM notification_ledger
        WHERE user_id = $1 AND category = 'MARKETING'
@@ -109,6 +116,17 @@ export async function dispatchPush(params: DispatchPushParams): Promise<Dispatch
       [userId]
     );
     if (recent.rows.length > 0) {
+      return { sent: false, reason: 'rate_limited' };
+    }
+  } else if (category === 'ENGAGEMENT') {
+    // ENGAGEMENT: max 4 per hour per user
+    const recent = await pool.query(
+      `SELECT COUNT(*) as cnt FROM notification_ledger
+       WHERE user_id = $1 AND category = 'ENGAGEMENT'
+         AND sent_at > NOW() - INTERVAL '1 hour'`,
+      [userId]
+    );
+    if (parseInt(recent.rows[0]?.cnt || '0') >= 4) {
       return { sent: false, reason: 'rate_limited' };
     }
   }
@@ -211,20 +229,34 @@ export async function dispatchBroadcast(params: DispatchBroadcastParams): Promis
   // 4. Per-user rate limit check + send
   if (!isFirebaseConfigured()) return result;
 
-  // Pre-fetch rate-limited users (MARKETING only)
+  // Pre-fetch rate-limited users
   const rateLimitedUsers = new Set<string>();
-  if (category === 'MARKETING' && userTokens.size > 0) {
+  if ((category === 'MARKETING' || category === 'ENGAGEMENT') && userTokens.size > 0) {
     const userIds = Array.from(userTokens.keys());
     const placeholders = userIds.map((_, i) => `$${i + 1}`).join(',');
-    const rlResult = await pool.query(
-      `SELECT DISTINCT user_id FROM notification_ledger
-       WHERE user_id IN (${placeholders})
-         AND category = 'MARKETING'
-         AND sent_at > NOW() - INTERVAL '48 hours'`,
-      userIds
-    );
-    for (const row of rlResult.rows) {
-      rateLimitedUsers.add(row.user_id);
+
+    if (category === 'MARKETING') {
+      // MARKETING: max 1 per 48h per user
+      const rlResult = await pool.query(
+        `SELECT DISTINCT user_id FROM notification_ledger
+         WHERE user_id IN (${placeholders})
+           AND category = 'MARKETING'
+           AND sent_at > NOW() - INTERVAL '48 hours'`,
+        userIds
+      );
+      for (const row of rlResult.rows) rateLimitedUsers.add(row.user_id);
+    } else {
+      // ENGAGEMENT: max 4 per hour per user
+      const rlResult = await pool.query(
+        `SELECT user_id, COUNT(*) as cnt FROM notification_ledger
+         WHERE user_id IN (${placeholders})
+           AND category = 'ENGAGEMENT'
+           AND sent_at > NOW() - INTERVAL '1 hour'
+         GROUP BY user_id
+         HAVING COUNT(*) >= 4`,
+        userIds
+      );
+      for (const row of rlResult.rows) rateLimitedUsers.add(row.user_id);
     }
   }
 
@@ -299,7 +331,7 @@ export async function flushDNDQueue(): Promise<FlushResult> {
   if (!isFirebaseConfigured()) return result;
 
   for (const row of pending.rows) {
-    // Rate limit check for MARKETING
+    // Rate limit check for MARKETING and ENGAGEMENT
     if (row.category === 'MARKETING') {
       const recent = await pool.query(
         `SELECT 1 FROM notification_ledger
@@ -309,7 +341,18 @@ export async function flushDNDQueue(): Promise<FlushResult> {
         [row.user_id]
       );
       if (recent.rows.length > 0) {
-        // Mark as flushed (don't re-process) but don't send
+        await pool.query('UPDATE notification_queue SET flushed = true WHERE id = $1', [row.id]);
+        result.rateLimited++;
+        continue;
+      }
+    } else if (row.category === 'ENGAGEMENT') {
+      const recent = await pool.query(
+        `SELECT COUNT(*) as cnt FROM notification_ledger
+         WHERE user_id = $1 AND category = 'ENGAGEMENT'
+           AND sent_at > NOW() - INTERVAL '1 hour'`,
+        [row.user_id]
+      );
+      if (parseInt(recent.rows[0]?.cnt || '0') >= 4) {
         await pool.query('UPDATE notification_queue SET flushed = true WHERE id = $1', [row.id]);
         result.rateLimited++;
         continue;
