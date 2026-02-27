@@ -56,21 +56,28 @@ function categorizeArticle(title: string, description: string): string {
   return 'Markets';
 }
 
-// ─── Clean description text — strip HTML tags, entities, and artifacts ────────
+// ─── Clean text — decode entities first, THEN strip HTML tags ────────────────
+function cleanText(html: string, maxLen = 0): string {
+  let text = html
+    // 1. Decode HTML entities FIRST (so encoded tags become real tags)
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&#\d+;/g, '')
+    // 2. THEN strip all HTML tags (including decoded <a href="...">, <b>, etc.)
+    .replace(/<[^>]*>/g, '')
+    // 3. Clean up whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
+  return maxLen > 0 ? text.substring(0, maxLen) : text;
+}
+
 function cleanDescription(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, '')           // strip HTML tags
-    .replace(/&nbsp;/gi, ' ')          // &nbsp; → space
-    .replace(/&amp;/gi, '&')           // &amp; → &
-    .replace(/&lt;/gi, '<')            // &lt; → <
-    .replace(/&gt;/gi, '>')            // &gt; → >
-    .replace(/&quot;/gi, '"')          // &quot; → "
-    .replace(/&#39;/gi, "'")           // &#39; → '
-    .replace(/&#x27;/gi, "'")          // &#x27; → '
-    .replace(/&#\d+;/g, '')            // other numeric entities
-    .replace(/\s+/g, ' ')             // collapse whitespace
-    .trim()
-    .substring(0, 300);
+  return cleanText(html, 300);
 }
 
 // ─── Extract image URL from RSS item block ──────────────────────────────────
@@ -170,10 +177,11 @@ async function fetchDirectFeed(config: DirectFeedConfig): Promise<NewsArticle[]>
     const items = parseRSSItems(xml);
 
     return items.map((item, index) => {
-      const category = categorizeArticle(item.title, item.description);
+      const title = cleanText(item.title);
+      const category = categorizeArticle(title, item.description);
       return {
         id: `df-${config.sourceName.replace(/\s/g, '')}-${index}-${Date.now()}`,
-        title: item.title,
+        title,
         description: cleanDescription(item.description),
         url: item.link,
         source: item.source || config.sourceName,
@@ -208,9 +216,10 @@ async function fetchGoogleNewsRSS(query: string): Promise<NewsArticle[]> {
 
     return items.map((item, index) => {
       // Clean title: Google News appends " - Source" at the end
-      const titleParts = item.title.split(' - ');
+      const rawTitle = cleanText(item.title);
+      const titleParts = rawTitle.split(' - ');
       const sourceName = item.source || (titleParts.length > 1 ? titleParts.pop()! : 'News');
-      const cleanTitle = item.source ? item.title : titleParts.join(' - ');
+      const cleanTitle = item.source ? rawTitle : titleParts.join(' - ');
 
       return {
         id: `gn-${index}-${Date.now()}`,
