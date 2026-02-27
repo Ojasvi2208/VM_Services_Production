@@ -197,7 +197,7 @@ export async function GET(request: NextRequest) {
 
 async function searchUnified(
   query: string, amc: string, category: string, subCategory: string,
-  page: number, pageSize: number, topPerformers = false
+  page: number, pageSize: number, topPerformers = false, randomize = false
 ) {
   // ── Build WHERE clause ──
   let where = 'WHERE 1=1';
@@ -355,7 +355,10 @@ async function searchUnified(
   // Priority: exact phrase → starts with → contains → fallback, then shorter name, then CAGR
   let orderBy: string;
   const dataParams = [...params];
-  if (query && !topPerformers) {
+  if (randomize) {
+    // "Fresh Discovery" mode: random selection for zero-state engagement
+    orderBy = 'ORDER BY RANDOM()';
+  } else if (query && !topPerformers) {
     const { words } = normalizeQuery(query);
     const phrase = words.join(' ');
     dataParams.push(phrase, phrase + '%', '%' + phrase + '%');
@@ -411,7 +414,8 @@ async function searchUnified(
     pageSize,
     totalPages,
     query: query || amc || category || subCategory,
-    engine: 'unified'
+    engine: 'unified',
+    ...(randomize ? { hint: 'random_discovery' } : {}),
   });
 }
 
@@ -551,9 +555,12 @@ export async function POST(request: NextRequest) {
 
     const useMV = await checkMatView();
 
+    // "Fresh Discovery" mode: category provided but no query → return 6 random funds
+    const isDiscoveryMode = !query && !amc && category && !subCategory;
+    const discoveryLimit = isDiscoveryMode ? 6 : Math.min(limit, 200);
+
     if (useMV) {
-      // Use unified search with limit as pageSize, page 1
-      return await searchUnified(query, amc, category, subCategory, 1, Math.min(limit, 200));
+      return await searchUnified(query, amc, category, subCategory, 1, discoveryLimit, false, isDiscoveryMode);
     }
 
     // Legacy fallback

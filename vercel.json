@@ -39,6 +39,26 @@
       "path": "/api/cron/engagement-dispatch",
       "schedule": "*/15 1-17 * * *",
       "description": "High-frequency engagement rotation every 15 min (IST ~6:30 AM–11:30 PM)"
+    },
+    {
+      "path": "/api/cron/market-snapshot",
+      "schedule": "0 4,6,8,10 * * 1-5",
+      "description": "Sentinel 2-hour market pulse (9:30, 11:30, 13:30, 15:30 IST, Mon–Fri)"
+    },
+    {
+      "path": "/api/cron/eod-big-money",
+      "schedule": "0 10 * * 1-5",
+      "description": "EOD FII/DII institutional flow report (3:30 PM IST, Mon–Fri)"
+    },
+    {
+      "path": "/api/cron/goal-proximity",
+      "schedule": "30 23 * * 0-4",
+      "description": "Goal proximity guardian + NAV confirmation (5:00 AM IST, Mon–Fri)"
+    },
+    {
+      "path": "/api/cron/engagement-drops",
+      "schedule": "0 3 * * *",
+      "description": "Morning quote + monthly champions + holiday reminders (8:30 AM IST, daily)"
     }
   ]
 }

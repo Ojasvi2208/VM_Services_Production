@@ -20,29 +20,35 @@ type NotifCategory = 'TRANSACTIONAL' | 'MARKETING' | 'ENGAGEMENT';
 
 const CATEGORY_MAP: Record<string, NotifCategory> = {
   // TRANSACTIONAL — exempt from rate limiting
-  goal_drift:     'TRANSACTIONAL',
-  ltcg_harvest:   'TRANSACTIONAL',
-  fuel_alert:     'TRANSACTIONAL',
-  nfo_close:      'TRANSACTIONAL',
-  price_alert:    'TRANSACTIONAL',
-  market_pulse:   'TRANSACTIONAL',  // volatility trigger — own daily dedup in route
-  secure_the_bag: 'TRANSACTIONAL',  // goal ≥90% + equity-heavy — protective lock-in alert
+  goal_drift:         'TRANSACTIONAL',
+  ltcg_harvest:       'TRANSACTIONAL',
+  fuel_alert:         'TRANSACTIONAL',
+  nfo_close:          'TRANSACTIONAL',
+  price_alert:        'TRANSACTIONAL',
+  market_pulse:       'TRANSACTIONAL',  // volatility trigger — own daily dedup in route
+  secure_the_bag:     'TRANSACTIONAL',  // goal ≥90% + equity-heavy — protective lock-in alert
+  goal_proximity:     'TRANSACTIONAL',  // Goal Proximity Guardian — post-NAV update
+  nav_confirmation:   'TRANSACTIONAL',  // "Portfolio Synced" after daily NAV update
 
   // MARKETING — max 1 per 48 hours per user
-  daily_briefing: 'MARKETING',
-  market_open:    'MARKETING',
-  market_close:   'MARKETING',
-  premium_upsell: 'MARKETING',
-  feature_promo:  'MARKETING',
-  nfo_alert:      'MARKETING',
-  eod_pulse:      'MARKETING',      // personalized EOD sector insight
-  ltcg_teaser:    'MARKETING',      // Jan-Mar free-user Pro upsell for tax harvesting
+  daily_briefing:     'MARKETING',
+  market_open:        'MARKETING',
+  market_close:       'MARKETING',
+  premium_upsell:     'MARKETING',
+  feature_promo:      'MARKETING',
+  nfo_alert:          'MARKETING',
+  eod_pulse:          'MARKETING',      // personalized EOD sector insight
+  eod_big_money:      'MARKETING',      // FII/DII EOD institutional report
+  ltcg_teaser:        'MARKETING',      // Jan-Mar free-user Pro upsell for tax harvesting
+  monthly_champions:  'MARKETING',      // 1st-of-month top performing fund
+  holiday_reminder:   'MARKETING',      // Indian national holiday — market closed
 
   // ENGAGEMENT — max 4 per hour per user (high-frequency rotation)
-  market_snapshot:          'ENGAGEMENT',
+  market_snapshot:          'ENGAGEMENT',  // 2-hour interval multi-index pulse
   breaking_headline:        'ENGAGEMENT',
   stock_mover:              'ENGAGEMENT',
   premium_upsell_rotation:  'ENGAGEMENT',  // 1x/day max enforced in cron
+  morning_quote:            'ENGAGEMENT',  // 08:30 AM quote of the day
 };
 
 function resolveCategory(type: string): NotifCategory {
