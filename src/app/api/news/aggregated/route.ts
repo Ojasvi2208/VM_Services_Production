@@ -320,6 +320,12 @@ async function fetchAllNews(): Promise<NewsArticle[]> {
   // Merge: direct feeds first (they have images), then Google News
   let allArticles: NewsArticle[] = [...directArticles, ...googleArticles];
 
+  // Filter out blocked sources (no images, low quality)
+  const BLOCKED_SOURCES = ['meyka'];
+  allArticles = allArticles.filter(article =>
+    !BLOCKED_SOURCES.some(blocked => article.source.toLowerCase().includes(blocked))
+  );
+
   // Deduplicate by title prefix (50 chars)
   const seen = new Set<string>();
   allArticles = allArticles.filter(article => {
