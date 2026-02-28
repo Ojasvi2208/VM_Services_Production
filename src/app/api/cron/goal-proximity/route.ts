@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
-import { dispatchPush, dispatchBroadcast } from '@/lib/notification-governor';
+import { dispatchPush } from '@/lib/notification-governor';
 
 function verifyCronSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
@@ -73,26 +73,19 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      // Dedup: don't spam daily — only notify at significant milestones
-      // or if > 5% change since last notification
+      // Dedup: one notification per goal per day
       const lastNotif = await pool.query(
-        `SELECT body FROM notification_ledger
+        `SELECT 1 FROM notification_ledger
          WHERE user_id = $1 AND type = 'goal_proximity'
            AND deep_link LIKE $2
-           AND sent_at > NOW() - INTERVAL '7 days'
-         ORDER BY sent_at DESC LIMIT 1`,
+           AND sent_at > NOW() - INTERVAL '24 hours'
+         LIMIT 1`,
         [goal.user_id, `%${goal.goal_id}%`]
       );
 
-      // If notified within 7 days for same goal, skip unless crossing a 10% milestone
       if (lastNotif.rows.length > 0) {
-        const pctStr = lastNotif.rows[0].body?.match(/(\d+)%/)?.[1];
-        const lastPct = pctStr ? parseInt(pctStr) : 0;
-        const milestonesCrossed = Math.floor(completionPct / 10) > Math.floor(lastPct / 10);
-        if (!milestonesCrossed) {
-          goalsSkipped++;
-          continue;
-        }
+        goalsSkipped++;
+        continue;
       }
 
       let title: string;
@@ -119,22 +112,63 @@ export async function GET(request: NextRequest) {
       goalsSent++;
     }
 
-    // ─── 2. NAV Confirmation Broadcast ─────────────────────────────────────
+    // ─── 2. Personalized Daily P&L Notification ────────────────────────────
 
-    // Count total users with holdings
-    const holdingsCount = await pool.query(
-      `SELECT COUNT(DISTINCT user_id) as cnt FROM portfolio_holdings`
-    );
-    const totalHolders = parseInt(holdingsCount.rows[0]?.cnt || '0');
+    let navSent = 0;
+    let navSkipped = 0;
 
-    let navBroadcast = null;
-    if (totalHolders > 0) {
-      navBroadcast = await dispatchBroadcast({
+    // Compute per-user portfolio value (current vs previous day NAV)
+    const plResult = await pool.query(`
+      SELECT
+        ph.user_id,
+        SUM(ph.units * COALESCE(f.latest_nav, ph.purchase_nav)) AS current_value,
+        SUM(ph.units * COALESCE(
+          (SELECT nh.nav_value FROM nav_history nh
+           WHERE nh.scheme_code = ph.scheme_code
+             AND nh.nav_date < COALESCE(f.latest_nav_date, CURRENT_DATE)
+           ORDER BY nh.nav_date DESC LIMIT 1),
+          f.latest_nav,
+          ph.purchase_nav
+        )) AS previous_value
+      FROM portfolio_holdings ph
+      LEFT JOIN funds f ON f.scheme_code = ph.scheme_code
+      GROUP BY ph.user_id
+      HAVING SUM(ph.units * COALESCE(f.latest_nav, ph.purchase_nav)) > 0
+    `);
+
+    for (const row of plResult.rows) {
+      const currentVal = parseFloat(row.current_value) || 0;
+      const previousVal = parseFloat(row.previous_value) || 0;
+      if (currentVal <= 0 || previousVal <= 0) {
+        navSkipped++;
+        continue;
+      }
+
+      const dailyChange = currentVal - previousVal;
+      const dailyChangePct = (dailyChange / previousVal) * 100;
+
+      let navTitle: string;
+      let navBody: string;
+
+      if (Math.abs(dailyChangePct) < 0.01) {
+        navTitle = 'Portfolio Synced';
+        navBody = `Your portfolio is steady at ₹${formatINR(currentVal)}. NAVs are updated.`;
+      } else if (dailyChange > 0) {
+        navTitle = `Portfolio +${dailyChangePct.toFixed(2)}% today`;
+        navBody = `Your portfolio grew to ₹${formatINR(currentVal)} (+₹${formatINR(dailyChange)}). NAVs are updated.`;
+      } else {
+        navTitle = `Portfolio ${dailyChangePct.toFixed(2)}% today`;
+        navBody = `Your portfolio is at ₹${formatINR(currentVal)} (₹${formatINR(Math.abs(dailyChange))} dip). SIPs buy more units at lower NAVs.`;
+      }
+
+      await dispatchPush({
+        userId: row.user_id,
         type: 'nav_confirmation',
-        title: 'Portfolio Synced',
-        body: 'All NAVs are updated. Open Akshaya to see your latest Net Worth.',
+        title: navTitle,
+        body: navBody,
         deepLink: 'portfolio',
       });
+      navSent++;
     }
 
     return NextResponse.json({
@@ -144,7 +178,10 @@ export async function GET(request: NextRequest) {
         sent: goalsSent,
         skipped: goalsSkipped,
       },
-      navConfirmation: navBroadcast,
+      navConfirmation: {
+        sent: navSent,
+        skipped: navSkipped,
+      },
     });
   } catch (error: any) {
     console.error('goal-proximity cron error:', error);

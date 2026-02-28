@@ -37,8 +37,8 @@
     },
     {
       "path": "/api/cron/engagement-dispatch",
-      "schedule": "*/15 1-17 * * *",
-      "description": "High-frequency engagement rotation every 15 min (IST ~6:30 AM–11:30 PM)"
+      "schedule": "0 5,7,9,11,13,15 * * *",
+      "description": "Top headlines every 2 hours (IST 10:30, 12:30, 14:30, 16:30, 18:30, 20:30)"
     },
     {
       "path": "/api/cron/market-snapshot",

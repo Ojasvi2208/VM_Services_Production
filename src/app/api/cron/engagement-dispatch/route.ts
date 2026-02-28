@@ -1,27 +1,29 @@
 /**
- * Engagement Dispatch Cron
+ * Engagement Dispatch Cron — Top Headlines (2-hour interval)
  *
- * High-frequency content rotation — runs every 15 minutes during waking hours.
- * Rotates between 4 content slots:
- *   A: Market snapshot ("Nifty at 22,450 ↑ 0.8%")
- *   B: Breaking headline from premium news feed
- *   C: Top stock mover ("TCS up 3.2% today")
- *   D: Premium upsell (1x/day max per user)
+ * Sends the latest breaking financial headline to all users.
+ * Runs every 2 hours during waking hours, interleaved with market-snapshot.
  *
- * Governor enforces 4/hour ENGAGEMENT rate limit per user.
- * Schedule: */15 1-17 * * * (UTC 1:00–17:59 = ~IST 6:30 AM–11:29 PM)
+ * Market-snapshot handles: 9:30, 11:30, 13:30, 15:30 IST
+ * This cron handles:       10:30, 12:30, 14:30, 16:30, 18:30, 20:30 IST
+ *
+ * Result: users get ~1 notification per hour during daytime,
+ * with 2-hour gaps between same type.
+ *
+ * Schedule: 0 5,7,9,11,13,15 * * * (UTC → IST 10:30, 12:30, 14:30, 16:30, 18:30, 20:30)
+ * Type: ENGAGEMENT (max 4/hr per user)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchBroadcast } from '@/lib/notification-governor';
 
-const CF_RELAY_URL = process.env.CF_RELAY_URL
-  || 'https://bse-nse-relay.vmfinancialservices.workers.dev';
-
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL
   || process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : 'https://www.vmfinancialservices.com';
+
+const CF_RELAY_URL = process.env.CF_RELAY_URL
+  || 'https://bse-nse-relay.vmfinancialservices.workers.dev';
 
 // ─── Cron Auth ──────────────────────────────────────────────────────────────
 
@@ -50,26 +52,37 @@ function isWakingHours(): boolean {
   return hours >= 7 && hours < 23; // 7:00 AM – 10:59 PM IST
 }
 
-// ─── Content Slot Resolution ────────────────────────────────────────────────
-
-type ContentSlot = 'market_snapshot' | 'breaking_headline' | 'stock_mover' | 'premium_upsell_rotation';
-
-function resolveContentSlot(): ContentSlot {
-  const { hours, minutes } = getISTTime();
-  // 4 slots per hour (every 15 min): 0→A, 15→B, 30→C, 45→D
-  const slotIndex = Math.floor(minutes / 15) % 4;
-  const slots: ContentSlot[] = [
-    'market_snapshot',
-    'breaking_headline',
-    'stock_mover',
-    'premium_upsell_rotation',
-  ];
-  return slots[slotIndex];
-}
-
 // ─── Content Fetchers ───────────────────────────────────────────────────────
 
-async function fetchMarketSnapshot(): Promise<{ title: string; body: string } | null> {
+async function fetchBreakingHeadline(): Promise<{ title: string; body: string } | null> {
+  try {
+    const url = `${BASE_URL}/api/news/aggregated?feed=premium&limit=1&category=all`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    const resp = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+    clearTimeout(timer);
+
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    const article = data?.articles?.[0];
+    if (!article?.title) return null;
+
+    // Truncate title to 80 chars for notification
+    const title = article.title.length > 80
+      ? article.title.substring(0, 77) + '...'
+      : article.title;
+
+    return {
+      title,
+      body: article.source ? `From ${article.source}` : 'Breaking financial news',
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchMarketSnapshotFallback(): Promise<{ title: string; body: string } | null> {
   try {
     const chartUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI';
     const proxyUrl = `${CF_RELAY_URL}/?url=${encodeURIComponent(chartUrl)}`;
@@ -102,101 +115,6 @@ async function fetchMarketSnapshot(): Promise<{ title: string; body: string } | 
   }
 }
 
-async function fetchBreakingHeadline(): Promise<{ title: string; body: string } | null> {
-  try {
-    const url = `${BASE_URL}/api/news/aggregated?feed=premium&limit=1&category=all`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10_000);
-    const resp = await fetch(url, { signal: controller.signal, cache: 'no-store' });
-    clearTimeout(timer);
-
-    if (!resp.ok) return null;
-
-    const data = await resp.json();
-    const article = data?.articles?.[0];
-    if (!article?.title) return null;
-
-    // Truncate title to 80 chars for notification
-    const title = article.title.length > 80
-      ? article.title.substring(0, 77) + '...'
-      : article.title;
-
-    return {
-      title,
-      body: article.source ? `From ${article.source}` : 'Breaking financial news',
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function fetchTopStockMover(): Promise<{ title: string; body: string } | null> {
-  try {
-    const url = `${BASE_URL}/api/stocks/gainers-losers`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10_000);
-    const resp = await fetch(url, { signal: controller.signal, cache: 'no-store' });
-    clearTimeout(timer);
-
-    if (!resp.ok) return null;
-
-    const data = await resp.json();
-    const gainers = data?.gainers || [];
-    const losers = data?.losers || [];
-
-    // Pick the stock with the biggest absolute move
-    const topGainer = gainers[0];
-    const topLoser = losers[0];
-
-    if (!topGainer && !topLoser) return null;
-
-    // Alternate between gainer and loser based on current minute
-    const { minutes } = getISTTime();
-    const useGainer = minutes < 30;
-
-    if (useGainer && topGainer) {
-      return {
-        title: `${topGainer.symbol} up ${Math.abs(topGainer.changePercent).toFixed(1)}% today`,
-        body: `Trading at ₹${topGainer.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}. See today's top movers.`,
-      };
-    } else if (topLoser) {
-      return {
-        title: `${topLoser.symbol} down ${Math.abs(topLoser.changePercent).toFixed(1)}% today`,
-        body: `Trading at ₹${topLoser.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}. Track sector-wide impact.`,
-      };
-    } else if (topGainer) {
-      return {
-        title: `${topGainer.symbol} up ${Math.abs(topGainer.changePercent).toFixed(1)}% today`,
-        body: `Trading at ₹${topGainer.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}. See today's top movers.`,
-      };
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function getPremiumUpsell(): { title: string; body: string } {
-  const variants = [
-    {
-      title: 'Is your portfolio built to survive this market?',
-      body: 'Upgrade to Akshaya Premium for live AI tracking and Monte Carlo-driven predictive analytics. ₹50/year.',
-    },
-    {
-      title: 'Your goals deserve smarter protection',
-      body: 'Premium users get automated LTCG harvesting, drift alerts, and Secure the Bag transitions. Just ₹50/year.',
-    },
-    {
-      title: 'See what the market can\'t show you',
-      body: 'Akshaya Premium runs 10,000 Monte Carlo simulations on your portfolio every night. Upgrade for ₹50/year.',
-    },
-  ];
-  // Rotate daily
-  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
-  return variants[dayOfYear % variants.length];
-}
-
 // ─── Route Handler ──────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -219,44 +137,28 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const slot = resolveContentSlot();
-    let content: { title: string; body: string } | null = null;
-    let deepLink = 'markets';
+    // Primary: fetch a breaking headline
+    let content = await fetchBreakingHeadline();
+    let type = 'breaking_headline';
+    let deepLink = 'news';
 
-    switch (slot) {
-      case 'market_snapshot':
-        content = await fetchMarketSnapshot();
-        deepLink = 'markets';
-        break;
-      case 'breaking_headline':
-        content = await fetchBreakingHeadline();
-        deepLink = 'news';
-        break;
-      case 'stock_mover':
-        content = await fetchTopStockMover();
-        deepLink = 'markets';
-        break;
-      case 'premium_upsell_rotation':
-        content = getPremiumUpsell();
-        deepLink = 'premium';
-        break;
+    // Fallback: market snapshot if no headline available
+    if (!content) {
+      content = await fetchMarketSnapshotFallback();
+      type = 'market_snapshot';
+      deepLink = 'markets';
     }
 
     if (!content) {
-      // Fallback: try market snapshot if primary slot fails
-      content = await fetchMarketSnapshot();
-      if (!content) {
-        return NextResponse.json({
-          success: false,
-          slot,
-          error: 'No content available for any slot',
-          duration: Date.now() - start,
-        });
-      }
+      return NextResponse.json({
+        success: false,
+        error: 'No content available',
+        duration: Date.now() - start,
+      });
     }
 
     const result = await dispatchBroadcast({
-      type: slot,
+      type,
       title: content.title,
       body: content.body,
       deepLink,
@@ -264,7 +166,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      slot,
+      type,
       title: content.title,
       broadcast: result,
       ist: getISTTime(),
