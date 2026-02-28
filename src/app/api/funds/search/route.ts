@@ -255,9 +255,24 @@ async function searchUnified(
     params.push(`%${subCategory}%`);
     p++;
   } else if (category) {
-    where += ` AND (category ILIKE $${p} OR sub_category ILIKE $${p})`;
-    params.push(`%${category}%`);
-    p++;
+    // "Equity" is a parent category — its sub_categories are Large Cap, Mid Cap, etc.
+    // Map parent categories to their constituent sub_categories for proper matching.
+    const EQUITY_SUBCATEGORIES = ['Large Cap', 'Mid Cap', 'Small Cap', 'Flexi Cap', 'ELSS'];
+    if (category.toLowerCase() === 'equity') {
+      const subcatConds = EQUITY_SUBCATEGORIES.map(sc => {
+        params.push(sc);
+        return `sub_category = $${p++}`;
+      });
+      // Also match category ILIKE '%Equity%' (from scheme_type) and funds with NULL sub_category
+      // that are clearly equity (not debt/hybrid/index/liquid)
+      params.push(`%${category}%`);
+      const catIdx = p++;
+      where += ` AND (${subcatConds.join(' OR ')} OR category ILIKE $${catIdx})`;
+    } else {
+      where += ` AND (category ILIKE $${p} OR sub_category ILIKE $${p})`;
+      params.push(`%${category}%`);
+      p++;
+    }
   }
 
   // Only show families with CAGR data for top performers
