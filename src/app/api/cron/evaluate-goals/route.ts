@@ -112,6 +112,9 @@ export async function GET(request: NextRequest) {
               `SELECT id FROM goal_portfolio_evaluations WHERE goal_id = $1 AND eval_date = CURRENT_DATE LIMIT 1`,
               [goal.id]
             );
+            if (existingDeepEval.rows.length > 0) {
+              (stats as any).deepEvalsSkipped = ((stats as any).deepEvalsSkipped || 0) + 1;
+            }
             if (existingDeepEval.rows.length === 0) {
               const userAge = user.date_of_birth
                 ? Math.floor((Date.now() - new Date(user.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
