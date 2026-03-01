@@ -70,11 +70,137 @@ export interface PortfolioRecommendation {
 export interface RecommendationResult {
   recommendation: PortfolioRecommendation;
   meta: {
-    engine: 'gemini' | 'rule_based';
+    engine: 'gemini' | 'rule_based' | 'cached';
     tokensUsed: number;
     candidatesConsidered: number;
     overlapChecked: boolean;
   };
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PILLAR 1: MARKDOWN SANITIZER
+//  Strips ```json / ``` fences from Gemini output before JSON.parse
+// ══════════════════════════════════════════════════════════════════
+
+function extractCleanJson(raw: string): string {
+  if (!raw || !raw.trim()) return '';
+  let cleaned = raw.trim();
+
+  // Strip markdown code fences: ```json ... ``` or ``` ... ```
+  cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, '');
+  cleaned = cleaned.replace(/\n?\s*```\s*$/i, '');
+
+  // Also handle cases where there's text before the JSON object
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+  }
+
+  return cleaned.trim();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PILLAR 2: O(1) ARCHETYPE CACHE
+//  Hash: AgeBucket + RiskProfile + TenureBucket → cache key
+// ══════════════════════════════════════════════════════════════════
+
+function computeAgeBucket(age: number): string {
+  if (age < 30) return '20s';
+  if (age < 40) return '30s';
+  if (age < 50) return '40s';
+  if (age < 60) return '50s';
+  return '60s+';
+}
+
+function computeTenureBucket(tenureMonths: number): string {
+  if (tenureMonths < 12) return 'ultra_short';
+  if (tenureMonths < 36) return 'short';
+  if (tenureMonths < 60) return 'medium';
+  if (tenureMonths < 120) return 'long';
+  return 'very_long';
+}
+
+function computeArchetypeKey(age: number, riskTolerance: string, tenureMonths: number): string {
+  return `${computeAgeBucket(age)}_${riskTolerance}_${computeTenureBucket(tenureMonths)}`;
+}
+
+async function lookupArchetypeCache(key: string): Promise<PortfolioRecommendation | null> {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `UPDATE ai_archetypes
+       SET hit_count = hit_count + 1
+       WHERE archetype_key = $1 AND expires_at > NOW()
+       RETURNING recommendation`,
+      [key]
+    );
+    if (result.rows.length > 0) {
+      return result.rows[0].recommendation as PortfolioRecommendation;
+    }
+    return null;
+  } catch (err) {
+    console.error('Archetype cache lookup failed:', err);
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
+async function saveArchetypeCache(
+  key: string,
+  age: number,
+  riskTolerance: string,
+  tenureMonths: number,
+  recommendation: PortfolioRecommendation
+): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `INSERT INTO ai_archetypes (archetype_key, age_bucket, risk_profile, tenure_bucket, recommendation, hit_count, updated_at, expires_at)
+       VALUES ($1, $2, $3, $4, $5, 0, NOW(), NOW() + INTERVAL '30 days')
+       ON CONFLICT (archetype_key) DO UPDATE
+       SET recommendation = $5,
+           hit_count = 0,
+           updated_at = NOW(),
+           expires_at = NOW() + INTERVAL '30 days'`,
+      [key, computeAgeBucket(age), riskTolerance, computeTenureBucket(tenureMonths), JSON.stringify(recommendation)]
+    );
+  } catch (err) {
+    console.error('Archetype cache save failed:', err);
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Scale a cached percentage-based recommendation to the user's actual SIP amount.
+ * Cached recommendations store allocation_percentage (0-100); this function
+ * computes the absolute monthly_sip_amount per fund, rounded to nearest 100.
+ */
+function scaleRecommendation(
+  cached: PortfolioRecommendation,
+  actualMonthlySip: number
+): PortfolioRecommendation {
+  const scaled = { ...cached, funds: cached.funds.map(f => ({ ...f })) };
+
+  // Scale each fund's SIP by its allocation percentage
+  scaled.funds.forEach(f => {
+    f.monthly_sip_amount = Math.round((f.allocation_percentage / 100) * actualMonthlySip / 100) * 100;
+  });
+
+  // Fix rounding difference — assign remainder to the largest allocation fund
+  const sipSum = scaled.funds.reduce((s, f) => s + f.monthly_sip_amount, 0);
+  const diff = actualMonthlySip - sipSum;
+  if (diff !== 0 && scaled.funds.length > 0) {
+    // Find fund with largest allocation
+    const largest = scaled.funds.reduce((a, b) =>
+      b.allocation_percentage > a.allocation_percentage ? b : a
+    );
+    largest.monthly_sip_amount += diff;
+  }
+
+  return scaled;
 }
 
 // ── Tenure-based category allow-lists ──
@@ -501,43 +627,71 @@ OUTPUT exactly this JSON schema (no markdown, no code blocks, no explanation out
 //  5. GEMINI API CALL (portfolio-specific, higher token budget)
 // ══════════════════════════════════════════════════════════════════
 
-async function callGeminiForPortfolio(prompt: string): Promise<{ text: string; tokensUsed: number }> {
+async function callGeminiForPortfolio(
+  prompt: string,
+  maxRetries: number = 2
+): Promise<{ text: string; tokensUsed: number }> {
   if (!GEMINI_API_KEY) {
     return { text: '', tokensUsed: 0 };
   }
 
-  try {
-    const response = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.1,
-          topK: 1,
-          topP: 0.95,
-          maxOutputTokens: 1500,
-          responseMimeType: 'application/json',
-        },
-      }),
-    });
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+            topK: 1,
+            topP: 0.95,
+            maxOutputTokens: 1500,
+            responseMimeType: 'application/json',
+          },
+        }),
+      });
 
-    if (!response.ok) {
-      console.error('Gemini Aladdin API error:', response.status, await response.text());
+      // Pillar 3: Exponential backoff for 429 (rate limit) and 503 (overloaded)
+      if (response.status === 429 || response.status === 503) {
+        if (attempt < maxRetries) {
+          const backoffMs = Math.pow(2, attempt + 1) * 1000; // 2s, 4s
+          console.warn(`Gemini ${response.status} — retrying in ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, backoffMs));
+          continue;
+        }
+        console.error(`Gemini ${response.status} — exhausted ${maxRetries} retries`);
+        return { text: '', tokensUsed: 0 };
+      }
+
+      if (!response.ok) {
+        console.error('Gemini Aladdin API error:', response.status, await response.text());
+        return { text: '', tokensUsed: 0 };
+      }
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const tokensUsed =
+        (data.usageMetadata?.promptTokenCount || 0) +
+        (data.usageMetadata?.candidatesTokenCount || 0);
+
+      // Pillar 1: Sanitize markdown fences before returning
+      const text = extractCleanJson(rawText);
+
+      return { text, tokensUsed };
+    } catch (error) {
+      if (attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt + 1) * 1000;
+        console.warn(`Gemini network error — retrying in ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries}):`, error);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      console.error('Gemini Aladdin call failed after retries:', error);
       return { text: '', tokensUsed: 0 };
     }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const tokensUsed =
-      (data.usageMetadata?.promptTokenCount || 0) +
-      (data.usageMetadata?.candidatesTokenCount || 0);
-
-    return { text, tokensUsed };
-  } catch (error) {
-    console.error('Gemini Aladdin call failed:', error);
-    return { text: '', tokensUsed: 0 };
   }
+
+  return { text: '', tokensUsed: 0 };
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -720,6 +874,23 @@ export async function constructPortfolio(
   // 1. Compute glide path
   const glidePath = computeEquityGlidePath(user.age, user.riskTolerance);
 
+  // ── Pillar 2: O(1) Archetype Cache Lookup ──
+  const archetypeKey = computeArchetypeKey(user.age, user.riskTolerance, goal.tenureMonths);
+  const cached = await lookupArchetypeCache(archetypeKey);
+  if (cached && cached.funds?.length >= 2) {
+    console.log(`Aladdin: Cache HIT for archetype "${archetypeKey}" — scaling to ₹${goal.monthlySip}/mo`);
+    const scaled = scaleRecommendation(cached, goal.monthlySip);
+    return {
+      recommendation: scaled,
+      meta: {
+        engine: 'cached',
+        tokensUsed: 0,
+        candidatesConsidered: 0,
+        overlapChecked: true,
+      },
+    };
+  }
+
   // 2. Get user's existing holdings (to avoid duplicates)
   const client = await pool.connect();
   let existingHoldings: string[] = [];
@@ -768,7 +939,7 @@ export async function constructPortfolio(
   // 5. Build Gemini prompt
   const prompt = buildGeminiPrompt(user, goal, glidePath, topCandidates, overlapMatrix, existingHoldingNames);
 
-  // 6. Call Gemini
+  // 6. Call Gemini (now with Pillar 3 exponential backoff + Pillar 1 markdown sanitizer)
   const { text, tokensUsed } = await callGeminiForPortfolio(prompt);
 
   if (text) {
@@ -793,6 +964,10 @@ export async function constructPortfolio(
           }
         } catch (_) { /* non-critical */ }
 
+        // ── Pillar 2: Save to archetype cache (fire-and-forget) ──
+        saveArchetypeCache(archetypeKey, user.age, user.riskTolerance, goal.tenureMonths, parsed)
+          .catch(err => console.error('Archetype cache save failed (non-blocking):', err));
+
         return {
           recommendation: parsed,
           meta: {
@@ -807,12 +982,16 @@ export async function constructPortfolio(
       // Validation failed — retry once with error context
       console.warn('Aladdin validation failed:', validationError, '— retrying with feedback');
       const retryPrompt = prompt + `\n\nPREVIOUS ATTEMPT FAILED VALIDATION: ${validationError}\nPlease fix this issue and return corrected JSON.`;
-      const retry = await callGeminiForPortfolio(retryPrompt);
+      const retry = await callGeminiForPortfolio(retryPrompt, 0); // No additional backoff retries for validation retry
       if (retry.text) {
         try {
           const retryParsed: PortfolioRecommendation = JSON.parse(retry.text);
           const retryError = validateRecommendation(retryParsed, topCandidates, overlapMatrix, goal.monthlySip);
           if (!retryError) {
+            // Save retry result to cache too
+            saveArchetypeCache(archetypeKey, user.age, user.riskTolerance, goal.tenureMonths, retryParsed)
+              .catch(err => console.error('Archetype cache save failed (non-blocking):', err));
+
             return {
               recommendation: retryParsed,
               meta: {
