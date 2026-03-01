@@ -89,6 +89,7 @@ export async function POST(
       }
 
       // ── Pillar 4: Fetch linked funds for dual-path auditor ──
+      // fund_returns has one row per scheme_code (PK = scheme_code)
       const linkedResult = await client.query(`
         SELECT gfl.scheme_code, gfl.allocation_pct,
                f.scheme_name as fund_name, f.category, f.sub_category,
@@ -96,7 +97,6 @@ export async function POST(
         FROM goal_fund_links gfl
         LEFT JOIN funds f ON gfl.scheme_code = f.scheme_code
         LEFT JOIN fund_returns fr ON gfl.scheme_code = fr.scheme_code
-          AND fr.calculated_date = (SELECT MAX(calculated_date) FROM fund_returns)
         WHERE gfl.goal_id = $1
       `, [goalId]);
 

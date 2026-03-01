@@ -483,7 +483,6 @@ export async function filterCandidateFunds(
         ) as quality_score
       FROM funds f
       LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
-        AND fr.calculated_date = (SELECT MAX(calculated_date) FROM fund_returns)
       WHERE f.plan_type = 'Direct'
         AND f.option_type = 'Growth'
         AND f.is_active = true
