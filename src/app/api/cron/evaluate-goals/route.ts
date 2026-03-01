@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
 import { runMonteCarlo, portfolioDrift, findRecommendedSip } from '@/lib/monte-carlo';
 import { evaluateGoalWithGemini, generateMonthlyNarrative, checkTokenBudget, recordTokenUsage } from '@/lib/gemini-evaluator';
+import { deepEvaluateGoal, storeDeepEvaluation } from '@/lib/fund-evaluator';
 import { dispatchPush } from '@/lib/notification-governor';
 import { classifyFund, getCurrentFY, getMonthsLeftInFY } from '@/lib/tax-calculator';
 import type { GBMOutput } from '@/lib/gemini-evaluator';
@@ -39,6 +40,8 @@ export async function GET(request: NextRequest) {
     redFlags: 0,
     totalTokensUsed: 0,
     monthlyNarrativeGenerated: false,
+    deepEvalsRun: 0,
+    deepEvalErrors: 0,
     errors: [] as string[]
   };
 
@@ -57,7 +60,8 @@ export async function GET(request: NextRequest) {
 
     // ── Step 2: Get all users with active goals ──
     const usersResult = await client.query(`
-      SELECT DISTINCT g.user_id, u.full_name, u.email
+      SELECT DISTINCT g.user_id, u.full_name, u.email,
+             u.date_of_birth, COALESCE(u.risk_tolerance, 'moderate') as risk_tolerance
       FROM goals g
       JOIN users u ON g.user_id = u.id
       WHERE g.is_active = true AND u.is_active = true
@@ -209,6 +213,27 @@ export async function GET(request: NextRequest) {
             shortfall: mc.shortfall,
             suggestedAction: evaluation.suggestedAction
           });
+
+          // ── Step 9b: Deep Fund Evaluation (Aladdin Deep Eval) ──
+          try {
+            const userAge = user.date_of_birth
+              ? Math.floor((Date.now() - new Date(user.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+              : 30;
+            const riskTol = (['conservative', 'moderate', 'aggressive'].includes(user.risk_tolerance)
+              ? user.risk_tolerance
+              : 'moderate') as 'conservative' | 'moderate' | 'aggressive';
+
+            const deepEval = await deepEvaluateGoal(
+              goal.id, user.user_id, userAge, riskTol,
+              monthsLeft, targetAmount, monthlySip,
+              goal.name, goal.criticality || 'important'
+            );
+            await storeDeepEvaluation(goal.id, user.user_id, deepEval);
+            stats.deepEvalsRun++;
+          } catch (deepErr: any) {
+            stats.deepEvalErrors++;
+            console.error(`Deep eval failed for goal ${goal.id}:`, deepErr.message);
+          }
         }
 
         // ── Step 10: Monthly narrative (last day of month) ──
