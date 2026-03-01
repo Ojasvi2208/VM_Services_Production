@@ -24,6 +24,101 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 // headroom for rule-based fallback + response serialization.
 const GEMINI_TIMEOUT_MS = 8500;
 
+// ── Self-Healing Fund Categorization ──
+// Production funds table has NULL sub_category/category because fresh-setup.ts
+// only populates scheme_code + scheme_name + NAV. This one-time UPDATE classifies
+// all funds by scheme_name pattern matching (runs once per cold start).
+let fundsCategorized = false;
+
+async function ensureFundsCategorized(): Promise<void> {
+  if (fundsCategorized) return;
+  fundsCategorized = true;
+
+  const client = await pool.connect();
+  try {
+    const check = await client.query(
+      `SELECT COUNT(*) as cnt FROM funds WHERE sub_category IS NULL AND is_active = true`
+    );
+    const uncategorized = parseInt(check.rows[0].cnt);
+    if (uncategorized === 0) return;
+
+    console.log(`Aladdin: Categorizing ${uncategorized} funds by scheme_name...`);
+
+    await client.query(`
+      UPDATE funds SET
+        sub_category = CASE
+          WHEN scheme_name ILIKE '%overnight%' THEN 'Overnight Fund'
+          WHEN scheme_name ILIKE '%liquid%' AND scheme_name NOT ILIKE '%illiquid%' THEN 'Liquid Fund'
+          WHEN scheme_name ILIKE '%ultra short%' THEN 'Ultra Short Duration Fund'
+          WHEN scheme_name ILIKE '%low duration%' OR scheme_name ILIKE '%low dur%' THEN 'Low Duration Fund'
+          WHEN scheme_name ILIKE '%money market%' THEN 'Money Market Fund'
+          WHEN scheme_name ILIKE '%short duration%' OR scheme_name ILIKE '%short dur%' OR scheme_name ILIKE '%short term%' THEN 'Short Duration Fund'
+          WHEN scheme_name ILIKE '%medium duration%' OR scheme_name ILIKE '%medium dur%' OR scheme_name ILIKE '%medium term%' THEN 'Medium Duration Fund'
+          WHEN scheme_name ILIKE '%long duration%' OR scheme_name ILIKE '%long dur%' THEN 'Long Duration Fund'
+          WHEN scheme_name ILIKE '%dynamic bond%' THEN 'Dynamic Bond Fund'
+          WHEN scheme_name ILIKE '%corporate bond%' THEN 'Corporate Bond Fund'
+          WHEN scheme_name ILIKE '%credit risk%' THEN 'Credit Risk Fund'
+          WHEN scheme_name ILIKE '%banking%psu%' OR scheme_name ILIKE '%banking and psu%' OR scheme_name ILIKE '%banking & psu%' THEN 'Banking & PSU Fund'
+          WHEN scheme_name ILIKE '%gilt%' AND scheme_name ILIKE '%10 year%' THEN 'Gilt Fund with 10-year constant duration'
+          WHEN scheme_name ILIKE '%gilt%' THEN 'Gilt Fund'
+          WHEN scheme_name ILIKE '%floater%' THEN 'Floater Fund'
+          WHEN scheme_name ILIKE '%small cap%' OR scheme_name ILIKE '%smallcap%' THEN 'Small Cap Fund'
+          WHEN scheme_name ILIKE '%large%mid%cap%' OR scheme_name ILIKE '%large & mid%' THEN 'Large & Mid Cap Fund'
+          WHEN scheme_name ILIKE '%large cap%' OR scheme_name ILIKE '%largecap%' THEN 'Large Cap Fund'
+          WHEN scheme_name ILIKE '%mid cap%' OR scheme_name ILIKE '%midcap%' THEN 'Mid Cap Fund'
+          WHEN scheme_name ILIKE '%flexi cap%' OR scheme_name ILIKE '%flexicap%' THEN 'Flexi Cap Fund'
+          WHEN scheme_name ILIKE '%multi cap%' OR scheme_name ILIKE '%multicap%' THEN 'Multi Cap Fund'
+          WHEN scheme_name ILIKE '%elss%' OR scheme_name ILIKE '%tax saver%' OR scheme_name ILIKE '%tax advantage%' OR scheme_name ILIKE '%long term advantage%' THEN 'ELSS'
+          WHEN scheme_name ILIKE '%value%' AND scheme_name NOT ILIKE '%balanced%' THEN 'Value Fund'
+          WHEN scheme_name ILIKE '%contra%' THEN 'Contra Fund'
+          WHEN scheme_name ILIKE '%dividend yield%' THEN 'Dividend Yield Fund'
+          WHEN scheme_name ILIKE '%focused%' OR scheme_name ILIKE '%focus fund%' THEN 'Focused Fund'
+          WHEN scheme_name ILIKE '%conservative hybrid%' THEN 'Conservative Hybrid Fund'
+          WHEN scheme_name ILIKE '%aggressive hybrid%' OR scheme_name ILIKE '%hybrid equity%' THEN 'Aggressive Hybrid Fund'
+          WHEN scheme_name ILIKE '%balanced advantage%' OR scheme_name ILIKE '%dynamic asset%' OR scheme_name ILIKE '%bal adv%' THEN 'Balanced Advantage Fund'
+          WHEN scheme_name ILIKE '%balanced%' AND scheme_name NOT ILIKE '%advantage%' THEN 'Balanced Hybrid Fund'
+          WHEN scheme_name ILIKE '%multi asset%' THEN 'Multi-Asset Allocation Fund'
+          WHEN scheme_name ILIKE '%arbitrage%' THEN 'Arbitrage Fund'
+          WHEN scheme_name ILIKE '%equity savings%' THEN 'Equity Savings Fund'
+          WHEN scheme_name ILIKE '%retirement%' THEN 'Retirement Fund'
+          WHEN scheme_name ILIKE '%children%' OR scheme_name ILIKE '%child%' THEN 'Children''s Fund'
+          WHEN scheme_name ILIKE '%index%' THEN 'Index Fund'
+          WHEN scheme_name ILIKE '%etf%' THEN 'ETF'
+          WHEN scheme_name ILIKE '%fund of funds%' OR scheme_name ILIKE '%fof%' THEN 'Fund of Funds - Domestic'
+          ELSE NULL
+        END,
+        category = CASE
+          WHEN scheme_name ILIKE '%overnight%' OR scheme_name ILIKE '%liquid%' OR scheme_name ILIKE '%ultra short%'
+            OR scheme_name ILIKE '%low duration%' OR scheme_name ILIKE '%money market%'
+            OR scheme_name ILIKE '%short duration%' OR scheme_name ILIKE '%short dur%' OR scheme_name ILIKE '%short term%'
+            OR scheme_name ILIKE '%medium duration%' OR scheme_name ILIKE '%medium dur%'
+            OR scheme_name ILIKE '%long duration%' OR scheme_name ILIKE '%long dur%'
+            OR scheme_name ILIKE '%dynamic bond%' OR scheme_name ILIKE '%corporate bond%'
+            OR scheme_name ILIKE '%credit risk%' OR scheme_name ILIKE '%banking%psu%'
+            OR scheme_name ILIKE '%gilt%' OR scheme_name ILIKE '%floater%' THEN 'Debt'
+          WHEN scheme_name ILIKE '%small cap%' OR scheme_name ILIKE '%smallcap%'
+            OR scheme_name ILIKE '%large%cap%' OR scheme_name ILIKE '%mid cap%' OR scheme_name ILIKE '%midcap%'
+            OR scheme_name ILIKE '%flexi cap%' OR scheme_name ILIKE '%flexicap%'
+            OR scheme_name ILIKE '%multi cap%' OR scheme_name ILIKE '%multicap%'
+            OR scheme_name ILIKE '%elss%' OR scheme_name ILIKE '%tax saver%'
+            OR scheme_name ILIKE '%value%' OR scheme_name ILIKE '%contra%'
+            OR scheme_name ILIKE '%dividend yield%' OR scheme_name ILIKE '%focused%' THEN 'Equity'
+          WHEN scheme_name ILIKE '%hybrid%' OR scheme_name ILIKE '%balanced%'
+            OR scheme_name ILIKE '%arbitrage%' OR scheme_name ILIKE '%equity savings%'
+            OR scheme_name ILIKE '%dynamic asset%' OR scheme_name ILIKE '%multi asset%' THEN 'Hybrid'
+          ELSE NULL
+        END
+      WHERE sub_category IS NULL AND is_active = true
+    `);
+
+    console.log('Aladdin: Fund categorization complete');
+  } catch (err) {
+    console.error('Aladdin: Fund categorization failed (non-fatal):', err);
+  } finally {
+    client.release();
+  }
+}
+
 // ── Types ──
 
 export interface UserContext {
@@ -455,6 +550,9 @@ export async function filterCandidateFunds(
   tenureMonths: number,
   existingHoldings: string[]
 ): Promise<CandidateFund[]> {
+  // Self-heal: categorize funds if sub_category is missing (one-time per cold start)
+  await ensureFundsCategorized();
+
   const allowedSubCategories = getAllowedCategories(tenureMonths);
 
   const client = await pool.connect();
@@ -487,7 +585,7 @@ export async function filterCandidateFunds(
         AND f.option_type = 'Growth'
         AND f.is_active = true
         AND f.sub_category = ANY($1)
-        AND COALESCE(f.fund_size, 0) > 500
+        AND (f.fund_size > 500 OR f.fund_size IS NULL)
         AND COALESCE(fr.cagr_3y, fr.return_3y) IS NOT NULL
         AND (fr.sharpe_ratio_1y > 0.3 OR fr.sharpe_ratio_1y IS NULL)
         AND f.scheme_code != ALL($2)
