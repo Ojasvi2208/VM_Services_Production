@@ -131,16 +131,18 @@ async function evaluateFundHealth(
   client: any
 ): Promise<FundHealthReport> {
   // Fetch the fund's metrics + its peer group stats in a single query
+  // Note: fund_returns columns are sharpe_1y (not sharpe_ratio_1y).
+  // sortino, max_drawdown, rolling_return_* may not exist as columns —
+  // they're available as DB functions but we skip them for performance.
   const result = await client.query(`
     WITH fund_data AS (
       SELECT
         f.scheme_code, f.scheme_name, f.category, f.sub_category,
         f.fund_size, f.expense_ratio,
-        fr.cagr_3y, fr.cagr_5y, fr.cagr_1y,
-        fr.sharpe_ratio_1y, fr.sortino_ratio_1y,
-        fr.max_drawdown, fr.volatility_1y, fr.volatility_3y,
-        fr.rolling_return_3y_avg, fr.rolling_return_3y_min, fr.rolling_return_3y_max,
-        fr.rolling_return_1y_avg, fr.rolling_return_1y_min
+        COALESCE(fr.cagr_3y, fr.return_3y) as cagr_3y,
+        fr.cagr_5y, fr.cagr_1y,
+        fr.sharpe_1y, fr.sharpe_3y,
+        fr.volatility_1y, fr.volatility_3y
       FROM funds f
       LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
         AND fr.calculated_date = (SELECT MAX(calculated_date) FROM fund_returns)
@@ -149,16 +151,15 @@ async function evaluateFundHealth(
     peer_stats AS (
       SELECT
         f2.sub_category,
-        PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY fr2.cagr_3y) as p25_return,
-        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY fr2.cagr_3y) as p50_return,
-        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY fr2.cagr_3y) as p75_return,
-        AVG(fr2.cagr_3y) as avg_return,
-        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY fr2.sharpe_ratio_1y) as median_sharpe,
-        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY fr2.sharpe_ratio_1y) as p75_sharpe,
-        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY fr2.sortino_ratio_1y) as median_sortino,
-        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY fr2.max_drawdown DESC) as median_drawdown,
-        PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY fr2.max_drawdown DESC) as p25_drawdown,
-        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY fr2.expense_ratio) as median_expense,
+        PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY COALESCE(fr2.cagr_3y, fr2.return_3y)) as p25_return,
+        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY COALESCE(fr2.cagr_3y, fr2.return_3y)) as p50_return,
+        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY COALESCE(fr2.cagr_3y, fr2.return_3y)) as p75_return,
+        AVG(COALESCE(fr2.cagr_3y, fr2.return_3y)) as avg_return,
+        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY fr2.sharpe_1y) as median_sharpe,
+        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY fr2.sharpe_1y) as p75_sharpe,
+        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY fr2.volatility_1y) as median_volatility,
+        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY fr2.volatility_1y) as p75_volatility,
+        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY f2.expense_ratio) as median_expense,
         COUNT(*) as peer_count
       FROM funds f2
       LEFT JOIN fund_returns fr2 ON f2.scheme_code = fr2.scheme_code
@@ -166,7 +167,7 @@ async function evaluateFundHealth(
       WHERE f2.sub_category = (SELECT sub_category FROM fund_data)
         AND f2.plan_type = 'Direct' AND f2.option_type = 'Growth'
         AND f2.is_active = true
-        AND fr2.cagr_3y IS NOT NULL
+        AND COALESCE(fr2.cagr_3y, fr2.return_3y) IS NOT NULL
       GROUP BY f2.sub_category
     )
     SELECT fd.*, ps.*
@@ -199,8 +200,6 @@ async function evaluateFundHealth(
   const p75Return = parseFloat(fd.p75_return);
   const p50Return = parseFloat(fd.p50_return);
   const p25Return = parseFloat(fd.p25_return);
-  const rollingAvg = parseFloat(fd.rolling_return_3y_avg);
-  const rollingMin = parseFloat(fd.rolling_return_3y_min);
 
   if (!isNaN(cagr3y) && !isNaN(p50Return)) {
     if (cagr3y >= p75Return) {
@@ -217,31 +216,20 @@ async function evaluateFundHealth(
     }
   }
 
-  // Bonus for rolling return consistency
-  if (!isNaN(rollingAvg) && !isNaN(rollingMin) && rollingMin > 0) {
-    strengths.push(`Consistent rolling returns (never negative in 3Y rolling windows)`);
-    returnScore = Math.min(100, returnScore + 5);
-  } else if (!isNaN(rollingMin) && rollingMin < -10) {
-    issues.push(`Deep rolling return drawdown (${rollingMin.toFixed(1)}% worst 3Y window)`);
-    returnScore = Math.max(0, returnScore - 5);
-  }
-
   returnScore = Math.max(0, Math.min(100, returnScore));
 
   // ── 2. RISK-ADJUSTED PERFORMANCE (25%) ──
   let riskScore = 50;
-  const sharpe = parseFloat(fd.sharpe_ratio_1y);
-  const sortino = parseFloat(fd.sortino_ratio_1y);
+  const sharpe = parseFloat(fd.sharpe_1y);
   const medianSharpe = parseFloat(fd.median_sharpe);
   const p75Sharpe = parseFloat(fd.p75_sharpe);
-  const medianSortino = parseFloat(fd.median_sortino);
 
   if (!isNaN(sharpe) && !isNaN(medianSharpe)) {
     if (sharpe >= p75Sharpe) {
-      riskScore = 80;
+      riskScore = 85;
       strengths.push(`Strong risk-adjusted returns (Sharpe ${sharpe.toFixed(2)} vs category P75 ${p75Sharpe.toFixed(2)})`);
     } else if (sharpe >= medianSharpe) {
-      riskScore = 55 + ((sharpe - medianSharpe) / Math.max(0.01, p75Sharpe - medianSharpe)) * 25;
+      riskScore = 55 + ((sharpe - medianSharpe) / Math.max(0.01, p75Sharpe - medianSharpe)) * 30;
     } else if (sharpe > 0) {
       riskScore = 20 + (sharpe / Math.max(0.01, medianSharpe)) * 35;
       issues.push(`Below-median Sharpe ratio (${sharpe.toFixed(2)} vs category median ${medianSharpe.toFixed(2)})`);
@@ -251,34 +239,27 @@ async function evaluateFundHealth(
     }
   }
 
-  // Sortino bonus (rewards funds that manage downside well)
-  if (!isNaN(sortino) && !isNaN(medianSortino)) {
-    if (sortino > medianSortino * 1.2) {
-      riskScore = Math.min(100, riskScore + 10);
-      strengths.push(`Superior downside management (Sortino ${sortino.toFixed(2)})`);
-    } else if (sortino < medianSortino * 0.5) {
-      riskScore = Math.max(0, riskScore - 10);
-    }
-  }
-
   riskScore = Math.max(0, Math.min(100, riskScore));
 
   // ── 3. DOWNSIDE PROTECTION (15%) ──
+  // Use volatility as proxy for downside risk (max_drawdown column not available)
   let drawdownScore = 50;
-  const maxDD = parseFloat(fd.max_drawdown);
-  const medianDD = parseFloat(fd.median_drawdown);
-  const p25DD = parseFloat(fd.p25_drawdown);
+  const vol1y = parseFloat(fd.volatility_1y);
+  const medianVol = parseFloat(fd.median_volatility);
+  const p75Vol = parseFloat(fd.p75_volatility);
 
-  if (!isNaN(maxDD) && !isNaN(medianDD)) {
-    // Lower drawdown is better (inverted scoring)
-    if (Math.abs(maxDD) <= Math.abs(p25DD)) {
+  if (!isNaN(vol1y) && !isNaN(medianVol)) {
+    // Lower volatility is better (inverted scoring)
+    if (vol1y <= medianVol * 0.8) {
       drawdownScore = 85;
-      strengths.push(`Low max drawdown (${maxDD.toFixed(1)}% vs category median ${medianDD.toFixed(1)}%)`);
-    } else if (Math.abs(maxDD) <= Math.abs(medianDD)) {
-      drawdownScore = 55 + 30 * (1 - (Math.abs(maxDD) - Math.abs(p25DD)) / Math.max(1, Math.abs(medianDD) - Math.abs(p25DD)));
+      strengths.push(`Low volatility (${vol1y.toFixed(1)}% vs category median ${medianVol.toFixed(1)}%)`);
+    } else if (vol1y <= medianVol) {
+      drawdownScore = 55 + 30 * (1 - vol1y / medianVol);
+    } else if (vol1y <= p75Vol) {
+      drawdownScore = 30 + 25 * (1 - (vol1y - medianVol) / Math.max(1, p75Vol - medianVol));
     } else {
-      drawdownScore = Math.max(10, 55 * (Math.abs(medianDD) / Math.max(1, Math.abs(maxDD))));
-      issues.push(`High max drawdown (${maxDD.toFixed(1)}% vs category median ${medianDD.toFixed(1)}%)`);
+      drawdownScore = Math.max(10, 30 * (medianVol / Math.max(1, vol1y)));
+      issues.push(`High volatility (${vol1y.toFixed(1)}% vs category median ${medianVol.toFixed(1)}%)`);
     }
   }
 
@@ -483,7 +464,8 @@ async function generateSuggestions(
     if (fr.health_score < 40) {
       // Find the best alternative in the same sub-category
       const altResult = await client.query(`
-        SELECT f.scheme_code, f.scheme_name, fr2.cagr_3y, fr2.sharpe_ratio_1y
+        SELECT f.scheme_code, f.scheme_name,
+               COALESCE(fr2.cagr_3y, fr2.return_3y) as cagr_3y, fr2.sharpe_1y
         FROM funds f
         JOIN fund_returns fr2 ON f.scheme_code = fr2.scheme_code
           AND fr2.calculated_date = (SELECT MAX(calculated_date) FROM fund_returns)
@@ -491,14 +473,16 @@ async function generateSuggestions(
           AND f.plan_type = 'Direct' AND f.option_type = 'Growth'
           AND f.is_active = true AND f.scheme_code != $2
           AND COALESCE(f.fund_size, 0) > 500
-        ORDER BY
-          0.6 * PERCENT_RANK() OVER (ORDER BY fr2.cagr_3y) +
-          0.4 * PERCENT_RANK() OVER (ORDER BY fr2.sharpe_ratio_1y) DESC
+          AND COALESCE(fr2.cagr_3y, fr2.return_3y) IS NOT NULL
+        ORDER BY COALESCE(fr2.cagr_3y, fr2.return_3y) DESC
         LIMIT 1
       `, [fr.sub_category, fr.scheme_code]);
 
       if (altResult.rows.length > 0) {
         const alt = altResult.rows[0];
+        const altCagr = parseFloat(alt.cagr_3y);
+        const altSharpe = parseFloat(alt.sharpe_1y);
+        const sharpeStr = !isNaN(altSharpe) ? ` and Sharpe ${altSharpe.toFixed(2)}` : '';
         suggestions.push({
           type: 'swap',
           from_scheme_code: fr.scheme_code,
@@ -507,7 +491,7 @@ async function generateSuggestions(
           to_fund_name: alt.scheme_name,
           to_sub_category: fr.sub_category,
           reason: fr.issues[0] || `Health score ${fr.health_score}/100 — below threshold`,
-          impact_estimate: `Better peer with ${parseFloat(alt.cagr_3y).toFixed(1)}% 3Y CAGR and Sharpe ${parseFloat(alt.sharpe_ratio_1y).toFixed(2)}`,
+          impact_estimate: `Better peer with ${altCagr.toFixed(1)}% 3Y CAGR${sharpeStr}`,
         });
       }
     }
