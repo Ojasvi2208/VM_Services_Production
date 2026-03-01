@@ -165,9 +165,11 @@ export async function POST(
       client.release();
     }
   } catch (error: unknown) {
-    console.error('Aladdin goal-linked error:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack?.split('\n').slice(0, 3).join(' | ') : '';
+    console.error('Aladdin goal-linked error:', errMsg, errStack);
     return NextResponse.json(
-      { error: 'Failed to generate portfolio recommendation' },
+      { error: 'Failed to generate portfolio recommendation', debug: errMsg },
       { status: 500 }
     );
   }
