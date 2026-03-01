@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
     totalTokensUsed: 0,
     monthlyNarrativeGenerated: false,
     deepEvalsRun: 0,
+    deepEvalsSkipped: 0,
     deepEvalErrors: 0,
     errors: [] as string[]
   };
@@ -113,7 +114,7 @@ export async function GET(request: NextRequest) {
               [goal.id]
             );
             if (existingDeepEval.rows.length > 0) {
-              (stats as any).deepEvalsSkipped = ((stats as any).deepEvalsSkipped || 0) + 1;
+              stats.deepEvalsSkipped++;
             }
             if (existingDeepEval.rows.length === 0) {
               const userAge = user.date_of_birth
