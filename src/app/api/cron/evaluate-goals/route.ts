@@ -100,6 +100,40 @@ export async function GET(request: NextRequest) {
           );
 
           const currentValue = parseFloat(goal.current_value) || 0;
+          const monthlySipForDeepEval = parseFloat(goal.monthly_sip) || 0;
+          const targetAmountForDeepEval = parseFloat(goal.target_amount) || 0;
+          const nowForDeepEval = new Date();
+          const targetDateForDeepEval = new Date(goal.target_date);
+          const monthsLeftForDeepEval = Math.max(1, (targetDateForDeepEval.getFullYear() - nowForDeepEval.getFullYear()) * 12 + (targetDateForDeepEval.getMonth() - nowForDeepEval.getMonth()));
+
+          // ── Step 4a: Run Deep Eval (independent of SWR — runs once per day per goal) ──
+          try {
+            const existingDeepEval = await client.query(
+              `SELECT id FROM goal_portfolio_evaluations WHERE goal_id = $1 AND eval_date = CURRENT_DATE LIMIT 1`,
+              [goal.id]
+            );
+            if (existingDeepEval.rows.length === 0) {
+              const userAge = user.date_of_birth
+                ? Math.floor((Date.now() - new Date(user.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+                : 30;
+              const riskTol = (['conservative', 'moderate', 'aggressive'].includes(user.risk_tolerance)
+                ? user.risk_tolerance
+                : 'moderate') as 'conservative' | 'moderate' | 'aggressive';
+
+              const deepEval = await deepEvaluateGoal(
+                goal.id, user.user_id, userAge, riskTol,
+                monthsLeftForDeepEval, targetAmountForDeepEval, monthlySipForDeepEval,
+                goal.name, goal.criticality || 'important'
+              );
+              await storeDeepEvaluation(goal.id, user.user_id, deepEval);
+              stats.deepEvalsRun++;
+            }
+          } catch (deepErr: any) {
+            stats.deepEvalErrors++;
+            console.error(`Deep eval failed for goal ${goal.id}:`, deepErr.message);
+          }
+
+          // ── Step 4b: Stale-While-Revalidate check (for Monte Carlo + Gemini) ──
           if (lastEval.rows.length > 0) {
             const lastValue = parseFloat(lastEval.rows[0].portfolio_value_at_eval) || 0;
             const drift = portfolioDrift(lastValue, currentValue);
@@ -214,26 +248,6 @@ export async function GET(request: NextRequest) {
             suggestedAction: evaluation.suggestedAction
           });
 
-          // ── Step 9b: Deep Fund Evaluation (Aladdin Deep Eval) ──
-          try {
-            const userAge = user.date_of_birth
-              ? Math.floor((Date.now() - new Date(user.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
-              : 30;
-            const riskTol = (['conservative', 'moderate', 'aggressive'].includes(user.risk_tolerance)
-              ? user.risk_tolerance
-              : 'moderate') as 'conservative' | 'moderate' | 'aggressive';
-
-            const deepEval = await deepEvaluateGoal(
-              goal.id, user.user_id, userAge, riskTol,
-              monthsLeft, targetAmount, monthlySip,
-              goal.name, goal.criticality || 'important'
-            );
-            await storeDeepEvaluation(goal.id, user.user_id, deepEval);
-            stats.deepEvalsRun++;
-          } catch (deepErr: any) {
-            stats.deepEvalErrors++;
-            console.error(`Deep eval failed for goal ${goal.id}:`, deepErr.message);
-          }
         }
 
         // ── Step 10: Monthly narrative (last day of month) ──
