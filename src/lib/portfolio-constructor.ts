@@ -1,11 +1,17 @@
 /**
- * Aladdin Portfolio Construction Engine
+ * Aladdin Portfolio Construction Engine — "Decoupled Brain" Architecture
  *
  * NOT a chatbot. Functions as a deterministic pipeline:
- * Input:  User profile + Goal parameters + Fund universe
+ * Input:  User profile + Goal parameters + Fund universe + Linked Funds
  * Output: Structured portfolio recommendation (2-5 funds)
  *
- * Pipeline: Filter → Overlap Check → Gemini Prompt → Validate → Fallback
+ * Pipeline: Filter → Overlap Check → Gemini Chain-of-Thought → Validate → Fallback
+ *
+ * Key resiliency:
+ *   - 8.5s AbortController on Gemini call (Vercel safety net)
+ *   - Single immediate retry (no exponential backoff on user-facing requests)
+ *   - Deterministic rule-based fallback always returns a valid portfolio
+ *   - Dual-path auditor: audits linked funds OR builds from scratch
  */
 
 import pool from './postgres-db';
@@ -13,6 +19,10 @@ import pool from './postgres-db';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = 'gemini-1.5-flash';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+// Strict timeout: Vercel free tier kills at 10-15s. We abort at 8.5s to leave
+// headroom for rule-based fallback + response serialization.
+const GEMINI_TIMEOUT_MS = 8500;
 
 // ── Types ──
 
@@ -23,12 +33,25 @@ export interface UserContext {
   incomeRange: string;
 }
 
+export interface LinkedFundInfo {
+  schemeCode: string;
+  fundName: string;
+  allocationPct: number;
+  category?: string;
+  subCategory?: string;
+  cagr3y?: number;
+  sharpe1y?: number;
+  volatility1y?: number;
+  healthScore?: number;
+}
+
 export interface GoalParams {
   targetAmount: number;
   monthlySip: number;
   tenureMonths: number;
   goalName: string;
   criticality: string;
+  linkedFunds?: LinkedFundInfo[];
 }
 
 export interface GlidePath {
@@ -61,7 +84,14 @@ export interface RecommendedFund {
   why_this_fund: string;
 }
 
+export interface ThinkingProcess {
+  macro_micro_evaluation: string;
+  fund_manager_and_metrics_audit: string;
+}
+
 export interface PortfolioRecommendation {
+  thinking_process?: ThinkingProcess;
+  action_required: 'KEEP_EXISTING' | 'REBALANCE' | 'BUILD_NEW';
   portfolio_rationale: string;
   asset_allocation: { equity_pct: number; debt_pct: number; hybrid_pct: number };
   funds: RecommendedFund[];
@@ -78,7 +108,7 @@ export interface RecommendationResult {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  PILLAR 1: MARKDOWN SANITIZER
+//  MARKDOWN SANITIZER
 //  Strips ```json / ``` fences from Gemini output before JSON.parse
 // ══════════════════════════════════════════════════════════════════
 
@@ -101,7 +131,7 @@ function extractCleanJson(raw: string): string {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  PILLAR 2: O(1) ARCHETYPE CACHE
+//  O(1) ARCHETYPE CACHE
 //  Hash: AgeBucket + RiskProfile + TenureBucket → cache key
 // ══════════════════════════════════════════════════════════════════
 
@@ -175,8 +205,6 @@ async function saveArchetypeCache(
 
 /**
  * Scale a cached percentage-based recommendation to the user's actual SIP amount.
- * Cached recommendations store allocation_percentage (0-100); this function
- * computes the absolute monthly_sip_amount per fund, rounded to nearest 100.
  */
 function scaleRecommendation(
   cached: PortfolioRecommendation,
@@ -184,16 +212,13 @@ function scaleRecommendation(
 ): PortfolioRecommendation {
   const scaled = { ...cached, funds: cached.funds.map(f => ({ ...f })) };
 
-  // Scale each fund's SIP by its allocation percentage
   scaled.funds.forEach(f => {
     f.monthly_sip_amount = Math.round((f.allocation_percentage / 100) * actualMonthlySip / 100) * 100;
   });
 
-  // Fix rounding difference — assign remainder to the largest allocation fund
   const sipSum = scaled.funds.reduce((s, f) => s + f.monthly_sip_amount, 0);
   const diff = actualMonthlySip - sipSum;
   if (diff !== 0 && scaled.funds.length > 0) {
-    // Find fund with largest allocation
     const largest = scaled.funds.reduce((a, b) =>
       b.allocation_percentage > a.allocation_percentage ? b : a
     );
@@ -267,10 +292,8 @@ export function computeEquityGlidePath(
   age: number,
   riskTolerance: 'conservative' | 'moderate' | 'aggressive'
 ): GlidePath {
-  // Base: 100 - age rule
   let equityPct = Math.max(10, Math.min(90, 100 - age));
 
-  // Risk tolerance adjustment
   switch (riskTolerance) {
     case 'conservative':
       equityPct = Math.round(equityPct * 0.7);
@@ -278,15 +301,12 @@ export function computeEquityGlidePath(
     case 'aggressive':
       equityPct = Math.min(90, Math.round(equityPct * 1.2));
       break;
-    // moderate: no adjustment
   }
 
-  // Floors
   equityPct = Math.max(10, equityPct);
   const debtPct = Math.max(10, 100 - equityPct);
   const actualEquity = 100 - debtPct;
 
-  // Allocate some to hybrid if there's room (10-20% from equity side)
   let hybridPct = 0;
   if (actualEquity >= 40) {
     hybridPct = Math.min(20, Math.round(actualEquity * 0.2));
@@ -303,7 +323,6 @@ export function computeEquityGlidePath(
 //  2. OVERLAP MATRIX
 // ══════════════════════════════════════════════════════════════════
 
-// Category-based heuristic fallback overlap estimates
 const CATEGORY_OVERLAP: Record<string, number> = {
   'same_sub_same_house': 0.80,
   'same_sub_diff_house': 0.50,
@@ -316,7 +335,6 @@ export async function calculateOverlapMatrix(
 ): Promise<Record<string, Record<string, number>>> {
   const matrix: Record<string, Record<string, number>> = {};
 
-  // Initialize matrix
   for (const code of fundCodes) {
     matrix[code] = {};
     for (const other of fundCodes) {
@@ -341,7 +359,6 @@ export async function calculateOverlapMatrix(
       ORDER BY scheme_code, holding_name, fetched_at DESC
     `, [fundCodes]);
 
-    // Group holdings by scheme_code
     const holdingsMap: Record<string, { name: string; isin: string | null; weight: number }[]> = {};
     for (const row of holdingsResult.rows) {
       if (!holdingsMap[row.scheme_code]) holdingsMap[row.scheme_code] = [];
@@ -352,7 +369,6 @@ export async function calculateOverlapMatrix(
       });
     }
 
-    // Funds with holdings data → stock-level overlap
     const fundsWithHoldings = fundCodes.filter(c => holdingsMap[c]?.length > 0);
 
     for (let i = 0; i < fundsWithHoldings.length; i++) {
@@ -373,16 +389,15 @@ export async function calculateOverlapMatrix(
           }
         }
 
-        const overlapPct = overlap / 100; // Convert to 0-1 range
+        const overlapPct = overlap / 100;
         matrix[a][b] = overlapPct;
         matrix[b][a] = overlapPct;
       }
     }
 
-    // Funds without holdings data → category heuristic fallback
+    // Category heuristic fallback for funds without holdings data
     const fundsWithoutHoldings = fundCodes.filter(c => !holdingsMap[c]?.length);
     if (fundsWithoutHoldings.length > 0 || fundsWithHoldings.length < fundCodes.length) {
-      // Fetch category info for fallback
       const fundInfoResult = await client.query(`
         SELECT scheme_code, category, sub_category, amc_code
         FROM funds
@@ -398,13 +413,11 @@ export async function calculateOverlapMatrix(
         };
       }
 
-      // Fill in missing pairs with heuristic
       for (let i = 0; i < fundCodes.length; i++) {
         for (let j = i + 1; j < fundCodes.length; j++) {
           const a = fundCodes[i];
           const b = fundCodes[j];
 
-          // Skip if already computed via stock-level overlap
           if (matrix[a][b] > 0) continue;
 
           const infoA = fundInfo[a];
@@ -440,7 +453,7 @@ export async function calculateOverlapMatrix(
 
 export async function filterCandidateFunds(
   tenureMonths: number,
-  existingHoldings: string[] // scheme_codes to exclude
+  existingHoldings: string[]
 ): Promise<CandidateFund[]> {
   const allowedSubCategories = getAllowedCategories(tenureMonths);
 
@@ -486,7 +499,6 @@ export async function filterCandidateFunds(
       ORDER BY quality_score DESC
     `, [allowedSubCategories, existingHoldings]);
 
-    // Limit: top 5 per sub_category
     const perCategory: Record<string, number> = {};
     const filtered: CandidateFund[] = [];
 
@@ -517,7 +529,7 @@ export async function filterCandidateFunds(
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  4. GEMINI PROMPT BUILDER
+//  4. GEMINI PROMPT BUILDER — Chain-of-Thought + Dual-Path Auditor
 // ══════════════════════════════════════════════════════════════════
 
 function buildGeminiPrompt(
@@ -526,7 +538,8 @@ function buildGeminiPrompt(
   glidePath: GlidePath,
   candidates: CandidateFund[],
   overlapMatrix: Record<string, Record<string, number>>,
-  existingHoldingNames: string[]
+  existingHoldingNames: string[],
+  linkedFunds: LinkedFundInfo[]
 ): string {
   const tenureYears = (goal.tenureMonths / 12).toFixed(1);
 
@@ -554,18 +567,52 @@ function buildGeminiPrompt(
     ? existingHoldingNames.join(', ')
     : 'None';
 
+  // Build linked funds section for dual-path auditor
+  let linkedFundsSection: string;
+  let dualPathInstructions: string;
+
+  if (linkedFunds.length > 0) {
+    const linkedTable = linkedFunds.map(f =>
+      `${f.schemeCode} | ${f.fundName} | ${f.category ?? 'N/A'} | ${f.subCategory ?? 'N/A'} | ${f.allocationPct}% | ${f.cagr3y?.toFixed(1) ?? 'N/A'}% | ${f.sharpe1y?.toFixed(2) ?? 'N/A'} | ${f.volatility1y?.toFixed(1) ?? 'N/A'}% | Health: ${f.healthScore?.toFixed(0) ?? 'N/A'}/100`
+    ).join('\n');
+
+    linkedFundsSection = `LINKED FUNDS (currently assigned to this goal by user):
+scheme_code | fund_name | category | sub_category | allocation_pct | cagr_3y | sharpe_1y | volatility_1y | health_score
+${linkedTable}`;
+
+    dualPathInstructions = `DUAL-PATH AUDITOR MODE:
+The user has EXISTING linked funds for this goal (listed above).
+You MUST act as a ruthless auditor:
+1. Evaluate if each linked fund's metrics (returns, Sharpe, volatility, health score) are sufficient to reach the target within the tenure.
+2. Check if the linked funds have excessive overlap (>20%) between them.
+3. Verify the linked funds' combined asset allocation matches the glide path target.
+4. DECISION:
+   - If ALL linked funds are high quality (health > 60), have low overlap, and match glide path → set action_required = "KEEP_EXISTING". Return the linked funds as-is with updated SIP amounts.
+   - If SOME linked funds are underperforming or overlap is too high → set action_required = "REBALANCE". Keep good funds, swap bad ones from the CANDIDATE FUNDS list.
+   - If MOST linked funds are poor quality → set action_required = "BUILD_NEW". Construct entirely from CANDIDATE FUNDS list.`;
+  } else {
+    linkedFundsSection = 'LINKED FUNDS: None (user has no funds assigned to this goal)';
+    dualPathInstructions = `ARCHITECT MODE:
+No funds are currently linked to this goal. You MUST set action_required = "BUILD_NEW" and construct a complete portfolio from the CANDIDATE FUNDS list.`;
+  }
+
   return `You are a SEBI-registered Investment Advisor AI for Indian retail mutual fund investors.
 You construct diversified SIP portfolios based on goal parameters, risk profiles, and
 quantitative fund metrics. You follow Modern Portfolio Theory principles adapted for
 Indian mutual fund investors.
 
+IMPORTANT: You must THINK before acting. First analyze the macro/micro conditions and
+fund metrics in your thinking_process, THEN decide on an action, THEN output the portfolio.
+
 HARD RULES (violating any = invalid output):
-1. Only recommend from the CANDIDATE FUNDS list provided below. Never invent fund names.
+1. Only recommend from the CANDIDATE FUNDS list provided below. Never invent fund names or scheme codes.
 2. Sum of allocation_percentage MUST equal exactly 100.
 3. No two funds in the portfolio may have overlap > 20% (overlap matrix provided below).
 4. Minimum 2 funds, maximum 5 funds in the portfolio.
-5. monthly_sip_amount for each fund must be rounded to nearest ₹100.
-6. Sum of all monthly_sip_amount must equal exactly ₹${goal.monthlySip}.
+5. monthly_sip_amount for each fund must be rounded to nearest 100.
+6. Sum of all monthly_sip_amount must equal exactly ${goal.monthlySip}.
+
+${dualPathInstructions}
 
 MACRO/MICRO AWARENESS:
 - If tenure < 3 years: STRICTLY avoid Small Cap, Mid Cap, Sectoral/Thematic funds. Prioritize: Liquid, Short Duration, Arbitrage, Conservative Hybrid.
@@ -575,7 +622,7 @@ MACRO/MICRO AWARENESS:
 
 QUALITY GATE (proxy for CRISIL 4-5 star):
 - Only pick funds with Sharpe > 0.5 OR 3Y CAGR in top quartile of their sub-category.
-- Prefer funds with AUM > ₹1,000 Cr (institutional confidence signal).
+- Prefer funds with AUM > 1,000 Cr (institutional confidence signal).
 - Prefer funds with lower expense ratio within same sub-category.
 
 AGE-BASED GLIDE PATH:
@@ -588,10 +635,12 @@ INPUT DATA:
 - User Age: ${user.age}
 - Risk Tolerance: ${user.riskTolerance}
 - Goal: ${goal.goalName} (${goal.criticality} priority)
-- Target Amount: ₹${goal.targetAmount.toLocaleString('en-IN')}
-- Monthly SIP Budget: ₹${goal.monthlySip.toLocaleString('en-IN')}
+- Target Amount: ${goal.targetAmount.toLocaleString('en-IN')}
+- Monthly SIP Budget: ${goal.monthlySip.toLocaleString('en-IN')}
 - Tenure: ${goal.tenureMonths} months (${tenureYears} years)
 - Current Portfolio Holdings (avoid duplicates): ${existingStr}
+
+${linkedFundsSection}
 
 CANDIDATE FUNDS (pre-filtered for tenure + quality):
 scheme_code | fund_name | category | sub_category | aum_cr | expense_ratio | cagr_3y | cagr_5y | sharpe_1y | volatility_1y | quality_score
@@ -603,7 +652,12 @@ ${overlapTable}
 
 OUTPUT exactly this JSON schema (no markdown, no code blocks, no explanation outside JSON):
 {
-  "portfolio_rationale": "2-3 sentence plain-English explanation of the strategy and why these specific funds were chosen.",
+  "thinking_process": {
+    "macro_micro_evaluation": "2-3 sentences analyzing: current economic conditions relevant to the tenure, how inflation and market regime affect this specific goal, and what asset classes are favorable right now.",
+    "fund_manager_and_metrics_audit": "2-3 sentences evaluating: the quality scores, rolling returns, Sharpe ratios, and drawdown characteristics of the top candidates (or linked funds if auditing). Identify which funds stand out and which are weak."
+  },
+  "action_required": "KEEP_EXISTING" | "REBALANCE" | "BUILD_NEW",
+  "portfolio_rationale": "2-3 sentence plain-English explanation of the strategy and why these specific funds were chosen or retained.",
   "asset_allocation": {
     "equity_pct": number,
     "debt_pct": number,
@@ -624,44 +678,45 @@ OUTPUT exactly this JSON schema (no markdown, no code blocks, no explanation out
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  5. GEMINI API CALL (portfolio-specific, higher token budget)
+//  5. GEMINI API CALL — Ironclad AbortController (8.5s timeout)
 // ══════════════════════════════════════════════════════════════════
 
 async function callGeminiForPortfolio(
-  prompt: string,
-  maxRetries: number = 2
+  prompt: string
 ): Promise<{ text: string; tokensUsed: number }> {
   if (!GEMINI_API_KEY) {
+    console.warn('Aladdin: No GEMINI_API_KEY — skipping Gemini call');
     return { text: '', tokensUsed: 0 };
   }
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+  // Single attempt + single retry. No exponential backoff on user-facing requests.
+  for (let attempt = 0; attempt <= 1; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+
     try {
       const response = await fetch(GEMINI_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.1,
             topK: 1,
             topP: 0.95,
-            maxOutputTokens: 1500,
+            maxOutputTokens: 2500, // Increased for Chain-of-Thought thinking_process
             responseMimeType: 'application/json',
           },
         }),
       });
 
-      // Pillar 3: Exponential backoff for 429 (rate limit) and 503 (overloaded)
-      if (response.status === 429 || response.status === 503) {
-        if (attempt < maxRetries) {
-          const backoffMs = Math.pow(2, attempt + 1) * 1000; // 2s, 4s
-          console.warn(`Gemini ${response.status} — retrying in ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, backoffMs));
-          continue;
-        }
-        console.error(`Gemini ${response.status} — exhausted ${maxRetries} retries`);
-        return { text: '', tokensUsed: 0 };
+      clearTimeout(timeoutId);
+
+      // Rate limit: immediate retry (no sleep)
+      if ((response.status === 429 || response.status === 503) && attempt === 0) {
+        console.warn(`Gemini ${response.status} — immediate retry (attempt 2/2)`);
+        continue;
       }
 
       if (!response.ok) {
@@ -675,18 +730,22 @@ async function callGeminiForPortfolio(
         (data.usageMetadata?.promptTokenCount || 0) +
         (data.usageMetadata?.candidatesTokenCount || 0);
 
-      // Pillar 1: Sanitize markdown fences before returning
       const text = extractCleanJson(rawText);
-
       return { text, tokensUsed };
-    } catch (error) {
-      if (attempt < maxRetries) {
-        const backoffMs = Math.pow(2, attempt + 1) * 1000;
-        console.warn(`Gemini network error — retrying in ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries}):`, error);
-        await new Promise(resolve => setTimeout(resolve, backoffMs));
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+
+      if (error.name === 'AbortError') {
+        console.warn(`Gemini aborted after ${GEMINI_TIMEOUT_MS}ms (attempt ${attempt + 1}/2) — falling back to rule-based`);
+        return { text: '', tokensUsed: 0 };
+      }
+
+      if (attempt === 0) {
+        console.warn('Gemini network error — immediate retry:', error.message);
         continue;
       }
-      console.error('Gemini Aladdin call failed after retries:', error);
+
+      console.error('Gemini Aladdin call failed after retry:', error);
       return { text: '', tokensUsed: 0 };
     }
   }
@@ -702,34 +761,33 @@ function validateRecommendation(
   rec: PortfolioRecommendation,
   candidates: CandidateFund[],
   overlapMatrix: Record<string, Record<string, number>>,
-  monthlySip: number
+  monthlySip: number,
+  linkedFunds: LinkedFundInfo[]
 ): string | null {
-  // Check fund count
   if (!rec.funds || rec.funds.length < 2 || rec.funds.length > 5) {
     return `Fund count must be 2-5, got ${rec.funds?.length ?? 0}`;
   }
 
-  // Check all funds are from candidates
-  const candidateCodes = new Set(candidates.map(c => c.schemeCode));
+  // Build valid codes: candidates + linked fund codes
+  const validCodes = new Set(candidates.map(c => c.schemeCode));
+  for (const lf of linkedFunds) validCodes.add(lf.schemeCode);
+
   for (const f of rec.funds) {
-    if (!candidateCodes.has(f.scheme_code)) {
-      return `Fund ${f.scheme_code} not in candidate list`;
+    if (!validCodes.has(f.scheme_code)) {
+      return `Fund ${f.scheme_code} not in candidate or linked fund list`;
     }
   }
 
-  // Check allocation sums to 100
   const allocSum = rec.funds.reduce((s, f) => s + f.allocation_percentage, 0);
   if (Math.abs(allocSum - 100) > 1) {
     return `Allocation sums to ${allocSum}%, expected 100%`;
   }
 
-  // Check SIP sums to budget
   const sipSum = rec.funds.reduce((s, f) => s + f.monthly_sip_amount, 0);
   if (Math.abs(sipSum - monthlySip) > 100) {
-    return `SIP sums to ₹${sipSum}, expected ₹${monthlySip}`;
+    return `SIP sums to ${sipSum}, expected ${monthlySip}`;
   }
 
-  // Check overlap constraint
   for (let i = 0; i < rec.funds.length; i++) {
     for (let j = i + 1; j < rec.funds.length; j++) {
       const a = rec.funds[i].scheme_code;
@@ -741,11 +799,17 @@ function validateRecommendation(
     }
   }
 
-  return null; // Valid
+  // Validate action_required field
+  const validActions = ['KEEP_EXISTING', 'REBALANCE', 'BUILD_NEW'];
+  if (!validActions.includes(rec.action_required)) {
+    return `action_required must be one of ${validActions.join(', ')}, got "${rec.action_required}"`;
+  }
+
+  return null;
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  7. RULE-BASED FALLBACK
+//  7. RULE-BASED FALLBACK — Always returns a valid portfolio
 // ══════════════════════════════════════════════════════════════════
 
 function ruleBasedPortfolio(
@@ -754,7 +818,6 @@ function ruleBasedPortfolio(
   monthlySip: number,
   tenureMonths: number
 ): PortfolioRecommendation {
-  // Define allocation templates by tenure
   type AllocSlot = { subCategories: string[]; pctOfTotal: number };
   let template: AllocSlot[];
 
@@ -789,8 +852,7 @@ function ruleBasedPortfolio(
     ];
   }
 
-  // Adjust for glide path: scale equity slots down if conservative
-  const equityRatio = glidePath.equityPct / 70; // 70% is the "moderate" baseline
+  const equityRatio = glidePath.equityPct / 70;
   const debtRatio = glidePath.debtPct / 30;
 
   const funds: RecommendedFund[] = [];
@@ -808,12 +870,10 @@ function ruleBasedPortfolio(
        'Equity Savings Fund', 'Multi-Asset Allocation Fund'].includes(sc)
     );
 
-    // Adjust allocation based on glide path
     let adjustedPct = slot.pctOfTotal;
     if (isEquitySlot) adjustedPct = Math.round(adjustedPct * Math.min(equityRatio, 1.3));
     else if (!isHybridSlot) adjustedPct = Math.round(adjustedPct * Math.min(debtRatio, 1.3));
 
-    // Pick best candidate from allowed sub-categories
     const match = candidates.find(c =>
       slot.subCategories.includes(c.subCategory) && !usedAMCs.has(c.fundName.split(' ')[0])
     );
@@ -835,20 +895,15 @@ function ruleBasedPortfolio(
     }
   }
 
-  // Normalize allocations to exactly 100% and SIP to exact budget
   if (funds.length > 0) {
     const allocTotal = funds.reduce((s, f) => s + f.allocation_percentage, 0);
-    const sipTotal = funds.reduce((s, f) => s + f.monthly_sip_amount, 0);
 
-    // Normalize allocation
     funds.forEach(f => {
       f.allocation_percentage = Math.round((f.allocation_percentage / allocTotal) * 100);
     });
-    // Fix rounding — give remainder to largest fund
     const allocDiff = 100 - funds.reduce((s, f) => s + f.allocation_percentage, 0);
     funds[0].allocation_percentage += allocDiff;
 
-    // Normalize SIP
     funds.forEach(f => {
       f.monthly_sip_amount = Math.round((f.allocation_percentage / 100) * monthlySip / 100) * 100;
     });
@@ -857,6 +912,7 @@ function ruleBasedPortfolio(
   }
 
   return {
+    action_required: 'BUILD_NEW',
     portfolio_rationale: `Rule-based portfolio allocation for a ${(tenureMonths / 12).toFixed(0)}-year goal. Equity ${glidePath.equityPct}%, Debt ${glidePath.debtPct}%, Hybrid ${glidePath.hybridPct}% based on age and risk tolerance.`,
     asset_allocation: glidePath,
     funds,
@@ -871,27 +927,29 @@ export async function constructPortfolio(
   user: UserContext,
   goal: GoalParams
 ): Promise<RecommendationResult> {
-  // 1. Compute glide path
   const glidePath = computeEquityGlidePath(user.age, user.riskTolerance);
+  const linkedFunds = goal.linkedFunds || [];
 
-  // ── Pillar 2: O(1) Archetype Cache Lookup ──
-  const archetypeKey = computeArchetypeKey(user.age, user.riskTolerance, goal.tenureMonths);
-  const cached = await lookupArchetypeCache(archetypeKey);
-  if (cached && cached.funds?.length >= 2) {
-    console.log(`Aladdin: Cache HIT for archetype "${archetypeKey}" — scaling to ₹${goal.monthlySip}/mo`);
-    const scaled = scaleRecommendation(cached, goal.monthlySip);
-    return {
-      recommendation: scaled,
-      meta: {
-        engine: 'cached',
-        tokensUsed: 0,
-        candidatesConsidered: 0,
-        overlapChecked: true,
-      },
-    };
+  // ── Archetype Cache (skip if user has linked funds — needs personalized audit) ──
+  if (linkedFunds.length === 0) {
+    const archetypeKey = computeArchetypeKey(user.age, user.riskTolerance, goal.tenureMonths);
+    const cached = await lookupArchetypeCache(archetypeKey);
+    if (cached && cached.funds?.length >= 2) {
+      console.log(`Aladdin: Cache HIT for archetype "${archetypeKey}" — scaling to ${goal.monthlySip}/mo`);
+      const scaled = scaleRecommendation(cached, goal.monthlySip);
+      return {
+        recommendation: scaled,
+        meta: {
+          engine: 'cached',
+          tokensUsed: 0,
+          candidatesConsidered: 0,
+          overlapChecked: true,
+        },
+      };
+    }
   }
 
-  // 2. Get user's existing holdings (to avoid duplicates)
+  // Get user's existing holdings (to avoid duplicates)
   const client = await pool.connect();
   let existingHoldings: string[] = [];
   let existingHoldingNames: string[] = [];
@@ -911,15 +969,15 @@ export async function constructPortfolio(
     client.release();
   }
 
-  // 3. Filter candidate funds
+  // Filter candidate funds
   const candidates = await filterCandidateFunds(goal.tenureMonths, existingHoldings);
 
   if (candidates.length === 0) {
-    // No candidates found — widen filter by reducing AUM threshold
     const widened = await filterCandidateFunds(goal.tenureMonths, []);
     if (widened.length === 0) {
       return {
         recommendation: {
+          action_required: 'BUILD_NEW',
           portfolio_rationale: 'Unable to find suitable funds matching your criteria. Please try adjusting your tenure or SIP amount.',
           asset_allocation: glidePath,
           funds: [],
@@ -927,25 +985,34 @@ export async function constructPortfolio(
         meta: { engine: 'rule_based', tokensUsed: 0, candidatesConsidered: 0, overlapChecked: false },
       };
     }
-    // Fall through with widened candidates
     candidates.push(...widened.slice(0, 30));
   }
 
-  // 4. Calculate overlap matrix (only for top candidates — limit to 30 for performance)
+  // Calculate overlap matrix (limit to 30 candidates for performance)
   const topCandidates = candidates.slice(0, 30);
   const candidateCodes = topCandidates.map(c => c.schemeCode);
-  const overlapMatrix = await calculateOverlapMatrix(candidateCodes);
 
-  // 5. Build Gemini prompt
-  const prompt = buildGeminiPrompt(user, goal, glidePath, topCandidates, overlapMatrix, existingHoldingNames);
+  // Include linked fund codes in overlap matrix
+  const linkedCodes = linkedFunds.map(f => f.schemeCode).filter(c => !candidateCodes.includes(c));
+  const allCodesForOverlap = [...candidateCodes, ...linkedCodes];
+  const overlapMatrix = await calculateOverlapMatrix(allCodesForOverlap);
 
-  // 6. Call Gemini (now with Pillar 3 exponential backoff + Pillar 1 markdown sanitizer)
+  // Build prompt with linked funds for dual-path auditor
+  const prompt = buildGeminiPrompt(user, goal, glidePath, topCandidates, overlapMatrix, existingHoldingNames, linkedFunds);
+
+  // Call Gemini with ironclad timeout
   const { text, tokensUsed } = await callGeminiForPortfolio(prompt);
 
   if (text) {
     try {
       const parsed: PortfolioRecommendation = JSON.parse(text);
-      const validationError = validateRecommendation(parsed, topCandidates, overlapMatrix, goal.monthlySip);
+
+      // Ensure action_required has a default if Gemini omits it
+      if (!parsed.action_required) {
+        parsed.action_required = linkedFunds.length > 0 ? 'REBALANCE' : 'BUILD_NEW';
+      }
+
+      const validationError = validateRecommendation(parsed, topCandidates, overlapMatrix, goal.monthlySip, linkedFunds);
 
       if (!validationError) {
         // Log token usage
@@ -964,9 +1031,12 @@ export async function constructPortfolio(
           }
         } catch (_) { /* non-critical */ }
 
-        // ── Pillar 2: Save to archetype cache (fire-and-forget) ──
-        saveArchetypeCache(archetypeKey, user.age, user.riskTolerance, goal.tenureMonths, parsed)
-          .catch(err => console.error('Archetype cache save failed (non-blocking):', err));
+        // Save to archetype cache only for BUILD_NEW (personalized audits shouldn't be cached)
+        if (parsed.action_required === 'BUILD_NEW' && linkedFunds.length === 0) {
+          const archetypeKey = computeArchetypeKey(user.age, user.riskTolerance, goal.tenureMonths);
+          saveArchetypeCache(archetypeKey, user.age, user.riskTolerance, goal.tenureMonths, parsed)
+            .catch(err => console.error('Archetype cache save failed (non-blocking):', err));
+        }
 
         return {
           recommendation: parsed,
@@ -979,18 +1049,23 @@ export async function constructPortfolio(
         };
       }
 
-      // Validation failed — retry once with error context
+      // Validation failed — single retry with error feedback
       console.warn('Aladdin validation failed:', validationError, '— retrying with feedback');
       const retryPrompt = prompt + `\n\nPREVIOUS ATTEMPT FAILED VALIDATION: ${validationError}\nPlease fix this issue and return corrected JSON.`;
-      const retry = await callGeminiForPortfolio(retryPrompt, 0); // No additional backoff retries for validation retry
+      const retry = await callGeminiForPortfolio(retryPrompt);
       if (retry.text) {
         try {
           const retryParsed: PortfolioRecommendation = JSON.parse(retry.text);
-          const retryError = validateRecommendation(retryParsed, topCandidates, overlapMatrix, goal.monthlySip);
+          if (!retryParsed.action_required) {
+            retryParsed.action_required = linkedFunds.length > 0 ? 'REBALANCE' : 'BUILD_NEW';
+          }
+          const retryError = validateRecommendation(retryParsed, topCandidates, overlapMatrix, goal.monthlySip, linkedFunds);
           if (!retryError) {
-            // Save retry result to cache too
-            saveArchetypeCache(archetypeKey, user.age, user.riskTolerance, goal.tenureMonths, retryParsed)
-              .catch(err => console.error('Archetype cache save failed (non-blocking):', err));
+            if (retryParsed.action_required === 'BUILD_NEW' && linkedFunds.length === 0) {
+              const archetypeKey = computeArchetypeKey(user.age, user.riskTolerance, goal.tenureMonths);
+              saveArchetypeCache(archetypeKey, user.age, user.riskTolerance, goal.tenureMonths, retryParsed)
+                .catch(err => console.error('Archetype cache save failed (non-blocking):', err));
+            }
 
             return {
               recommendation: retryParsed,
@@ -1009,7 +1084,7 @@ export async function constructPortfolio(
     }
   }
 
-  // 7. Fallback to rule-based
+  // Fallback to rule-based — always returns a valid portfolio
   console.log('Aladdin: Falling back to rule-based portfolio');
   const fallback = ruleBasedPortfolio(topCandidates, glidePath, goal.monthlySip, goal.tenureMonths);
 
