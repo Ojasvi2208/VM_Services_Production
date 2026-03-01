@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
             }
           } catch (deepErr: any) {
             stats.deepEvalErrors++;
-            console.error(`Deep eval failed for goal ${goal.id}:`, deepErr.message);
+            stats.errors.push(`DeepEval goal ${goal.id}: ${deepErr.message}`);
           }
 
           // ── Step 4b: Stale-While-Revalidate check (for Monte Carlo + Gemini) ──
