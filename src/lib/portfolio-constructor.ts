@@ -469,7 +469,7 @@ export async function filterCandidateFunds(
         COALESCE(f.expense_ratio, 0) as expense_ratio,
         COALESCE(fr.cagr_3y, fr.return_3y) as cagr_3y,
         fr.cagr_5y,
-        fr.sharpe_1y,
+        fr.sharpe_ratio_1y as sharpe_1y,
         fr.volatility_1y,
         -- Quality score: 60% return + 40% sharpe (normalized within sub_category)
         COALESCE(
@@ -477,7 +477,7 @@ export async function filterCandidateFunds(
             PARTITION BY f.sub_category ORDER BY COALESCE(fr.cagr_3y, fr.return_3y)
           ) +
           0.4 * PERCENT_RANK() OVER (
-            PARTITION BY f.sub_category ORDER BY fr.sharpe_1y
+            PARTITION BY f.sub_category ORDER BY fr.sharpe_ratio_1y
           ),
           0
         ) as quality_score
@@ -489,7 +489,7 @@ export async function filterCandidateFunds(
         AND f.sub_category = ANY($1)
         AND COALESCE(f.fund_size, 0) > 500
         AND COALESCE(fr.cagr_3y, fr.return_3y) IS NOT NULL
-        AND (fr.sharpe_1y > 0.3 OR fr.sharpe_3y > 0.3 OR fr.sharpe_1y IS NULL)
+        AND (fr.sharpe_ratio_1y > 0.3 OR fr.sharpe_ratio_1y IS NULL)
         AND f.scheme_code != ALL($2)
         AND f.scheme_name NOT ILIKE '%index%'
         AND f.scheme_name NOT ILIKE '%etf%'

@@ -93,7 +93,7 @@ export async function POST(
       const linkedResult = await client.query(`
         SELECT gfl.scheme_code, gfl.allocation_pct,
                f.scheme_name as fund_name, f.category, f.sub_category,
-               fr.cagr_3y, fr.sharpe_1y, fr.volatility_1y
+               fr.cagr_3y, fr.sharpe_ratio_1y as sharpe_1y, fr.volatility_1y
         FROM goal_fund_links gfl
         LEFT JOIN funds f ON gfl.scheme_code = f.scheme_code
         LEFT JOIN fund_returns fr ON gfl.scheme_code = fr.scheme_code
