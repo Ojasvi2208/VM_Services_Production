@@ -10,7 +10,7 @@
 
 CREATE TABLE IF NOT EXISTS goal_portfolio_evaluations (
   id                SERIAL PRIMARY KEY,
-  goal_id           INT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+  goal_id           UUID NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
   user_id           UUID NOT NULL,
 
   -- Pathway verdict
