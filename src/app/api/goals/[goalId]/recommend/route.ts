@@ -169,7 +169,7 @@ export async function POST(
     const errStack = error instanceof Error ? error.stack?.split('\n').slice(0, 3).join(' | ') : '';
     console.error('Aladdin goal-linked error:', errMsg, errStack);
     return NextResponse.json(
-      { error: 'Failed to generate portfolio recommendation', debug: errMsg },
+      { error: 'Failed to generate portfolio recommendation' },
       { status: 500 }
     );
   }

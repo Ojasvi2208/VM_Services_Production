@@ -233,25 +233,27 @@ export async function calculateAllReturns(schemeCode: string, asOfDate?: Date): 
 }
 
 // Save calculated returns to database
-export async function saveReturns(schemeCode: string, returns: Returns, calculatedDate: Date) {
+// Production schema: PK is scheme_code only (no calculated_date column).
+// Uses sharpe_ratio_1y / sortino_ratio_1y (not sharpe_1y/3y/5y).
+export async function saveReturns(schemeCode: string, returns: Returns) {
   const client = await pool.connect();
-  
+
   try {
     await client.query(
       `INSERT INTO fund_returns (
-        scheme_code, calculated_date,
+        scheme_code,
         return_1w, return_1m, return_3m, return_6m, return_1y,
         return_2y, return_3y, return_5y, return_7y, return_10y,
         return_since_inception,
         cagr_1y, cagr_2y, cagr_3y, cagr_5y, cagr_7y, cagr_10y,
         cagr_since_inception,
         volatility_1y, volatility_3y, volatility_5y,
-        sharpe_1y, sharpe_3y, sharpe_5y
+        sharpe_ratio_1y
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+        $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
       )
-      ON CONFLICT (scheme_code, calculated_date) 
+      ON CONFLICT (scheme_code)
       DO UPDATE SET
         return_1w = EXCLUDED.return_1w,
         return_1m = EXCLUDED.return_1m,
@@ -274,19 +276,17 @@ export async function saveReturns(schemeCode: string, returns: Returns, calculat
         volatility_1y = EXCLUDED.volatility_1y,
         volatility_3y = EXCLUDED.volatility_3y,
         volatility_5y = EXCLUDED.volatility_5y,
-        sharpe_1y = EXCLUDED.sharpe_1y,
-        sharpe_3y = EXCLUDED.sharpe_3y,
-        sharpe_5y = EXCLUDED.sharpe_5y
+        sharpe_ratio_1y = EXCLUDED.sharpe_ratio_1y
       `,
       [
-        schemeCode, calculatedDate,
+        schemeCode,
         returns.return1w, returns.return1m, returns.return3m, returns.return6m, returns.return1y,
         returns.return2y, returns.return3y, returns.return5y, returns.return7y, returns.return10y,
         returns.returnInception,
         returns.cagr1y, returns.cagr2y, returns.cagr3y, returns.cagr5y, returns.cagr7y, returns.cagr10y,
         returns.cagrInception,
         returns.volatility1y, returns.volatility3y, returns.volatility5y,
-        returns.sharpe1y, returns.sharpe3y, returns.sharpe5y
+        returns.sharpe1y
       ]
     );
   } finally {
@@ -310,7 +310,7 @@ export async function calculateReturnsForAllFunds() {
     for (const fund of funds) {
       try {
         const returns = await calculateAllReturns(fund.scheme_code, currentDate);
-        await saveReturns(fund.scheme_code, returns, currentDate);
+        await saveReturns(fund.scheme_code, returns);
         completed++;
         
         if (completed % 100 === 0) {

@@ -1,0 +1,47 @@
+{
+  "as_of_date": "2026-01-31",
+  "top_n": 10,
+  "amcs": [
+    {
+      "id": "sbi",
+      "name": "SBI",
+      "file": "vijaymalik-mobile/androidApp/All-Schemes-Monthly-Portfolio---as-on-31st-January-2026.xlsx",
+      "format": "index_sheet",
+      "index_sheet": "Index",
+      "index_start_row": 4,
+      "index_short_code_col": 1,
+      "index_scheme_name_col": 2,
+      "data_start_row": 0,
+      "columns": {
+        "stock_name": 2,
+        "isin": 3,
+        "sector": 4,
+        "weight_pct": 7
+      },
+      "isin_prefix": "IN",
+      "isin_length": 12,
+      "skip_stock_names": ["EQUITY & EQUITY RELATED"],
+      "min_columns": 8
+    },
+    {
+      "id": "kotak",
+      "name": "Kotak",
+      "file": "vijaymalik-mobile/androidApp/ConsolidatedSEBIPortfolioJanuary2026.xlsx",
+      "format": "title_row",
+      "title_row": 0,
+      "title_col": 2,
+      "title_regex": "Portfolio of (.+?) as on",
+      "data_start_row": 4,
+      "columns": {
+        "stock_name": 2,
+        "isin": 3,
+        "sector": 4,
+        "weight_pct": 8
+      },
+      "isin_prefix": "IN",
+      "isin_length": 12,
+      "skip_stock_names": [],
+      "min_columns": 9
+    }
+  ]
+}

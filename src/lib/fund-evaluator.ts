@@ -131,9 +131,8 @@ async function evaluateFundHealth(
   client: any
 ): Promise<FundHealthReport> {
   // Fetch the fund's metrics + its peer group stats in a single query
-  // Note: fund_returns columns are sharpe_1y (not sharpe_ratio_1y).
-  // sortino, max_drawdown, rolling_return_* may not exist as columns —
-  // they're available as DB functions but we skip them for performance.
+  // Production fund_returns has sharpe_ratio_1y (NOT sharpe_1y), no calculated_date, no sharpe_3y.
+  // volatility_3y exists (added by migration 005).
   const result = await client.query(`
     WITH fund_data AS (
       SELECT
@@ -141,11 +140,10 @@ async function evaluateFundHealth(
         f.fund_size, f.expense_ratio,
         COALESCE(fr.cagr_3y, fr.return_3y) as cagr_3y,
         fr.cagr_5y, fr.cagr_1y,
-        fr.sharpe_1y, fr.sharpe_3y,
+        fr.sharpe_ratio_1y as sharpe_1y,
         fr.volatility_1y, fr.volatility_3y
       FROM funds f
       LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
-        AND fr.calculated_date = (SELECT MAX(calculated_date) FROM fund_returns)
       WHERE f.scheme_code = $1
     ),
     peer_stats AS (
@@ -155,15 +153,14 @@ async function evaluateFundHealth(
         PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY COALESCE(fr2.cagr_3y, fr2.return_3y)) as p50_return,
         PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY COALESCE(fr2.cagr_3y, fr2.return_3y)) as p75_return,
         AVG(COALESCE(fr2.cagr_3y, fr2.return_3y)) as avg_return,
-        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY fr2.sharpe_1y) as median_sharpe,
-        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY fr2.sharpe_1y) as p75_sharpe,
+        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY fr2.sharpe_ratio_1y) as median_sharpe,
+        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY fr2.sharpe_ratio_1y) as p75_sharpe,
         PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY fr2.volatility_1y) as median_volatility,
         PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY fr2.volatility_1y) as p75_volatility,
         PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY f2.expense_ratio) as median_expense,
         COUNT(*) as peer_count
       FROM funds f2
       LEFT JOIN fund_returns fr2 ON f2.scheme_code = fr2.scheme_code
-        AND fr2.calculated_date = (SELECT MAX(calculated_date) FROM fund_returns)
       WHERE f2.sub_category = (SELECT sub_category FROM fund_data)
         AND f2.plan_type = 'Direct' AND f2.option_type = 'Growth'
         AND f2.is_active = true
@@ -465,14 +462,13 @@ async function generateSuggestions(
       // Find the best alternative in the same sub-category
       const altResult = await client.query(`
         SELECT f.scheme_code, f.scheme_name,
-               COALESCE(fr2.cagr_3y, fr2.return_3y) as cagr_3y, fr2.sharpe_1y
+               COALESCE(fr2.cagr_3y, fr2.return_3y) as cagr_3y, fr2.sharpe_ratio_1y as sharpe_1y
         FROM funds f
         JOIN fund_returns fr2 ON f.scheme_code = fr2.scheme_code
-          AND fr2.calculated_date = (SELECT MAX(calculated_date) FROM fund_returns)
         WHERE f.sub_category = $1
           AND f.plan_type = 'Direct' AND f.option_type = 'Growth'
           AND f.is_active = true AND f.scheme_code != $2
-          AND COALESCE(f.fund_size, 0) > 500
+          AND (f.fund_size > 500 OR f.fund_size IS NULL)
           AND COALESCE(fr2.cagr_3y, fr2.return_3y) IS NOT NULL
         ORDER BY COALESCE(fr2.cagr_3y, fr2.return_3y) DESC
         LIMIT 1
@@ -652,7 +648,7 @@ export async function deepEvaluateGoal(
         const aladdinResult = await constructPortfolio(userCtx, goalParams);
         if (aladdinResult.recommendation.funds.length >= 2) {
           return {
-            verdict, verdictReason, portfolio_score: portfolioScore,
+            verdict, verdict_reason: verdictReason, portfolio_score: portfolioScore,
             fund_evaluations: fundReports, suggestions,
             recommendation: aladdinResult.recommendation,
             macro_context: macroContext, glide_path: glidePath,
@@ -663,7 +659,7 @@ export async function deepEvaluateGoal(
       } catch { /* Fall through without recommendation */ }
 
       return {
-        verdict, verdictReason, portfolio_score: portfolioScore,
+        verdict, verdict_reason: verdictReason, portfolio_score: portfolioScore,
         fund_evaluations: fundReports, suggestions,
         recommendation: null, macro_context: macroContext,
         glide_path: glidePath, actual_allocation: actualAllocation,
@@ -681,7 +677,7 @@ export async function deepEvaluateGoal(
     }
 
     return {
-      verdict, verdictReason, portfolio_score: portfolioScore,
+      verdict, verdict_reason: verdictReason, portfolio_score: portfolioScore,
       fund_evaluations: fundReports, suggestions,
       recommendation: null, macro_context: macroContext,
       glide_path: glidePath, actual_allocation: actualAllocation,

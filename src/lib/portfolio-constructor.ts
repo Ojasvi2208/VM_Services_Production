@@ -441,7 +441,38 @@ export async function calculateOverlapMatrix(
 
   const client = await pool.connect();
   try {
-    // Attempt stock-level overlap via fund_top_holdings
+    // ── O(1) path: precomputed fund_overlap_pairs ──
+    const precomputed = await client.query(`
+      SELECT fund_a, fund_b, overlap_pct
+      FROM fund_overlap_pairs
+      WHERE as_of_date = (SELECT MAX(as_of_date) FROM fund_overlap_pairs)
+        AND (fund_a = ANY($1) AND fund_b = ANY($1))
+    `, [fundCodes]);
+
+    let precomputedHits = 0;
+    for (const row of precomputed.rows) {
+      const pct = parseFloat(row.overlap_pct) || 0;
+      matrix[row.fund_a][row.fund_b] = pct;
+      matrix[row.fund_b][row.fund_a] = pct;
+      precomputedHits++;
+    }
+
+    // Check which pairs are still missing (not in precomputed table)
+    const totalPairs = (fundCodes.length * (fundCodes.length - 1)) / 2;
+    const missingPairs: [string, string][] = [];
+    for (let i = 0; i < fundCodes.length; i++) {
+      for (let j = i + 1; j < fundCodes.length; j++) {
+        if (matrix[fundCodes[i]][fundCodes[j]] === 0) {
+          missingPairs.push([fundCodes[i], fundCodes[j]]);
+        }
+      }
+    }
+
+    // If precomputed covered everything, return early
+    if (missingPairs.length === 0) return matrix;
+
+    // ── Fallback: compute missing pairs from fund_top_holdings ──
+    const missingCodes = [...new Set(missingPairs.flat())];
     const holdingsResult = await client.query(`
       SELECT DISTINCT ON (scheme_code, holding_name)
         scheme_code, holding_name, holding_isin, weight_pct
@@ -452,7 +483,7 @@ export async function calculateOverlapMatrix(
           WHERE scheme_code = ANY($1)
         )
       ORDER BY scheme_code, holding_name, fetched_at DESC
-    `, [fundCodes]);
+    `, [missingCodes]);
 
     const holdingsMap: Record<string, { name: string; isin: string | null; weight: number }[]> = {};
     for (const row of holdingsResult.rows) {
@@ -464,75 +495,59 @@ export async function calculateOverlapMatrix(
       });
     }
 
-    const fundsWithHoldings = fundCodes.filter(c => holdingsMap[c]?.length > 0);
+    for (const [a, b] of missingPairs) {
+      const holdingsA = holdingsMap[a];
+      const holdingsB = holdingsMap[b];
 
-    for (let i = 0; i < fundsWithHoldings.length; i++) {
-      for (let j = i + 1; j < fundsWithHoldings.length; j++) {
-        const a = fundsWithHoldings[i];
-        const b = fundsWithHoldings[j];
-        const holdingsA = holdingsMap[a];
-        const holdingsB = holdingsMap[b];
-
+      if (holdingsA?.length && holdingsB?.length) {
         let overlap = 0;
         for (const ha of holdingsA) {
           const match = holdingsB.find(hb =>
             (ha.isin && hb.isin && ha.isin === hb.isin) ||
             ha.name === hb.name
           );
-          if (match) {
-            overlap += Math.min(ha.weight, match.weight);
-          }
+          if (match) overlap += Math.min(ha.weight, match.weight);
         }
-
         const overlapPct = overlap / 100;
         matrix[a][b] = overlapPct;
         matrix[b][a] = overlapPct;
       }
     }
 
-    // Category heuristic fallback for funds without holdings data
-    const fundsWithoutHoldings = fundCodes.filter(c => !holdingsMap[c]?.length);
-    if (fundsWithoutHoldings.length > 0 || fundsWithHoldings.length < fundCodes.length) {
+    // ── Category heuristic for pairs with no holdings data at all ──
+    const stillMissing = missingPairs.filter(([a, b]) => matrix[a][b] === 0 && (!holdingsMap[a]?.length || !holdingsMap[b]?.length));
+    if (stillMissing.length > 0) {
+      const heuristicCodes = [...new Set(stillMissing.flat())];
       const fundInfoResult = await client.query(`
         SELECT scheme_code, category, sub_category, amc_code
-        FROM funds
-        WHERE scheme_code = ANY($1)
-      `, [fundCodes]);
+        FROM funds WHERE scheme_code = ANY($1)
+      `, [heuristicCodes]);
 
       const fundInfo: Record<string, { cat: string; subCat: string; amc: string }> = {};
       for (const row of fundInfoResult.rows) {
         fundInfo[row.scheme_code] = {
-          cat: row.category || '',
-          subCat: row.sub_category || '',
-          amc: row.amc_code || '',
+          cat: row.category || '', subCat: row.sub_category || '', amc: row.amc_code || '',
         };
       }
 
-      for (let i = 0; i < fundCodes.length; i++) {
-        for (let j = i + 1; j < fundCodes.length; j++) {
-          const a = fundCodes[i];
-          const b = fundCodes[j];
+      for (const [a, b] of stillMissing) {
+        const infoA = fundInfo[a];
+        const infoB = fundInfo[b];
+        if (!infoA || !infoB) continue;
 
-          if (matrix[a][b] > 0) continue;
-
-          const infoA = fundInfo[a];
-          const infoB = fundInfo[b];
-          if (!infoA || !infoB) continue;
-
-          let heuristic: number;
-          if (infoA.subCat === infoB.subCat && infoA.amc === infoB.amc) {
-            heuristic = CATEGORY_OVERLAP.same_sub_same_house;
-          } else if (infoA.subCat === infoB.subCat) {
-            heuristic = CATEGORY_OVERLAP.same_sub_diff_house;
-          } else if (infoA.cat === infoB.cat) {
-            heuristic = CATEGORY_OVERLAP.same_cat_diff_sub;
-          } else {
-            heuristic = CATEGORY_OVERLAP.diff_cat;
-          }
-
-          matrix[a][b] = heuristic;
-          matrix[b][a] = heuristic;
+        let heuristic: number;
+        if (infoA.subCat === infoB.subCat && infoA.amc === infoB.amc) {
+          heuristic = CATEGORY_OVERLAP.same_sub_same_house;
+        } else if (infoA.subCat === infoB.subCat) {
+          heuristic = CATEGORY_OVERLAP.same_sub_diff_house;
+        } else if (infoA.cat === infoB.cat) {
+          heuristic = CATEGORY_OVERLAP.same_cat_diff_sub;
+        } else {
+          heuristic = CATEGORY_OVERLAP.diff_cat;
         }
+
+        matrix[a][b] = heuristic;
+        matrix[b][a] = heuristic;
       }
     }
   } finally {
