@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { pool } from '@/lib/postgres-db';
 
 interface CurrencyRate {
   pair: string;
@@ -11,80 +12,136 @@ interface CurrencyRate {
   lastUpdated: string;
 }
 
-// ── Previous-rate tracking: store last known rates to compute REAL deltas ──
-// On first fetch of the day (or after cold start), change = 0 (honest).
-// On subsequent fetches, change = current - previous (real movement).
-let previousRates: Record<string, number> = {};
-let previousRatesDate: string = ''; // YYYY-MM-DD of when previousRates was captured
-
-// Cache for 30 minutes
+// In-memory cache for 30 minutes (avoid hitting free API rate limit)
 let ratesCache: { rates: CurrencyRate[]; timestamp: number } | null = null;
 const CACHE_TTL = 30 * 60 * 1000;
 
 const CURRENCY_FLAGS: Record<string, string> = {
-  USD: '🇺🇸',
-  EUR: '🇪🇺',
-  GBP: '🇬🇧',
-  AUD: '🇦🇺',
-  CAD: '🇨🇦',
-  JPY: '🇯🇵',
-  SGD: '🇸🇬',
-  AED: '🇦🇪',
-  CHF: '🇨🇭',
+  USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', AUD: '🇦🇺', CAD: '🇨🇦',
+  JPY: '🇯🇵', SGD: '🇸🇬', AED: '🇦🇪', CHF: '🇨🇭',
 };
+
+// ── DB-persisted previous rates (survives cold starts) ──
+// Table: currency_previous_rates — single row, upserted daily
+// Schema: id=1, rates_json JSONB, rate_date DATE, updated_at TIMESTAMPTZ
+
+async function ensureTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS currency_previous_rates (
+        id INT PRIMARY KEY DEFAULT 1,
+        rates_json JSONB NOT NULL DEFAULT '{}',
+        rate_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+  } catch (_) {
+    // Table likely already exists
+  }
+}
+
+async function getPreviousRates(): Promise<{ rates: Record<string, number>; date: string }> {
+  try {
+    const result = await pool.query(
+      `SELECT rates_json, rate_date::text FROM currency_previous_rates WHERE id = 1`
+    );
+    if (result.rows.length > 0) {
+      return {
+        rates: result.rows[0].rates_json || {},
+        date: result.rows[0].rate_date || '',
+      };
+    }
+  } catch (_) {}
+  return { rates: {}, date: '' };
+}
+
+async function savePreviousRates(rates: Record<string, number>, date: string) {
+  try {
+    await pool.query(
+      `INSERT INTO currency_previous_rates (id, rates_json, rate_date, updated_at)
+       VALUES (1, $1, $2, NOW())
+       ON CONFLICT (id) DO UPDATE SET
+         rates_json = $1,
+         rate_date = $2,
+         updated_at = NOW()`,
+      [JSON.stringify(rates), date]
+    );
+  } catch (e) {
+    console.error('Failed to save previous rates:', e);
+  }
+}
 
 async function fetchCurrencyRates(): Promise<CurrencyRate[]> {
   const rates: CurrencyRate[] = [];
   const targetCurrencies = ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'JPY', 'SGD', 'AED', 'CHF'];
 
   try {
-    // Use open.er-api.com (free, no key needed, 1500 req/month)
+    await ensureTable();
+
+    // Fetch live rates
     const response = await fetch('https://open.er-api.com/v6/latest/INR', {
       headers: { 'User-Agent': 'Mozilla/5.0' },
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      if (data.result === 'success' && data.rates) {
-        const today = new Date().toISOString().split('T')[0];
-        const currentRates: Record<string, number> = {};
+    if (!response.ok) return rates;
 
-        for (const currency of targetCurrencies) {
-          const rateValue = data.rates[currency];
-          if (rateValue) {
-            const inrPerUnit = Math.round((1 / rateValue) * 100) / 100;
-            currentRates[currency] = inrPerUnit;
+    const data = await response.json();
+    if (data.result !== 'success' || !data.rates) return rates;
 
-            // Compute real change from previous fetch
-            const prevRate = previousRates[currency];
-            const change = prevRate ? Math.round((inrPerUnit - prevRate) * 100) / 100 : 0;
-            const changePercent = prevRate ? Math.round((change / prevRate) * 10000) / 100 : 0;
+    const today = new Date().toISOString().split('T')[0];
+    const currentRates: Record<string, number> = {};
 
-            rates.push({
-              pair: `${currency}/INR`,
-              from: currency,
-              to: 'INR',
-              rate: inrPerUnit,
-              change,
-              changePercent,
-              flag: CURRENCY_FLAGS[currency] || '🏳️',
-              lastUpdated: data.time_last_update_utc || new Date().toISOString(),
-            });
-          }
-        }
+    // Load yesterday's rates from DB (persists across cold starts)
+    const { rates: prevRates, date: prevDate } = await getPreviousRates();
 
-        // Rotate: current rates become "previous" for next comparison
-        // Reset daily so first fetch of a new day shows 0 change (honest cold start)
-        if (previousRatesDate !== today && Object.keys(previousRates).length > 0) {
-          // New day — previous day's final rates are now the baseline
-          previousRatesDate = today;
-        } else if (Object.keys(previousRates).length === 0) {
-          // Very first fetch (cold start) — seed baseline, change = 0 is shown
-          previousRatesDate = today;
-        }
-        previousRates = currentRates;
+    for (const currency of targetCurrencies) {
+      const rateValue = data.rates[currency];
+      if (!rateValue) continue;
+
+      const inrPerUnit = Math.round((1 / rateValue) * 100) / 100;
+      currentRates[currency] = inrPerUnit;
+
+      // Compute change vs previous day's rate
+      const prevRate = prevRates[currency];
+      let change = 0;
+      let changePercent = 0;
+
+      if (prevRate && prevRate > 0) {
+        change = Math.round((inrPerUnit - prevRate) * 100) / 100;
+        changePercent = Math.round((change / prevRate) * 10000) / 100;
       }
+
+      rates.push({
+        pair: `${currency}/INR`,
+        from: currency,
+        to: 'INR',
+        rate: inrPerUnit,
+        change,
+        changePercent,
+        flag: CURRENCY_FLAGS[currency] || '🏳️',
+        lastUpdated: data.time_last_update_utc || new Date().toISOString(),
+      });
     }
+
+    // Persist today's rates as "previous" for tomorrow
+    // Logic: if the stored date is older than today, rotate today's rates in
+    // This means: on day N, we compare against day N-1's stored rates
+    // At end of day N, today's rates become the new baseline for day N+1
+    if (prevDate !== today) {
+      // New day detected — save current rates as the new baseline
+      // But first: if we had previous rates, those were yesterday's.
+      // The current comparison already used them. Now store TODAY's rates
+      // so tomorrow's first fetch compares against today.
+      await savePreviousRates(currentRates, today);
+    }
+    // If same day: don't overwrite. The baseline stays as the start-of-day snapshot.
+
+    // Edge case: if no previous rates existed at all (first ever run),
+    // seed the DB so next fetch has something to compare against
+    if (Object.keys(prevRates).length === 0) {
+      await savePreviousRates(currentRates, today);
+    }
+
   } catch (error) {
     console.error('Currency rates fetch error:', error);
   }
