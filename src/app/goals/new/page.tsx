@@ -223,7 +223,6 @@ function Step2({
               className="w-full bg-[#161d1a] border border-white/10 rounded-xl px-4 pl-8 py-3 text-[#dce5df] placeholder:text-[#859586]/50 focus:outline-none focus:border-[#44f593]/40 font-['JetBrains_Mono']"
             />
           </div>
-          <p className="text-xs text-[#859586] mt-1.5">Leave empty to get AI-recommended SIP at creation.</p>
         </div>
       </div>
     </div>
@@ -247,7 +246,6 @@ function Step3({ selected, onSelect }: { selected: string; onSelect: (id: string
               selected === rp.id ? 'border-[#44f593]/60 bg-[#44f593]/5' : 'border-transparent hover:border-white/15',
             ].join(' ')}
           >
-            <span className="text-3xl mb-3 block">{rp.icon}</span>
             <p className="font-['Space_Grotesk'] font-bold text-[#dce5df] mb-1">{rp.label}</p>
             <p className="text-xs text-[#859586] mb-3">{rp.sublabel}</p>
             <p className="font-['JetBrains_Mono'] text-sm font-bold" style={{ color: rp.color }}>

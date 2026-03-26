@@ -47,7 +47,6 @@ const REFRESH_MS = 5 * 60 * 1000; // 5 minutes
 
 export default function MarketStrip() {
   const [tickers, setTickers] = useState<TickerEntry[]>(FALLBACK);
-  const [lastUpdated, setLastUpdated] = useState<string>('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function loadData() {
@@ -68,8 +67,6 @@ export default function MarketStrip() {
 
       if (mapped.length > 0) {
         setTickers(mapped);
-        const now = new Date();
-        setLastUpdated(now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
       }
     } catch {
       // silently keep existing data
@@ -137,14 +134,6 @@ export default function MarketStrip() {
         ))}
       </div>
 
-      {/* Last updated timestamp — far right, above the fade */}
-      {lastUpdated && (
-        <div className="absolute right-20 top-1/2 -translate-y-1/2 z-20">
-          <span className="font-['JetBrains_Mono'] text-xs text-[#3c4a3e] uppercase tracking-widest">
-            {lastUpdated}
-          </span>
-        </div>
-      )}
     </div>
   );
 }

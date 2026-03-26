@@ -271,9 +271,9 @@ export default function IndexDetailPage() {
                 <span className="bg-[#2f3733] px-2 py-0.5 rounded text-[10px] font-['JetBrains_Mono'] tracking-widest text-[#44f593] uppercase">{exchange} Index</span>
                 <span className="text-[#859586] text-sm font-medium">INDEX{exchange}: {symbol}</span>
               </div>
-              <h1 className="text-4xl md:text-6xl font-bold font-['Space_Grotesk'] text-[#dce5df] tracking-tighter mb-3">{name}</h1>
+              <h1 className="text-3xl md:text-4xl font-bold font-['Space_Grotesk'] text-[#dce5df] tracking-tighter mb-2">{name}</h1>
               <div className="flex items-center gap-4 flex-wrap">
-                <span className="text-3xl md:text-5xl font-['JetBrains_Mono'] font-medium text-[#dce5df] tracking-tight">₹{fmt(price, 2)}</span>
+                <span className="text-2xl md:text-3xl font-['JetBrains_Mono'] font-medium text-[#dce5df] tracking-tight">₹{fmt(price, 2)}</span>
                 <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${pos ? 'bg-[#44f593]/10 border-[#44f593]/20' : 'bg-[#ffb4ab]/10 border-[#ffb4ab]/20'}`}>
                   <span className="material-symbols-outlined text-lg" style={{ color: pos ? '#44f593' : '#ffb4ab', fontVariationSettings: "'FILL' 1" }}>
                     {pos ? 'arrow_drop_up' : 'arrow_drop_down'}
@@ -339,7 +339,7 @@ export default function IndexDetailPage() {
                 </div>
               )}
             </div>
-            <div className="relative h-64 md:h-96 w-full">
+            <div className="relative h-56 md:h-72 w-full">
               {chartLoading ? (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-8 h-8 rounded-full border-2 border-[#1F2B24] border-t-[#00D87A] animate-spin" />
