@@ -71,7 +71,10 @@ export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // ── 1. Canonical www redirect ─────────────────────────────────────────────
-  if (host === 'vmfinancialservices.com') {
+  // Skip redirect for Google bots (AdSense/Search verification needs non-www to respond directly)
+  const ua = request.headers.get('user-agent') || '';
+  const isGoogleBot = /googlebot|adsbot|mediapartners/i.test(ua);
+  if (host === 'vmfinancialservices.com' && !isGoogleBot) {
     url.host = 'www.vmfinancialservices.com';
     return NextResponse.redirect(url, 301);
   }
