@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import NavBar from '@/components/home/NavBar';
 import HeroSection from '@/components/home/HeroSection';
 import StatsBanner from '@/components/home/StatsBanner';
@@ -121,7 +122,7 @@ function IndexCard({ idx }: { idx: MarketIndex }) {
   const pos = pct >= 0;
 
   return (
-    <div className="glass-card rounded-xl p-5 hover:border-[#44f593]/20 transition-all">
+    <Link href={`/markets/${encodeURIComponent((idx.symbol ?? idx.name ?? '').toUpperCase())}`} className="glass-card rounded-xl p-5 hover:border-[#44f593]/20 transition-all block cursor-pointer group">
       <div className="flex justify-between items-start mb-3">
         <div>
           <p className="text-xs font-mono text-[#859586] uppercase tracking-wide mb-1">
@@ -159,7 +160,7 @@ function IndexCard({ idx }: { idx: MarketIndex }) {
           )}
         </div>
       )}
-    </div>
+    </Link>
   );
 }
 
