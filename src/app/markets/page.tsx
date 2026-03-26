@@ -122,28 +122,28 @@ function IndexCard({ idx }: { idx: MarketIndex }) {
   const pos = pct >= 0;
 
   return (
-    <Link href={`/markets/${encodeURIComponent((idx.symbol ?? idx.name ?? '').toUpperCase())}`} className="glass-card rounded-xl p-5 hover:border-[#44f593]/20 transition-all block cursor-pointer group">
-      <div className="flex justify-between items-start mb-3">
-        <div>
-          <p className="text-xs font-mono text-[#859586] uppercase tracking-wide mb-1">
+    <Link href={`/markets/${encodeURIComponent((idx.symbol ?? idx.name ?? '').toUpperCase())}`} className="glass-card rounded-xl p-3 sm:p-5 hover:border-[#44f593]/20 transition-all block cursor-pointer group">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 sm:gap-0 mb-2 sm:mb-3">
+        <div className="min-w-0">
+          <p className="text-[10px] sm:text-xs font-mono text-[#859586] uppercase tracking-wide mb-0.5 sm:mb-1 truncate">
             {idx.symbol ?? idx.name}
           </p>
-          <h3 className="font-display font-bold text-[#dce5df] text-sm leading-tight">
+          <h3 className="font-display font-bold text-[#dce5df] text-xs sm:text-sm leading-tight line-clamp-1">
             {idx.displayName ?? idx.name ?? idx.symbol}
           </h3>
         </div>
-        <span className={`text-xs font-mono font-bold px-2 py-1 rounded-full ${pos ? 'bg-[#44f593]/10 text-[#44f593]' : 'bg-[#ffb4ab]/10 text-[#ffb4ab]'}`}>
+        <span className={`text-[10px] sm:text-xs font-mono font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full shrink-0 self-start ${pos ? 'bg-[#44f593]/10 text-[#44f593]' : 'bg-[#ffb4ab]/10 text-[#ffb4ab]'}`}>
           {fmtPct(pct)}
         </span>
       </div>
-      <div className="flex items-end gap-2">
-        <span className="text-2xl font-mono font-bold text-[#dce5df]">{fmtNum(price, 2)}</span>
-        <span className={`text-sm font-mono mb-0.5 ${pos ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+      <div className="flex items-end gap-1.5 sm:gap-2">
+        <span className="text-xl sm:text-2xl font-mono font-bold text-[#dce5df]">{fmtNum(price, 2)}</span>
+        <span className={`text-[11px] sm:text-sm font-mono mb-0.5 ${pos ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
           {pos ? '+' : ''}{fmtNum(chg, 2)}
         </span>
       </div>
       {(idx.high || idx.low) && (
-        <div className="flex gap-4 mt-3 pt-3 border-t border-white/5">
+        <div className="hidden sm:flex gap-4 mt-3 pt-3 border-t border-white/5">
           <div>
             <p className="text-[11px] text-[#859586] uppercase tracking-wide">High</p>
             <p className="text-xs font-mono text-[#dce5df]">{fmtNum(idx.high, 2)}</p>
