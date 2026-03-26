@@ -1,154 +1,125 @@
 "use client";
 
-import React from 'react';
-import { ChevronRightIcon, ChartBarIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
-import ResponsiveContainer from '@/components/ResponsiveContainer';
-import AnimatedElement from '@/components/ui/AnimatedElement';
+import NavBar from '@/components/home/NavBar';
+import SiteFooter from '@/components/home/SiteFooter';
 import EnhancedFundsTable from '@/components/EnhancedFundsTable';
 
+const STATS = [
+  { value: '5,000+', label: 'Mutual Funds' },
+  { value: '45+', label: 'Categories' },
+  { value: 'Real-time', label: 'NAV Updates' },
+  { value: 'Pro', label: 'Analytics' },
+];
+
+const BADGES = [
+  { label: 'Real-time NAV', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+  { label: 'Advanced Search', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
+  { label: 'Detailed Analysis', icon: 'M9 5l7 7-7 7' },
+];
+
 const AnalysisPage = () => {
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-pearl via-white to-brand-platinum">
-      {/* Enhanced Header Section with reduced height */}
-      <section className="relative h-[70vh] bg-gradient-to-br from-brand-navy via-brand-royal to-brand-navy overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-navy/90 via-brand-royal/85 to-brand-navy/90"></div>
-        
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[length:50px_50px]"></div>
-          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-l from-brand-gold/20 to-transparent rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-r from-brand-soft-blue/20 to-transparent rounded-full blur-3xl"></div>
-        </div>
+    <div className="bg-[#060D0A] min-h-screen flex flex-col">
+      <NavBar />
 
-        <ResponsiveContainer className="relative z-10 h-full flex items-center">
-          <div className="grid lg:grid-cols-2 gap-12 items-center w-full">
-            <AnimatedElement
-              variant="fadeLeft"
-              className="text-white space-y-8"
-            >
-              <div className="space-y-6">
-                <h1 className="text-5xl md:text-7xl font-bold leading-tight">
-                  <span className="bg-gradient-to-r from-brand-gold via-yellow-300 to-brand-gold bg-clip-text text-transparent">
-                    Comprehensive
-                  </span>
+      <main className="flex-1">
+
+        {/* Hero Section */}
+        <section className="pt-36 pb-16 px-6 md:px-8 max-w-[1440px] mx-auto">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+
+            {/* Left — Copy */}
+            <div className="space-y-8">
+              <div className="space-y-5">
+                <h1 className="text-5xl md:text-7xl font-display font-bold leading-tight tracking-tight">
+                  <span className="gradient-text">Comprehensive</span>
                   <br />
-                  <span className="text-white">Fund Analysis</span>
+                  <span className="text-[#dce5df]">Fund Analysis</span>
                 </h1>
-                <div className="h-1 w-24 bg-gradient-to-r from-brand-gold to-yellow-400 rounded-full"></div>
-                <p className="text-xl md:text-2xl text-brand-pearl leading-relaxed max-w-2xl">
-                  Discover, analyze, and compare mutual funds with real-time data, 
-                  comprehensive insights, and professional-grade tools for informed investment decisions.
+                <div className="h-1 w-20 bg-gradient-to-r from-[#44f593] to-[#00d87a] rounded-full" />
+                <p className="text-base md:text-lg text-[#859586] leading-relaxed max-w-xl">
+                  Discover, analyze, and compare mutual funds with real-time data, comprehensive insights,
+                  and professional-grade tools for informed investment decisions.
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-4">
-                <div className="flex items-center space-x-2 bg-brand-gold/20 backdrop-blur-sm px-4 py-2 rounded-full border border-brand-gold/40">
-                  <ChartBarIcon className="h-5 w-5 text-brand-gold" />
-                  <span className="text-sm font-medium">Real-time NAV</span>
-                </div>
-                <div className="flex items-center space-x-2 bg-brand-gold/20 backdrop-blur-sm px-4 py-2 rounded-full border border-brand-gold/40">
-                  <MagnifyingGlassIcon className="h-5 w-5 text-brand-gold" />
-                  <span className="text-sm font-medium">Advanced Search</span>
-                </div>
-                <div className="flex items-center space-x-2 bg-brand-gold/20 backdrop-blur-sm px-4 py-2 rounded-full border border-brand-gold/40">
-                  <ChevronRightIcon className="h-5 w-5 text-brand-gold" />
-                  <span className="text-sm font-medium">Detailed Analysis</span>
-                </div>
-              </div>
-            </AnimatedElement>
-
-            <AnimatedElement
-              variant="fadeRight"
-              className="relative"
-            >
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-brand-gold/20 to-brand-royal/20 rounded-2xl blur-2xl"></div>
-                <div className="relative bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-brand-gold/30">
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="text-center">
-                      <div className="text-3xl md:text-4xl font-bold text-white mb-2">5000+</div>
-                      <div className="text-brand-pearl text-sm">Mutual Funds</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-3xl md:text-4xl font-bold text-white mb-2">45+</div>
-                      <div className="text-brand-pearl text-sm">Categories</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-3xl md:text-4xl font-bold text-white mb-2">Real-time</div>
-                      <div className="text-brand-pearl text-sm">NAV Updates</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-3xl md:text-4xl font-bold text-white mb-2">Pro</div>
-                      <div className="text-brand-pearl text-sm">Analytics</div>
-                    </div>
+              <div className="flex flex-wrap gap-3">
+                {BADGES.map(badge => (
+                  <div
+                    key={badge.label}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#44f593]/10 border border-[#44f593]/20 text-xs font-mono text-[#44f593]"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d={badge.icon} />
+                    </svg>
+                    {badge.label}
                   </div>
-                </div>
+                ))}
               </div>
-            </AnimatedElement>
-          </div>
-        </ResponsiveContainer>
-      </section>
-
-      {/* Comprehensive Funds Table Section */}
-      <section className="py-16 bg-white">
-        <ResponsiveContainer>
-          <AnimatedElement variant="fadeUp" className="space-y-8">
-            <div className="text-center space-y-6">
-              <h2 className="text-4xl md:text-6xl font-bold">
-                <span className="bg-gradient-to-r from-brand-navy via-brand-royal to-brand-navy bg-clip-text text-transparent">
-                  Explore Mutual Funds
-                </span>
-              </h2>
-              <p className="text-xl md:text-2xl text-brand-cloud max-w-4xl mx-auto leading-relaxed">
-                Browse through our comprehensive database of mutual funds with real-time NAV data, 
-                detailed categorization, and advanced filtering options.
-              </p>
             </div>
-            
-            {/* Comprehensive Funds Table */}
+
+            {/* Right — Stats card */}
             <div className="relative">
-              {/* Premium background with subtle pattern */}
-              <div className="absolute inset-0 bg-gradient-to-br from-brand-navy/95 via-brand-royal/90 to-brand-navy/95 rounded-3xl"></div>
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(197,165,114,0.15)_0%,transparent_50%)] rounded-3xl"></div>
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(139,157,195,0.1)_0%,transparent_50%)] rounded-3xl"></div>
-              
-              {/* Elegant border */}
-              <div className="relative bg-gradient-to-r from-brand-gold/20 via-brand-gold/30 to-brand-gold/20 p-[2px] rounded-3xl">
-                <div className="bg-gradient-to-br from-brand-navy/98 to-brand-royal/95 rounded-3xl overflow-hidden backdrop-blur-xl">
-                  <EnhancedFundsTable />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#44f593]/10 to-[#00d87a]/10 rounded-2xl blur-2xl" />
+              <div className="glass-card rounded-2xl p-8 relative">
+                <div className="grid grid-cols-2 gap-6">
+                  {STATS.map(stat => (
+                    <div key={stat.label} className="text-center">
+                      <p className="text-3xl md:text-4xl font-display font-bold gradient-text mb-1">{stat.value}</p>
+                      <p className="text-xs font-mono text-[#859586] uppercase tracking-widest">{stat.label}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
-              
-              {/* Floating elements for extra premium feel */}
-              <div className="absolute -top-6 -left-6 w-12 h-12 bg-gradient-to-br from-brand-gold/30 to-brand-gold/10 rounded-full blur-xl"></div>
-              <div className="absolute -bottom-6 -right-6 w-16 h-16 bg-gradient-to-br from-brand-soft-blue/20 to-brand-royal/10 rounded-full blur-xl"></div>
             </div>
-          </AnimatedElement>
-        </ResponsiveContainer>
-      </section>
+          </div>
+        </section>
 
-      {/* Call-to-Action Section */}      {/* Call-to-Action Section */}
-      <section className="py-16 bg-gradient-to-r from-brand-navy to-brand-royal">
-        <ResponsiveContainer>
-          <AnimatedElement variant="fadeUp" className="text-center text-white space-y-8">
-            <h2 className="text-4xl md:text-5xl font-bold">
+        {/* Funds Table Section */}
+        <section className="pb-16 px-6 md:px-8 max-w-[1440px] mx-auto">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight gradient-text mb-4">
+              Explore Mutual Funds
+            </h2>
+            <p className="text-[#859586] text-base max-w-2xl mx-auto">
+              Browse our comprehensive database with real-time NAV data, detailed categorization, and advanced filtering.
+            </p>
+          </div>
+
+          <div className="glass-card rounded-2xl overflow-hidden">
+            <EnhancedFundsTable />
+          </div>
+        </section>
+
+        {/* CTA Section */}
+        <section className="pb-20 px-6 md:px-8 max-w-[1440px] mx-auto">
+          <div className="glass-card rounded-2xl p-10 text-center border-[#44f593]/15 bg-[#44f593]/3">
+            <h2 className="text-3xl md:text-4xl font-display font-bold text-[#dce5df] mb-4">
               Ready to Start Your Investment Journey?
             </h2>
-            <p className="text-xl text-brand-pearl max-w-3xl mx-auto">
+            <p className="text-[#859586] text-base max-w-2xl mx-auto mb-8">
               Get personalized fund recommendations based on your investment goals and risk profile.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="px-8 py-4 bg-brand-gold text-brand-navy font-semibold rounded-lg hover:bg-yellow-400 transition-all duration-300 transform hover:scale-105">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <a
+                href="/funds/advanced-search"
+                className="px-8 py-3.5 bg-gradient-to-br from-[#44f593] to-[#00d87a] text-[#001f10] rounded-xl font-bold text-sm hover:scale-[1.01] transition-transform"
+              >
                 Start Analysis
-              </button>
-              <button className="px-8 py-4 border-2 border-brand-gold text-brand-gold font-semibold rounded-lg hover:bg-brand-gold hover:text-brand-navy transition-all duration-300">
+              </a>
+              <a
+                href="/goal-planning"
+                className="px-8 py-3.5 rounded-xl border border-[#44f593]/30 text-[#44f593] text-sm font-semibold hover:bg-[#44f593]/5 transition-colors"
+              >
                 Learn More
-              </button>
+              </a>
             </div>
-          </AnimatedElement>
-        </ResponsiveContainer>
-      </section>
+          </div>
+        </section>
+
+      </main>
+
+      <SiteFooter />
     </div>
   );
 };

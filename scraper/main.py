@@ -22,10 +22,12 @@ from scrapers import scrape_fii_dii, scrape_index_movers, scrape_nifty_constitue
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("main")
 
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://postgres:zZGzhpULOgKqXvnnutWEjCengioSheMD@turntable.proxy.rlwy.net:19665/railway",
-)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL environment variable is not set. "
+        "Set it to the Railway PostgreSQL connection string before starting the scraper."
+    )
 SCRAPER_INTERVAL = int(os.environ.get("SCRAPER_INTERVAL_MINUTES", "30"))
 
 cache = MarketStateCache()

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import pool from '@/lib/postgres-db';
 
 // Corporate Actions: Dividends, Earnings for top Indian stocks
 // Primary: Yahoo Finance via Cloudflare Worker relay (handles cookie/crumb auth)
@@ -166,7 +167,25 @@ export async function GET(request: NextRequest) {
   const upcoming = searchParams.get('upcoming') === 'true';
 
   try {
-    // Check cache
+    // 1. Try DB cache first (populated by /api/cron/cache-corporate-actions)
+    try {
+      const dbResult = await pool.query(
+        `SELECT data, updated_at FROM market_cache WHERE cache_key = 'corporate_actions' AND is_stale = false AND updated_at > NOW() - INTERVAL '14 hours' LIMIT 1`
+      );
+      if (dbResult.rows.length > 0) {
+        const cached = JSON.parse(dbResult.rows[0].data);
+        let actions = [...(cached.actions || [])];
+        if (type !== 'all') actions = actions.filter((a: any) => a.actionType === type);
+        if (symbol) actions = actions.filter((a: any) => a.symbol.toLowerCase() === symbol.toLowerCase());
+        if (upcoming) {
+          const today = new Date().toISOString().split('T')[0];
+          actions = actions.filter((a: any) => { const d = a.exDate || a.announcementDate; return d >= today; });
+        }
+        return NextResponse.json({ ...cached, actions, total: actions.length, source: 'db-cache' });
+      }
+    } catch {}
+
+    // Check in-memory cache
     if (actionsCache && Date.now() - actionsCache.timestamp < CACHE_TTL) {
       let actions = [...actionsCache.actions];
       if (type !== 'all') actions = actions.filter(a => a.actionType === type);

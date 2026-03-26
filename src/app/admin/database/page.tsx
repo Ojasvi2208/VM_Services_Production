@@ -162,7 +162,7 @@ export default function DatabaseViewerPage() {
 
   return (
     <>
-      <div className="pt-24"></div>
+      <div className="pt-36"></div>
       
       <Section background="offwhite" padding="large">
         <ResponsiveContainer maxWidth="xl">

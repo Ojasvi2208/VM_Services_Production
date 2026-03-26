@@ -161,18 +161,16 @@ export async function GET(request: NextRequest) {
         stats.goalsProcessed++;
 
         // Send push notification if drift > 10%
+        // SEBI_COMPLIANCE_HOLD: Push body stripped of SIP top-up suggestion.
+        // Factual observation only — no actionable amount recommendation.
         if (driftPct > 10) {
           stats.driftingGoals++;
-
-          const topupDisplay = suggestedTopupSip
-            ? `A top-up SIP of ₹${suggestedTopupSip.toLocaleString('en-IN')}/mo can get you back on track.`
-            : 'Review your goal allocation.';
 
           const pushResult = await dispatchPush({
             userId: goal.user_id,
             type: 'goal_drift',
             title: `🎯 ${goal.goal_name} — ${Math.round(driftPct)}% behind target`,
-            body: topupDisplay,
+            body: `Your goal is currently behind its progress milestone. Review your portfolio for details.`,
             deepLink: `goal_detail/${goal.goal_id}`,
             data: { goalId: goal.goal_id },
           });
@@ -180,192 +178,19 @@ export async function GET(request: NextRequest) {
           if (pushResult.sent) stats.notificationsSent++;
         }
 
-        // ═══ Goal Transition: "Secure the Bag" (≥90% progress) ═══
-        const progressPct = targetAmount > 0 ? (currentValue / targetAmount) * 100 : 0;
-        if (progressPct >= 90) {
-          try {
-            // Find equity holdings linked to this goal
-            const equityHoldings = await client.query(`
-              SELECT ghl.holding_id, ph.scheme_code, ph.units, ph.purchase_nav, ph.purchase_date,
-                     COALESCE(f.scheme_name, ph.scheme_name) as fund_name,
-                     f.category, f.equity_allocation_pct, f.latest_nav
-              FROM goal_holding_links ghl
-              JOIN portfolio_holdings ph ON ghl.holding_id = ph.id
-              LEFT JOIN funds f ON ph.scheme_code = f.scheme_code
-              WHERE ghl.goal_id = $1
-                AND (f.category = 'Equity' OR COALESCE(f.equity_allocation_pct, 0) >= 65)
-            `, [goal.goal_id]);
-
-            let newSuggestionsCreated = 0;
-
-            for (const eh of equityHoldings.rows) {
-              // Check if suggestion already exists
-              const existing = await client.query(
-                `SELECT id FROM goal_transition_suggestions
-                 WHERE goal_id = $1 AND from_scheme_code = $2 AND trigger_type = 'secure_the_bag' AND status = 'pending'`,
-                [goal.goal_id, eh.scheme_code]
-              );
-              if (existing.rows.length > 0) continue;
-
-              const ehNav = parseFloat(eh.latest_nav) || parseFloat(eh.purchase_nav);
-              const ehUnits = parseFloat(eh.units);
-              const ehGain = (ehNav - parseFloat(eh.purchase_nav)) * ehUnits;
-
-              // Get user's LTCG buffer
-              const fy = getCurrentFY();
-              const bufferResult = await client.query(
-                `SELECT realized_ltcg FROM ltcg_buffer WHERE user_id = $1 AND financial_year = $2`,
-                [goal.user_id, fy]
-              );
-              const ltcgUsed = bufferResult.rows.length > 0 ? parseFloat(bufferResult.rows[0].realized_ltcg) : 0;
-              const ltcgRemaining = Math.max(0, 125000 - ltcgUsed);
-
-              // Calculate tax-optimized STP
-              const stp = calculateTaxOptimizedSTP({
-                totalUnits: ehUnits,
-                purchaseNav: parseFloat(eh.purchase_nav),
-                currentNav: ehNav,
-                ltcgRemaining,
-                monthsLeftInFY: getMonthsLeftInFY(),
-              });
-
-              // Tax cost estimate
-              const taxImpact = calculateRedemptionTax({
-                purchaseDate: new Date(eh.purchase_date),
-                purchaseNav: parseFloat(eh.purchase_nav),
-                currentNav: ehNav,
-                units: ehUnits,
-                fundType: 'equity',
-                userIncome: 600000, // default; will be refined in API calls
-                taxRegime: 'new',
-                ltcgUsedThisFY: ltcgUsed,
-              });
-
-              await client.query(`
-                INSERT INTO goal_transition_suggestions
-                  (goal_id, user_id, trigger_type, from_scheme_code, from_fund_name,
-                   to_fund_name, units_to_move, estimated_gain, tax_cost, net_benefit,
-                   stp_monthly_amount, stp_months)
-                VALUES ($1, $2, 'secure_the_bag', $3, $4, 'Arbitrage/Liquid Fund', $5, $6, $7, $8, $9, $10)
-              `, [
-                goal.goal_id, goal.user_id, eh.scheme_code, eh.fund_name || eh.scheme_code,
-                ehUnits, Math.round(ehGain * 100) / 100, Math.round(taxImpact.totalTax * 100) / 100,
-                Math.round((ehGain - taxImpact.totalTax) * 100) / 100,
-                stp.monthlyAmount > 0 ? stp.monthlyAmount : null,
-                stp.months > 0 ? stp.months : null,
-              ]);
-              newSuggestionsCreated++;
-            }
-
-            // Dispatch "Secure the Bag" push if new transition suggestions were created
-            if (newSuggestionsCreated > 0 && equityHoldings.rows.length > 0) {
-              const progressDisplay = Math.round(progressPct);
-              const pushResult = await dispatchPush({
-                userId: goal.user_id,
-                type: 'secure_the_bag',
-                title: `${goal.goal_name} is ${progressDisplay}% funded`,
-                body: `You're almost there — but still in aggressive equity. Lock in your gains with a tax-smart transition to safety.`,
-                deepLink: `goal_detail/${goal.goal_id}`,
-                data: {
-                  goalId: goal.goal_id,
-                  progressPct: String(progressDisplay),
-                  equityHoldings: String(equityHoldings.rows.length),
-                },
-              });
-              if (pushResult.sent) stats.notificationsSent++;
-            }
-          } catch (transErr: any) {
-            stats.errors.push(`Transition for goal ${goal.goal_id}: ${transErr.message}`);
-          }
-        }
-
-        // ═══ Goal Transition: "Off-Track Swap" (red-flagged funds) ═══
-        try {
-          const offTrackResult = await client.query(`
-            SELECT ghl.holding_id, ph.scheme_code, ph.units, ph.purchase_nav, ph.purchase_date,
-                   COALESCE(f.scheme_name, ph.scheme_name) as fund_name,
-                   f.category, f.sub_category, f.equity_allocation_pct, f.latest_nav,
-                   fr.cagr_1y as fund_cagr_1y,
-                   mv.avg_cagr_1y as category_avg_1y
-            FROM goal_holding_links ghl
-            JOIN portfolio_holdings ph ON ghl.holding_id = ph.id
-            LEFT JOIN funds f ON ph.scheme_code = f.scheme_code
-            LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
-            LEFT JOIN mv_category_avg_returns mv ON f.category = mv.category AND f.sub_category = mv.sub_category
-            WHERE ghl.goal_id = $1
-              AND fr.cagr_1y IS NOT NULL AND mv.avg_cagr_1y IS NOT NULL
-              AND fr.cagr_1y < mv.avg_cagr_1y
-          `, [goal.goal_id]);
-
-          for (const ot of offTrackResult.rows) {
-            // Check if suggestion already exists
-            const existing = await client.query(
-              `SELECT id FROM goal_transition_suggestions
-               WHERE goal_id = $1 AND from_scheme_code = $2 AND trigger_type = 'off_track_swap' AND status = 'pending'`,
-              [goal.goal_id, ot.scheme_code]
-            );
-            if (existing.rows.length > 0) continue;
-
-            // Find best alternative fund in same category
-            const altResult = await client.query(`
-              SELECT f.scheme_code, f.scheme_name, fr.cagr_1y
-              FROM funds f
-              JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
-              WHERE f.category = $1 AND f.sub_category = $2
-                AND f.plan_type = 'Direct' AND f.option_type IN ('Growth', 'Reinvestment')
-                AND f.is_active = true AND f.scheme_code != $3
-              ORDER BY fr.cagr_1y DESC NULLS LAST
-              LIMIT 1
-            `, [ot.category, ot.sub_category, ot.scheme_code]);
-
-            if (altResult.rows.length === 0) continue;
-
-            const alt = altResult.rows[0];
-            const currentNav = parseFloat(ot.latest_nav) || parseFloat(ot.purchase_nav);
-            const currentValue = parseFloat(ot.units) * currentNav;
-            const fundType = classifyFund(ot.category || '', ot.equity_allocation_pct != null ? parseFloat(ot.equity_allocation_pct) : null);
-
-            const taxImpact = calculateRedemptionTax({
-              purchaseDate: new Date(ot.purchase_date),
-              purchaseNav: parseFloat(ot.purchase_nav),
-              currentNav,
-              units: parseFloat(ot.units),
-              fundType,
-              userIncome: 600000,
-              taxRegime: 'new',
-              ltcgUsedThisFY: 0,
-            });
-
-            const swapBenefit = calculateSwapBenefit({
-              currentFundCagr: parseFloat(ot.fund_cagr_1y),
-              newFundCagr: parseFloat(alt.cagr_1y),
-              currentValue,
-              taxCost: taxImpact.totalTax,
-              projectionYears: 3,
-            });
-
-            // Only suggest if net benefit > ₹1000
-            if (swapBenefit.netBenefit > 1000) {
-              await client.query(`
-                INSERT INTO goal_transition_suggestions
-                  (goal_id, user_id, trigger_type, from_scheme_code, to_scheme_code,
-                   from_fund_name, to_fund_name, units_to_move, estimated_gain, tax_cost,
-                   projected_benefit_3y, net_benefit)
-                VALUES ($1, $2, 'off_track_swap', $3, $4, $5, $6, $7, $8, $9, $10, $11)
-              `, [
-                goal.goal_id, goal.user_id, ot.scheme_code, alt.scheme_code,
-                ot.fund_name || ot.scheme_code, alt.scheme_name,
-                parseFloat(ot.units),
-                Math.round(taxImpact.gainAmount * 100) / 100,
-                Math.round(taxImpact.totalTax * 100) / 100,
-                Math.round(swapBenefit.projectedGainNew * 100) / 100,
-                Math.round(swapBenefit.netBenefit * 100) / 100,
-              ]);
-            }
-          }
-        } catch (swapErr: any) {
-          stats.errors.push(`Swap check for goal ${goal.goal_id}: ${swapErr.message}`);
-        }
+        // ═══ SEBI_COMPLIANCE_HOLD: "Secure the Bag" + "Off-Track Swap" disabled ═══
+        // These sections create specific fund transition suggestions (equity→debt STP,
+        // underperforming fund swaps) which constitute personalised investment advice
+        // under SEBI IA Regulations 2013 Reg 2(l).
+        // Re-enable once VM Financial Advisory Pvt. Ltd. receives SEBI IA certificate.
+        //
+        // Original "Secure the Bag" (lines 183-280): Triggered when goal ≥90% funded.
+        // Found equity holdings → calculated tax-optimized STP → inserted secure_the_bag
+        // suggestions into goal_transition_suggestions → dispatched push notification.
+        //
+        // Original "Off-Track Swap" (lines 282-368): Found holdings with CAGR below
+        // category average → found best alternative fund → calculated tax impact and
+        // swap benefit → inserted off_track_swap suggestions if netBenefit > ₹1000.
 
       } catch (goalErr: any) {
         stats.errors.push(`Goal ${goal.goal_id}: ${goalErr.message}`);

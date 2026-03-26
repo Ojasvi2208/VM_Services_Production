@@ -1,344 +1,1126 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* ============================================================
+   AKSHAYA VAULT — OBSIDIAN DESIGN SYSTEM v1.0
+   globals.css — CSS Custom Properties & Base Styles
+   Theme: "Obsidian Vault" — Deep Basalt / Neon Emerald
+   Extracted from approved high-fidelity mockup (March 2026)
+   ============================================================ */
 
-/* TailwindCSS directives */
+/* ── Google Fonts ─────────────────────────────────────────── */
+/* Space Grotesk: Display headings — geometric, authoritative  */
+/* Inter: Body copy — high legibility at small sizes           */
+/* JetBrains Mono: Tickers, numbers — tabular, monospaced      */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ── Tailwind Directives ──────────────────────────────────── */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   SECTION 1 — DESIGN TOKENS (CSS CUSTOM PROPERTIES)
+   Source of truth for all visual values.
+   Tailwind config mirrors these; CSS vars are for use in
+   inline styles, SVGs, and non-Tailwind contexts.
+   ============================================================ */
+
 :root {
-  /* Premium Brand Colors */
-  --color-brand-navy: #1B365D;
-  --color-brand-royal: #2E5984;
-  --color-brand-gold: #C5A572;
-  --color-brand-pearl: #F8F9FA;
-  --color-brand-cloud: #6C757D;
-  --color-brand-platinum: #E9ECEF;
-  --color-brand-soft-blue: #8B9DC3;
-  
-  /* Legacy Brand Colors (for gradual migration) */
-  --color-olive: #1B365D;
-  --color-olive-50: #F8F9FA;
-  --color-olive-100: #E9ECEF;
-  --color-olive-200: #D1E7DD;
-  --color-olive-300: #B3D9C7;
-  --color-olive-400: #8FBC8F;
-  --color-olive-500: #2E5984;
-  --color-olive-600: #1B365D;
-  --color-olive-700: #0F2A4C;
-  --color-olive-800: #0A1F3B;
-  --color-olive-900: #051A2A;
-  
-  /* Secondary Colors */
-  --color-navy: #1B365D;
-  --color-navy-900: #0F1419;
-  
-  /* UI Colors */
-  --color-white: #FFFFFF;
-  --color-offwhite: #F8F9FA;
-  
-  /* Font Family */
-  --font-family-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-family-display: 'Inter', system-ui, -apple-system, sans-serif;
-  
-  /* Premium Gradients */
-  --gradient-premium: linear-gradient(135deg, #1B365D 0%, #2E5984 100%);
-  --gradient-gold: linear-gradient(135deg, #C5A572 0%, #D4AF37 100%);
-  --gradient-hero: linear-gradient(135deg, rgba(27,54,93,0.9) 0%, rgba(46,89,132,0.8) 100%);
-  --gradient-royal-navy: linear-gradient(to bottom right, #1B365D, #2E5984);
-  --gradient-white-pearl: linear-gradient(to bottom, #FFFFFF, #F8F9FA);
-  --gradient-dark-overlay: linear-gradient(to right, rgba(27,54,93,0.8), rgba(46,89,132,0.7));
-  
-  /* Typography */
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-  --font-weight-extrabold: 800;
+
+  /* ── PILLAR 1: COLOR & DEPTH ──────────────────────────────
+
+     Elevation Stack (Background Layers)
+     ─────────────────────────────────────────────────────────
+     L0 vault-void    — Page canvas. Deepest. <body> background.
+     L1 vault-base    — Section alternating backgrounds.
+     L2 vault-surface — Default card background.
+     L3 vault-raised  — Elevated cards (hover, modal, dropdown).
+     L4 vault-border  — Default border color.
+     L5 vault-rim     — Active/focus border ring.
+  */
+  --vault-void:    #060D0A;
+  --vault-base:    #0A1410;
+  --vault-surface: #0F1D16;
+  --vault-raised:  #152518;
+  --vault-border:  #1E3325;
+  --vault-rim:     #274436;
+
+  /* ── Emerald Accent Scale ─────────────────────────────────
+     Primary brand color for all active, positive, CTA states.
+  */
+  --emerald-bright:  #00D87A;   /* Hero text, chart peaks, primary CTA */
+  --emerald-core:    #00C46A;   /* Chart fills, active toggles, returns */
+  --emerald-deep:    #009952;   /* Gradient bottoms, large area fills   */
+  --emerald-muted:   #1A4D2E;   /* Pill/badge backgrounds               */
+  --emerald-ghost:   #0D2918;   /* Hover tint backgrounds               */
+  --emerald-glow:    rgba(0, 216, 122, 0.18);  /* Box-shadow glow    */
+  --emerald-glow-sm: rgba(0, 216, 122, 0.10);  /* Soft border glow   */
+  --emerald-glow-lg: rgba(0, 216, 122, 0.28);  /* Intense CTA glow   */
+
+  /* ── Semantic Status Colors ──────────────────────────────── */
+  --positive:        #00D87A;
+  --positive-dim:    #00C46A;
+  --positive-bg:     #1A4D2E;
+
+  --negative:        #FF4757;
+  --negative-dim:    #CC394A;
+  --negative-bg:     #3D1218;
+
+  --warning:         #FFB800;
+  --warning-dim:     #CC9300;
+  --warning-bg:      #3D2C00;
+
+  /* ── Goal Pulse Semantic ─────────────────────────────────── */
+  --pulse-green:     #00D87A;
+  --pulse-amber:     #FFB800;
+  --pulse-red:       #FF4757;
+  --pulse-green-bg:  #1A4D2E;
+  --pulse-amber-bg:  #3D2C00;
+  --pulse-red-bg:    #3D1218;
+
+  /* ── Text Scale ───────────────────────────────────────────
+     Usage order: pure → silver → slate → dim → ghost
+     NEVER skip levels (e.g., don't use ghost for body copy).
+  */
+  --ink-pure:   #FFFFFF;   /* H1, H2, KPI values, primary numbers   */
+  --ink-silver: #C4CFC9;   /* Body text, card subtitles, descriptions */
+  --ink-slate:  #7A8C84;   /* Muted body, form labels, metadata     */
+  --ink-dim:    #3D4F47;   /* Disabled states, placeholders         */
+  --ink-ghost:  #1E2C24;   /* Dividers, decorative lines            */
+
+  /* ── PILLAR 2: TYPOGRAPHY ─────────────────────────────────
+     Font Families
+  */
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-body:    'Inter', 'DM Sans', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+
+  /* Type Scale (Sizes)
+     ─────────────────────────────────────────────────────────
+     Hero  : 40–64px  Clamp — "Good morning, User."
+     H1    : 32–48px  Clamp — Section primary headings
+     H2    : 24–32px  Clamp — "Vault Intelligence"
+     H3    : 18–24px  Clamp — Card titles
+     H4    : 18px     Fixed — Subsection headings
+     Body  : 15px     Fixed — Standard body copy
+     Caption: 13px   Fixed — Secondary metadata
+     Micro : 12px     Fixed — Uppercase labels, tickers
+     Label : 11px     Fixed — SECTION LABELS (uppercase, tracked)
+  */
+  --text-hero:    clamp(2.5rem, 5vw, 4rem);
+  --text-h1:      clamp(2rem, 3.5vw, 3rem);
+  --text-h2:      clamp(1.5rem, 2.5vw, 2rem);
+  --text-h3:      clamp(1.125rem, 2vw, 1.5rem);
+  --text-h4:      1.125rem;
+  --text-body-lg: 1rem;
+  --text-body:    0.9375rem;
+  --text-body-sm: 0.875rem;
+  --text-caption: 0.8125rem;
+  --text-micro:   0.75rem;
+  --text-label:   0.6875rem;
+
+  /* Type Scale (Weights) */
+  --weight-light:     300;
+  --weight-normal:    400;
+  --weight-medium:    500;
+  --weight-semibold:  600;
+  --weight-bold:      700;
+
+  /* Type Scale (Line Heights) */
+  --leading-hero:  1.05;
+  --leading-tight: 1.1;
+  --leading-snug:  1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+
+  /* Type Scale (Letter Spacing) */
+  --tracking-tightest: -0.03em;   /* Hero headings            */
+  --tracking-tight:    -0.02em;   /* H1/H2                    */
+  --tracking-snug:     -0.01em;   /* H3/H4, numbers           */
+  --tracking-normal:   0;         /* Body copy                */
+  --tracking-wide:     0.05em;    /* Caption                  */
+  --tracking-widest:   0.1em;     /* SECTION LABELS uppercase */
+
+  /* ── PILLAR 3: SPATIAL ARCHITECTURE ──────────────────────
+     Base unit: 4px. All spacings are multiples of 4.
+  */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+  --space-20:  80px;
+  --space-24:  96px;
+
+  /* Container */
+  --container-max:       1280px;
+  --container-padding-x: clamp(1rem, 3vw, 2rem);
+
+  /* Section Vertical Rhythm */
+  --section-padding-y:   clamp(4rem, 8vw, 6rem);
+
+  /* Card */
+  --card-padding:    var(--space-6);
+  --card-radius:     16px;
+  --card-radius-lg:  20px;
+  --card-radius-sm:  12px;
+
+  /* Border Radii */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-2xl:  20px;
+  --radius-3xl:  24px;
+  --radius-full: 9999px;
+
+  /* ── GRADIENTS ──────────────────────────────────────────── */
+  --gradient-hero:
+    linear-gradient(160deg, rgba(0,216,122,0.12) 0%, rgba(6,12,8,0) 60%);
+  --gradient-emerald:
+    linear-gradient(135deg, #00D87A 0%, #009952 100%);
+  --gradient-emerald-soft:
+    linear-gradient(135deg, rgba(0,216,122,0.15) 0%, rgba(0,153,82,0.05) 100%);
+  --gradient-card-shine:
+    linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 60%);
+  --gradient-chart-fill:
+    linear-gradient(180deg, rgba(0,196,106,0.3) 0%, rgba(0,196,106,0) 100%);
+  --gradient-chart-stroke:
+    linear-gradient(90deg, #00C46A 0%, #00D87A 100%);
+  --gradient-dark-base:
+    linear-gradient(180deg, #0A1410 0%, #060D0A 100%);
+  --gradient-void-edge:
+    linear-gradient(to right, #060D0A 0%, transparent 10%, transparent 90%, #060D0A 100%);
+
+  /* ── BOX SHADOWS ─────────────────────────────────────────── */
+  --shadow-card:      0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-card-md:   0 4px 12px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
+  --shadow-card-lg:   0 8px 32px rgba(0,0,0,0.6), 0 4px 8px rgba(0,0,0,0.4);
+  --shadow-glow-sm:   0 0 12px rgba(0,216,122,0.18);
+  --shadow-glow-md:   0 0 24px rgba(0,216,122,0.22), 0 0 8px rgba(0,216,122,0.12);
+  --shadow-glow-lg:   0 0 40px rgba(0,216,122,0.28), 0 0 16px rgba(0,216,122,0.18);
 }
 
-/* Custom Premium Animations */
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
+/* ============================================================
+   SECTION 2 — BASE RESET & DOCUMENT DEFAULTS
+   ============================================================ */
+
+@layer base {
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
   }
-  100% {
-    background-position: 200% 0;
+
+  html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Page Canvas — The Void */
+  body {
+    background-color: var(--vault-void);
+    color: var(--ink-silver);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    line-height: var(--leading-normal);
+    letter-spacing: 0;
+    min-height: 100vh;
+    /* Prevent horizontal overflow */
+    overflow-x: hidden;
+  }
+
+  /* ── Heading Defaults ─────────────────────────────────── */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    color: var(--ink-pure);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-tight);
+    letter-spacing: var(--tracking-tight);
+  }
+
+  h1 { font-size: var(--text-h1); letter-spacing: var(--tracking-tightest); }
+  h2 { font-size: var(--text-h2); letter-spacing: var(--tracking-tight); }
+  h3 { font-size: var(--text-h3); font-weight: var(--weight-semibold); }
+  h4 { font-size: var(--text-h4); font-weight: var(--weight-semibold); }
+
+  /* ── Paragraph & Body ─────────────────────────────────── */
+  p {
+    color: var(--ink-silver);
+    line-height: var(--leading-relaxed);
+  }
+
+  /* ── Links ────────────────────────────────────────────── */
+  a {
+    color: var(--emerald-bright);
+    text-decoration: none;
+    transition: color 150ms ease, opacity 150ms ease;
+  }
+  a:hover {
+    color: var(--emerald-core);
+    opacity: 0.9;
+  }
+
+  /* ── Selection ────────────────────────────────────────── */
+  ::selection {
+    background: rgba(0, 216, 122, 0.2);
+    color: var(--ink-pure);
+  }
+
+  /* ── Scrollbar (Custom Dark) ──────────────────────────── */
+  ::-webkit-scrollbar              { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track        { background: var(--vault-base); }
+  ::-webkit-scrollbar-thumb        { background: var(--vault-rim); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover  { background: var(--emerald-deep); }
+
+  /* Firefox */
+  * { scrollbar-width: thin; scrollbar-color: var(--vault-rim) var(--vault-base); }
+
+  /* ── Focus Ring ───────────────────────────────────────── */
+  :focus-visible {
+    outline: 2px solid rgba(0, 216, 122, 0.5);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* ── Inputs Reset ─────────────────────────────────────── */
+  input, textarea, select {
+    font-family: var(--font-body);
+    background-color: var(--vault-surface);
+    color: var(--ink-pure);
+    border: 1px solid var(--vault-border);
+    border-radius: var(--radius-sm);
+  }
+  input::placeholder, textarea::placeholder {
+    color: var(--ink-dim);
+  }
+
+  /* ── Table Defaults ───────────────────────────────────── */
+  table { border-collapse: collapse; width: 100%; }
+  th {
+    font-family: var(--font-body);
+    font-size: var(--text-label);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--ink-slate);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--vault-border);
+    text-align: left;
+  }
+  td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--vault-border);
+    color: var(--ink-silver);
+    font-size: var(--text-body-sm);
+  }
+
+  /* ── HR ───────────────────────────────────────────────── */
+  hr {
+    border: none;
+    border-top: 1px solid var(--vault-border);
+    margin: var(--space-6) 0;
+  }
+
+  /* ── Code ─────────────────────────────────────────────── */
+  code, pre {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+  }
+  code {
+    background: var(--vault-raised);
+    color: var(--emerald-bright);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
   }
 }
 
-@keyframes marketShimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
+/* ============================================================
+   SECTION 3 — KEYFRAME ANIMATIONS
+   ============================================================ */
+
+/* Standard Entry */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
-@keyframes scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes glow {
-  0%, 100% {
-    text-shadow: 0 0 5px rgba(197, 165, 114, 0.3);
-  }
-  50% {
-    text-shadow: 0 0 20px rgba(197, 165, 114, 0.6), 0 0 30px rgba(197, 165, 114, 0.4);
-  }
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Ambient / Looping */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(0,216,122,0.15); }
+  50%       { box-shadow: 0 0 24px rgba(0,216,122,0.35); }
+}
+
+@keyframes emeraldPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
 }
 
 @keyframes float {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-8px); }
 }
 
-@keyframes slideInFromLeft {
-  0% {
-    transform: translateX(-100%);
-    opacity: 0;
-  }
-  100% {
-    transform: translateX(0);
-    opacity: 1;
-  }
+/* Ticker / Scroll */
+@keyframes tickerScroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 
-@keyframes fadeInUp {
-  0% {
-    transform: translateY(30px);
-    opacity: 0;
-  }
-  100% {
-    transform: translateY(0);
-    opacity: 1;
-  }
+/* Chart */
+@keyframes barRise {
+  from { transform: scaleY(0); transform-origin: bottom; }
+  to   { transform: scaleY(1); transform-origin: bottom; }
 }
 
-@keyframes sparkle {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.3;
-    transform: scale(1.2);
-  }
+@keyframes lineTrace {
+  from { stroke-dashoffset: 1000; }
+  to   { stroke-dashoffset: 0; }
 }
 
-.animation-delay-500 {
-  animation-delay: 0.5s;
+/* Shimmer skeleton loading */
+@keyframes shimmerDark {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
 }
 
-.animation-delay-1000 {
-  animation-delay: 1s;
+/* Number count-up visual hint */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.animation-delay-1500 {
-  animation-delay: 1.5s;
-}
+/* ============================================================
+   SECTION 4 — UTILITY CLASSES
+   High-frequency helpers not covered by Tailwind utilities.
+   ============================================================ */
 
-.shimmer {
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(197, 165, 114, 0.1),
-    transparent
-  );
-  background-size: 200% 100%;
-  animation: shimmer 2s infinite;
-}
-
-.animate-shimmer {
-  animation: marketShimmer 3s infinite;
-}
-
-.animate-scroll {
-  animation: scroll 120s linear infinite;
-}
-
-.animate-scroll:hover {
-  animation-play-state: paused;
-}
-
-.glow-text {
-  animation: glow 3s ease-in-out infinite alternate;
-}
-
-.float-animation {
-  animation: float 6s ease-in-out infinite;
-}
-
-/* Component Styling */
-@layer components {
-  /* Navigation Links */
-  .nav-link {
-    @apply text-base md:text-lg font-bold transition-colors text-brand-navy hover:text-brand-gold;
-  }
-  .nav-link.active {
-    @apply text-brand-gold font-bold;
-  }
-  
-  /* Buttons */
-  .btn-primary {
-    @apply px-6 py-2.5 rounded-full bg-brand-navy text-white font-semibold shadow-md hover:bg-brand-royal hover:shadow-lg transition-all duration-300 border border-brand-royal;
-  }
-  
-  .btn-secondary {
-    @apply px-6 py-2.5 rounded-full bg-white/90 border-2 border-brand-navy text-brand-navy font-semibold hover:bg-brand-pearl hover:border-brand-royal transition-all duration-300;
-  }
-  
-  /* Premium Gold Button */
-  .btn-gold {
-    @apply px-6 py-2.5 rounded-full bg-brand-gold text-brand-navy font-bold shadow-md hover:shadow-lg transition-all duration-300;
-  }
-  
-  /* Cards */
-  .card-light {
-    @apply bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow border border-brand-platinum;
-  }
-  
-  .card-gradient {
-    @apply rounded-2xl shadow-lg text-white;
-    background: var(--gradient-premium);
-  }
-  
-  .card-gold {
-    @apply rounded-2xl shadow-lg text-brand-navy;
-    background: var(--gradient-gold);
-  }
-  
-  /* Container with padding */
-  .container-padding {
-    @apply px-4 sm:px-6 lg:px-8;
-  }
-  
-  /* Text styling */
-  .text-heading {
-    @apply text-brand-navy;
-  }
-  
-  .text-heading-light {
-    @apply text-white;
-  }
-  
-  /* Accent elements */
-  .heading-with-accent {
-    @apply relative pb-3 mb-4;
-  }
-  
-  .heading-with-accent::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 60px;
-    height: 3px;
-    background: var(--gradient-gold);
-    border-radius: 2px;
-  }
-  
-  /* Responsive container */
-  .responsive-container {
-    @apply px-4 sm:px-6 md:px-8 mx-auto max-w-7xl;
-  }
-  
-  /* Focus styles */
-  .focus-ring {
-    @apply focus:outline-none focus:ring-2 focus:ring-brand-gold focus:ring-offset-2;
-  }
-  
-  /* Premium hover effects */
-  .hover-lift {
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-  }
-  
-  .hover-lift:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(27, 54, 93, 0.15);
-  }
-  
-  /* Professional card styling */
-  .professional-card {
-    @apply bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border border-brand-platinum/50;
-  }
-  
-  .professional-card:hover {
-    transform: translateY(-1px);
-    border-color: var(--color-brand-gold);
-  }
-}
-
-/* Custom utilities */
 @layer utilities {
-  .text-shadow-sm {
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+
+  /* ── Text ────────────────────────────────────────────── */
+  .text-emerald-bright { color: var(--emerald-bright); }
+  .text-emerald-core   { color: var(--emerald-core); }
+  .text-ink-pure       { color: var(--ink-pure); }
+  .text-ink-silver     { color: var(--ink-silver); }
+  .text-ink-slate      { color: var(--ink-slate); }
+  .text-ink-dim        { color: var(--ink-dim); }
+  .text-positive       { color: var(--positive); }
+  .text-negative       { color: var(--negative); }
+  .text-warning        { color: var(--warning); }
+
+  /* ── Background ──────────────────────────────────────── */
+  .bg-vault-void    { background-color: var(--vault-void); }
+  .bg-vault-base    { background-color: var(--vault-base); }
+  .bg-vault-surface { background-color: var(--vault-surface); }
+  .bg-vault-raised  { background-color: var(--vault-raised); }
+  .bg-positive-bg   { background-color: var(--positive-bg); }
+  .bg-negative-bg   { background-color: var(--negative-bg); }
+  .bg-warning-bg    { background-color: var(--warning-bg); }
+
+  /* ── Gradient Backgrounds ────────────────────────────── */
+  .bg-gradient-hero          { background: var(--gradient-hero); }
+  .bg-gradient-emerald       { background: var(--gradient-emerald); }
+  .bg-gradient-emerald-soft  { background: var(--gradient-emerald-soft); }
+  .bg-gradient-chart-fill    { background: var(--gradient-chart-fill); }
+  .bg-gradient-dark-base     { background: var(--gradient-dark-base); }
+
+  /* ── Border ──────────────────────────────────────────── */
+  .border-vault        { border-color: var(--vault-border); }
+  .border-vault-rim    { border-color: var(--vault-rim); }
+  .border-emerald      { border-color: rgba(0,216,122,0.35); }
+  .border-emerald-glow { border-color: rgba(0,216,122,0.12); }
+
+  /* ── Shadow Glows ────────────────────────────────────── */
+  .shadow-glow-sm { box-shadow: var(--shadow-glow-sm); }
+  .shadow-glow-md { box-shadow: var(--shadow-glow-md); }
+  .shadow-glow-lg { box-shadow: var(--shadow-glow-lg); }
+
+  /* ── Number Rendering ────────────────────────────────── */
+  /* Apply to all financial values: NAV, returns, net worth */
+  .numeric {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    letter-spacing: var(--tracking-snug);
   }
-  
-  .text-shadow-md {
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+
+  /* ── Glassmorphism ───────────────────────────────────── */
+  .glass {
+    background: rgba(15, 29, 22, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 216, 122, 0.08);
   }
-  
-  .text-shadow-lg {
-    text-shadow: 0 3px 6px rgba(0, 0, 0, 0.7);
+  .glass-strong {
+    background: rgba(10, 20, 16, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 216, 122, 0.12);
   }
-  
-  .bg-gradient-premium {
-    background: var(--gradient-premium);
+
+  /* ── Shimmer Skeleton ─────────────────────────────────── */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--vault-surface)    25%,
+      var(--vault-raised)     50%,
+      var(--vault-surface)    75%
+    );
+    background-size: 800px 100%;
+    animation: shimmerDark 1.6s infinite linear;
+    border-radius: var(--radius-sm);
   }
-  
-  .bg-gradient-gold {
-    background: var(--gradient-gold);
-  }
-  
-  .bg-gradient-hero {
-    background: var(--gradient-hero);
-  }
-  
-  /* Hide scrollbar */
+
+  /* ── Scrollbar Suppression ──────────────────────────── */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+  /* ── Ticker Scroll ───────────────────────────────────── */
+  .animate-ticker { animation: tickerScroll 120s linear infinite; }
+  .animate-ticker:hover { animation-play-state: paused; }
+
+  /* ── Hover Lift ──────────────────────────────────────── */
+  .hover-lift {
+    transition: transform 200ms ease, box-shadow 200ms ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card-lg);
+  }
+
+  /* ── Animation Delay Helpers ─────────────────────────── */
+  .delay-75   { animation-delay: 75ms; }
+  .delay-150  { animation-delay: 150ms; }
+  .delay-300  { animation-delay: 300ms; }
+  .delay-500  { animation-delay: 500ms; }
+  .delay-700  { animation-delay: 700ms; }
+  .delay-1000 { animation-delay: 1000ms; }
+
+  /* ── Text Truncation ─────────────────────────────────── */
+  .clamp-1 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+  .clamp-2 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .clamp-3 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+
+  /* ── Section Label (uppercase, tracked) ─────────────── */
+  .label-section {
+    font-size: var(--text-label);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--ink-slate);
+  }
+
+  /* ── Pulse Glow Animation ────────────────────────────── */
+  .animate-pulse-glow { animation: pulseGlow 2.5s ease-in-out infinite; }
+  .animate-float      { animation: float 6s ease-in-out infinite; }
+  .animate-fade-in    { animation: fadeIn 0.4s ease-out both; }
+  .animate-fade-up    { animation: fadeUp 0.5s ease-out both; }
+  .animate-bar-rise   { animation: barRise 0.8s cubic-bezier(0.34,1.56,0.64,1) both; }
+}
+
+/* ============================================================
+   SECTION 5 — COMPONENT LAYER
+   Semantic component classes to be used directly in JSX.
+   These are the canonical class names. Use these, not
+   arbitrary Tailwind chains, for shared components.
+   ============================================================ */
+
+@layer components {
+
+  /* ── Layout Containers ───────────────────────────────── */
+  .vault-container {
+    width: 100%;
+    max-width: 1280px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+  @media (min-width: 1024px) {
+    .vault-container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+  }
+
+  /* ── Cards ────────────────────────────────────────────── */
+  .card-vault {
+    background-color: #0F1D16;
+    border-radius: 16px;
+    border: 1px solid #1E3325;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
+    padding: 1.5rem;
+    transition: all 200ms ease;
+  }
+  .card-vault:hover {
+    background-color: #152518;
+    border-color: #274436;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.65), 0 4px 12px rgba(0,0,0,0.4);
+  }
+  .card-vault-glow {
+    background-color: #0F1D16;
+    border-radius: 16px;
+    border: 1px solid rgba(0, 216, 122, 0.12);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3), 0 0 12px rgba(0,216,122,0.18);
+    padding: 1.5rem;
+    transition: all 250ms ease;
+  }
+  .card-vault-glow:hover {
+    border-color: rgba(0, 216, 122, 0.28);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.65), 0 4px 12px rgba(0,0,0,0.4), 0 0 24px rgba(0,216,122,0.22);
+  }
+  .card-glass {
+    background: rgba(15, 29, 22, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 16px;
+    border: 1px solid rgba(0, 216, 122, 0.10);
+    padding: 1.5rem;
+  }
+  /* Elite glassmorphism — discover page fund cards + hero cards */
+  .glass-card-vi {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .glass-card-vi:hover {
+    border-color: rgba(0, 216, 122, 0.20) !important;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 24px rgba(0,216,122,0.10) !important;
+  }
+
+  /* ── Buttons ──────────────────────────────────────────── */
+  .btn-vault-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    background-color: #00C46A;
+    color: #060C08;
+    font-family: "Space Grotesk", Inter, system-ui, sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    border: none;
+    box-shadow: 0 0 12px rgba(0,216,122,0.18);
+    transition: all 200ms ease;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .btn-vault-primary:hover {
+    background-color: #00D87A;
+    box-shadow: 0 0 24px rgba(0,216,122,0.22), 0 0 8px rgba(0,216,122,0.12);
+    transform: translateY(-1px);
+  }
+  .btn-vault-primary:active { transform: translateY(0); }
+
+  .btn-vault-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    background-color: transparent;
+    color: #C4CFC9;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid #1E3325;
+    transition: all 200ms ease;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .btn-vault-ghost:hover {
+    background-color: #152518;
+    border-color: #274436;
+    color: #FFFFFF;
+  }
+
+  .btn-vault-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    background-color: transparent;
+    color: #00D87A;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid rgba(0, 216, 122, 0.35);
+    transition: all 200ms ease;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .btn-vault-outline:hover {
+    background-color: #0D2918;
+    border-color: rgba(0, 216, 122, 0.6);
+    box-shadow: 0 0 12px rgba(0,216,122,0.18);
+  }
+
+  /* ── Badges ───────────────────────────────────────────── */
+  .badge-positive {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background-color: #1A4D2E;
+    color: #00D87A;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .badge-negative {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background-color: #3D1218;
+    color: #FF4757;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .badge-warning {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background-color: #3D2C00;
+    color: #FFB800;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  /* ── Nav Link ─────────────────────────────────────────── */
+  .nav-link-vault {
+    color: #C4CFC9;
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    transition: color 150ms ease;
+    text-decoration: none;
+  }
+  .nav-link-vault:hover { color: #FFFFFF; }
+  .nav-link-vault.active { color: #00D87A; }
+
+  /* ── Inputs ───────────────────────────────────────────── */
+  .input-vault {
+    width: 100%;
+    background-color: #0F1D16;
+    border: 1px solid #1E3325;
+    border-radius: 6px;
+    color: #FFFFFF;
+    font-size: 0.875rem;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+  }
+  .input-vault::placeholder { color: #3D4F47; }
+  .input-vault:focus {
+    border-color: rgba(0, 216, 122, 0.5);
+    box-shadow: 0 0 0 3px rgba(0, 216, 122, 0.08);
+  }
+
+  /* ── Table ────────────────────────────────────────────── */
+  .table-row-vault {
+    border-bottom: 1px solid #1E3325;
+    transition: background-color 150ms ease;
+  }
+  .table-row-vault:hover { background-color: #152518; }
+
+  /* ── Section Label ────────────────────────────────────── */
+  .section-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #C4CFC9;
+  }
+
+  /* ── KPI Value ────────────────────────────────────────── */
+  .kpi-value {
+    font-family: "Space Grotesk", Inter, system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    letter-spacing: -0.025em;
+    color: #FFFFFF;
+    font-weight: 700;
+  }
+
+  /* ── Divider ──────────────────────────────────────────── */
+  .divider-vault {
+    width: 100%;
+    height: 1px;
+    background-color: #1E3325;
+  }
+
+  /* ── Section Layout ──────────────────────────────────── */
+  .vault-section {
+    padding-top: var(--section-padding-y);
+    padding-bottom: var(--section-padding-y);
+  }
+  .vault-section-alt {
+    padding-top: var(--section-padding-y);
+    padding-bottom: var(--section-padding-y);
+    background-color: var(--vault-base);
+  }
+
+  /* ── Typography Atoms ────────────────────────────────── */
+  .hero-text {
+    font-family: var(--font-display);
+    font-size: var(--text-hero);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-hero);
+    letter-spacing: var(--tracking-tightest);
+    color: var(--ink-pure);
+  }
+
+  .hero-text-accent {
+    font-family: var(--font-display);
+    font-size: var(--text-hero);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-hero);
+    letter-spacing: var(--tracking-tightest);
+    color: var(--emerald-bright);
+  }
+
+  .section-heading {
+    font-family: var(--font-display);
+    font-size: var(--text-h2);
+    font-weight: var(--weight-bold);
+    letter-spacing: var(--tracking-tight);
+    color: var(--ink-pure);
+  }
+
+  .section-subheading {
+    font-size: var(--text-body-lg);
+    color: var(--ink-slate);
+    line-height: var(--leading-relaxed);
+    max-width: 60ch;
+  }
+
+  .card-title {
+    font-family: var(--font-display);
+    font-size: var(--text-h4);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-snug);
+    color: var(--ink-pure);
+  }
+
+  .card-subtitle {
+    font-size: var(--text-label);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--ink-slate);
+  }
+
+  .kpi-label {
+    font-size: var(--text-label);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--ink-slate);
+    margin-bottom: var(--space-1);
+  }
+
+  .kpi-number {
+    font-family: var(--font-display);
+    font-size: var(--text-h1);
+    font-weight: var(--weight-bold);
+    letter-spacing: var(--tracking-tightest);
+    color: var(--ink-pure);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  .kpi-number-sm {
+    font-family: var(--font-display);
+    font-size: var(--text-h3);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-tight);
+    color: var(--ink-pure);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* ── Body Copy ────────────────────────────────────────── */
+  .body-primary   { color: var(--ink-silver); font-size: var(--text-body);    line-height: var(--leading-relaxed); }
+  .body-secondary { color: var(--ink-slate);  font-size: var(--text-body-sm); line-height: var(--leading-normal);  }
+  .body-muted     { color: var(--ink-dim);    font-size: var(--text-caption); line-height: var(--leading-normal);  }
+
+  /* ── Return Value Atoms ───────────────────────────────── */
+  .return-positive {
+    color: var(--positive);
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-snug);
+  }
+  .return-negative {
+    color: var(--negative);
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-snug);
+  }
+
+  /* ── Nav ──────────────────────────────────────────────── */
+  .vault-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(6, 12, 8, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--vault-border);
+  }
+
+  /* ── Stat / Trust Row ────────────────────────────────── */
+  /* The "200+ Families / 200+ SIPs / 15+ Cities" row      */
+  .stat-number {
+    font-family: var(--font-display);
+    font-size: var(--text-h2);
+    font-weight: var(--weight-bold);
+    color: var(--emerald-bright);
+    letter-spacing: var(--tracking-tight);
+    line-height: 1;
+  }
+  .stat-label {
+    font-size: var(--text-caption);
+    color: var(--ink-slate);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    font-weight: var(--weight-medium);
+    margin-top: var(--space-1);
+  }
+
+  /* ── Compliance Footer ───────────────────────────────── */
+  .compliance-text {
+    font-size: var(--text-micro);
+    color: var(--ink-dim);
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+  }
+
+  /* ── Divider with Label ──────────────────────────────── */
+  .divider-labeled {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    color: var(--ink-dim);
+    font-size: var(--text-micro);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+  }
+  .divider-labeled::before,
+  .divider-labeled::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--vault-border);
   }
 }
 
-/* Mutual Fund Banner Animations */
-@keyframes scroll {
-  0% { transform: translateX(0); }
+/* ============================================================
+   SECTION 6 — LEGACY OVERRIDES
+   Keeps old classes from the Navy/Gold theme working
+   during the migration period. Remove when migration complete.
+   ============================================================ */
+
+/* These are shims only — they point old classes at new tokens  */
+.btn-primary    { @apply btn-vault-primary; }
+.btn-secondary  { @apply btn-vault-ghost; }
+.card-light     { @apply card-vault; }
+.nav-link       { @apply nav-link-vault; }
+.responsive-container { @apply vault-container; }
+
+/* Force body background to void in case any page overrides it */
+html, body { background-color: var(--vault-void) !important; }
+
+/* ============================================================
+   SECTION 7 — MD DESIGN TOKENS (from HTML reference files)
+   New Material Design 3 inspired tokens for the Revamp.
+   ============================================================ */
+:root {
+  --md-primary: #44f593;
+  --md-primary-container: #00d87a;
+  --md-background: #0d1512;
+  --md-surface: #161d1a;
+  --md-surface-container-lowest: #08100d;
+  --md-surface-container-low: #161d1a;
+  --md-surface-container: #19211e;
+  --md-surface-container-high: #242c28;
+  --md-outline: #859586;
+  --md-on-surface: #dce5df;
+  --md-on-surface-variant: #c0c9c2;
+  --md-on-primary: #00391c;
+  --md-error: #ffb4ab;
+  --md-outline-variant: #3c4a3e;
+  --md-surface-container-highest: #2f3733;
+}
+
+/* ── New Glass Card Utility ─────────────────────────────── */
+.glass-card {
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+.glass-card:hover {
+  border-color: rgba(68,245,147,0.20);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 24px rgba(68,245,147,0.10);
+}
+
+/* ── Gradient Text ──────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #44f593, #00d87a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Nav Glass ──────────────────────────────────────────── */
+.nav-glass {
+  background: rgba(6,13,10,0.88);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+/* ── Metallic Emerald ───────────────────────────────────── */
+.metallic-emerald {
+  background: linear-gradient(135deg, #44f593 0%, #00d87a 100%);
+}
+
+/* ── Emerald Glow ───────────────────────────────────────── */
+.emerald-glow {
+  box-shadow: 0 0 20px rgba(68, 245, 147, 0.15);
+}
+
+/* ── Text Glow ──────────────────────────────────────────── */
+.text-glow {
+  text-shadow: 0 0 15px rgba(68, 245, 147, 0.3);
+}
+
+/* ── Material Symbols Font Variation ───────────────────── */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  display: inline-block;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  word-wrap: normal;
+  white-space: nowrap;
+  direction: ltr;
+}
+
+/* ── Range Input Styling ────────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  background: #19211e;
+  height: 4px;
+  border-radius: 2px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -6px;
+  background-color: #44f593;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(68, 245, 147, 0.4);
+}
+
+/* ── Line Clamp Utilities ───────────────────────────────── */
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* ── No Scrollbar ───────────────────────────────────────── */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Vault Glass (alias) ─────────────────────────────────── */
+.vault-glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+/* ── Emerald Gradient Text (alias) ──────────────────────── */
+.emerald-gradient-text {
+  background: linear-gradient(135deg, #44f593 0%, #00d87a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Precision Ticker Marquee ───────────────────────────── */
+@keyframes marquee-scroll {
+  0%   { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
-
-@keyframes fundPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.9; }
+.animate-marquee-scroll {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: marquee-scroll 30s linear infinite;
 }
 
-.hover\:pause:hover {
-  animation-play-state: paused !important;
-}
-
-/* Professional Banner Styling */
-.mutual-fund-banner {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(229, 231, 235, 0.5);
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
-}
-
-.fund-item {
-  transition: all 0.3s ease;
-}
-
-.fund-item:hover {
-  background: rgba(249, 250, 251, 0.8);
-  transform: translateY(-1px);
+/* ── Nav Area Gradient ──────────────────────────────────── */
+.nav-area-gradient {
+  background: linear-gradient(to bottom, rgba(68, 245, 147, 0.15) 0%, rgba(68, 245, 147, 0) 100%);
 }

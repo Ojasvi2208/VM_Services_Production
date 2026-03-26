@@ -1,647 +1,617 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import Section from '@/components/Section';
-import ResponsiveContainer from '@/components/ResponsiveContainer';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import NavBar from '@/components/home/NavBar';
+import SiteFooter from '@/components/home/SiteFooter';
+import { useFundSearch, PAGE_SIZE } from '@/hooks/useFundSearch';
+import type { FundResult, SortMode } from '@/hooks/useFundSearch';
 
-interface AutocompleteSuggestion {
-  schemeCode: string;
-  schemeName: string;
-  amcCode?: string;
+// ─────────────────────────────────────────────────────────────
+// Utility helpers
+// ─────────────────────────────────────────────────────────────
+function formatNav(n?: number) {
+  if (n == null) return '—';
+  return `₹${n.toFixed(2)}`;
 }
 
-interface FundSearchResult {
-  schemeCode: string;
-  schemeName: string;
-  latestNav?: number;
-  latestNavDate?: string;
-  amcCode?: string;
-  schemeType?: string;
-  category?: string;
+function formatReturn(r?: number) {
+  if (r == null) return null;
+  const pos = r >= 0;
+  return { label: `${pos ? '+' : ''}${r.toFixed(2)}%`, pos };
 }
 
-interface SearchFilters {
-  query: string;
-  amc: string;
-  category: string;
-  sortBy: 'name' | 'nav' | 'recent';
-  planType: 'Direct' | 'Regular' | 'All';
+function amcInitials(name?: string): string {
+  if (!name) return 'AM';
+  const clean = name.replace(/mutual fund|asset management|mf|india/gi, '').trim();
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return clean.slice(0, 2).toUpperCase();
 }
 
-const PAGE_SIZE = 10;
+// AMC colour palette (seeded by initials)
+const AMC_COLORS = [
+  '#00d87a', '#3b82f6', '#f59e0b', '#a855f7',
+  '#ff6b35', '#06b6d4', '#ec4899', '#84cc16',
+];
+function amcColor(name?: string) {
+  if (!name) return AMC_COLORS[0];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AMC_COLORS[h % AMC_COLORS.length];
+}
 
-export default function EnhancedFundSearchPage() {
-  const router = useRouter();
-  const [filters, setFilters] = useState<SearchFilters>({
-    query: '',
-    amc: '',
-    category: '',
-    sortBy: 'name',
-    planType: 'All'
-  });
-  const [searchResults, setSearchResults] = useState<FundSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
-  const [totalFunds, setTotalFunds] = useState(0);
-  const [showFilters, setShowFilters] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
-  
-  // Autocomplete state
-  const [suggestions, setSuggestions] = useState<AutocompleteSuggestion[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Popular AMCs
-  const popularAMCs = [
-    'HDFC', 'ICICI Prudential', 'SBI', 'Axis', 'Aditya Birla Sun Life',
-    'Kotak', 'Nippon India', 'UTI', 'DSP', 'Franklin Templeton'
-  ];
-
-  // Categories (will be populated from database once category fetch completes)
-  const categories = [
-    'Equity', 'Debt', 'Hybrid', 'Solution Oriented', 'Index', 'ETF', 'FoF'
-  ];
-
-  // Fetch autocomplete suggestions
-  const fetchSuggestions = useCallback(async (query: string) => {
-    if (query.length < 2) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-
-    setLoadingSuggestions(true);
-    try {
-      const response = await fetch(`/api/funds/autocomplete?q=${encodeURIComponent(query)}`);
-      const data = await response.json();
-      
-      if (data.success && data.suggestions.length > 0) {
-        setSuggestions(data.suggestions);
-        setShowSuggestions(true);
-      } else {
-        setSuggestions([]);
-        setShowSuggestions(false);
-      }
-    } catch (error) {
-      console.error('Autocomplete error:', error);
-      setSuggestions([]);
-    } finally {
-      setLoadingSuggestions(false);
-    }
-  }, []);
-
-  // Handle input change with debounce
-  const handleInputChange = (value: string) => {
-    setFilters({ ...filters, query: value });
-    
-    // Clear previous timer
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-    
-    // Set new debounced fetch
-    debounceTimerRef.current = setTimeout(() => {
-      fetchSuggestions(value);
-    }, 200);
-  };
-
-  // Handle suggestion click
-  const handleSuggestionClick = (suggestion: AutocompleteSuggestion) => {
-    setFilters({ ...filters, query: suggestion.schemeName });
-    setShowSuggestions(false);
-    setSuggestions([]);
-    // Navigate directly to fund details
-    router.push(`/funds/${suggestion.schemeCode}`);
-  };
-
-  // Close suggestions when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        suggestionsRef.current && 
-        !suggestionsRef.current.contains(event.target as Node) &&
-        searchInputRef.current &&
-        !searchInputRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Search function with pagination
-  const handleSearch = async (page: number = 1) => {
-    if (!filters.query && !filters.amc && !filters.category) {
-      alert('Please enter a search term or select a filter');
-      return;
-    }
-
-    setLoading(true);
-    setSearched(true);
-
-    try {
-      const params = new URLSearchParams();
-      if (filters.query) params.append('q', filters.query);
-      if (filters.amc) params.append('amc', filters.amc);
-      if (filters.category) params.append('category', filters.category);
-      if (filters.planType !== 'All') params.append('planType', filters.planType);
-      params.append('page', page.toString());
-      params.append('pageSize', PAGE_SIZE.toString());
-
-      const response = await fetch(`/api/funds/search?${params.toString()}`);
-      const data = await response.json();
-
-      if (data.success) {
-        let results = data.funds;
-
-        // Apply sorting (client-side)
-        if (filters.sortBy === 'nav') {
-          results.sort((a: FundSearchResult, b: FundSearchResult) =>
-            (b.latestNav || 0) - (a.latestNav || 0)
-          );
-        } else if (filters.sortBy === 'recent') {
-          results.sort((a: FundSearchResult, b: FundSearchResult) => {
-            const dateA = new Date(a.latestNavDate || 0).getTime();
-            const dateB = new Date(b.latestNavDate || 0).getTime();
-            return dateB - dateA;
-          });
-        }
-
-        setSearchResults(results);
-        setTotalFunds(data.total);
-        setCurrentPage(data.page);
-        setTotalPages(data.totalPages);
-      } else {
-        alert('Error searching funds: ' + data.error);
-      }
-    } catch (error) {
-      console.error('Search error:', error);
-      alert('Error searching funds');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle page change
-  const goToPage = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      handleSearch(page);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  // Reset filters
-  const resetFilters = () => {
-    setFilters({
-      query: '',
-      amc: '',
-      category: '',
-      sortBy: 'name',
-      planType: 'All'
-    });
-    setSearched(false);
-    setSearchResults([]);
-  };
-
-  // View fund details
-  const viewFundDetails = (schemeCode: string) => {
-    router.push(`/funds/${schemeCode}`);
-  };
-
-  // Quick filter by AMC
-  const quickFilterAMC = (amc: string) => {
-    setFilters({ ...filters, query: amc, amc: '' });
-    setTimeout(() => handleSearch(1), 100);
-  };
+// ─────────────────────────────────────────────────────────────
+// Fund Card — matches discover.html
+// ─────────────────────────────────────────────────────────────
+function FundCard({ fund }: { fund: FundResult }) {
+  const ret = formatReturn(fund.return1y);
+  const positive = ret ? ret.pos : true;
+  const accentColor = amcColor(fund.amcCode);
+  const initials = amcInitials(fund.amcCode);
 
   return (
-    <>
-      <div className="pt-24"></div>
-      
-      <Section background="offwhite" padding="large">
-        <ResponsiveContainer maxWidth="xl">
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="text-center mb-6 md:mb-8 px-2">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-brand-navy mb-3 md:mb-4">
-                Search <span className="text-brand-gold">37,000+ Mutual Funds</span>
-              </h1>
-              <p className="text-sm md:text-lg text-brand-navy/70 max-w-2xl mx-auto">
-                Advanced search with filters, sorting, and real-time results
-              </p>
-            </div>
+    <Link
+      href={`/funds/${fund.schemeCode}`}
+      className="glass-card-vi group rounded-2xl p-6 flex flex-col h-full transition-all duration-300"
+      aria-label={fund.schemeName}
+    >
+      {/* ── Top row: AMC logo + category badge ── */}
+      <div className="flex justify-between items-start mb-4">
+        <div
+          className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold font-['Space_Grotesk'] shrink-0"
+          style={{ background: `${accentColor}18`, border: `1px solid ${accentColor}30`, color: accentColor }}
+        >
+          {initials}
+        </div>
+        {fund.category && (
+          <span className="bg-[#44f593]/10 text-[#44f593] text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full border border-[#44f593]/20">
+            {fund.category.length > 18 ? fund.category.slice(0, 18) + '…' : fund.category}
+          </span>
+        )}
+      </div>
 
-            {/* Search Bar */}
-            <div className="card-light p-4 md:p-6 max-w-4xl mx-auto">
-              <div className="flex flex-col md:flex-row gap-3 md:gap-4 mb-4">
-                <div className="flex-1 relative">
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    placeholder="Search fund name or code..."
-                    value={filters.query}
-                    onChange={(e) => handleInputChange(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        setShowSuggestions(false);
-                        handleSearch(1);
-                      }
-                    }}
-                    onFocus={() => {
-                      if (suggestions.length > 0) setShowSuggestions(true);
-                    }}
-                    className="w-full px-4 py-3 md:py-4 pl-10 md:pl-12 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal text-base md:text-lg"
-                  />
-                  <svg className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-brand-navy/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  
-                  {/* Autocomplete Suggestions Dropdown */}
-                  {showSuggestions && suggestions.length > 0 && (
-                    <div 
-                      ref={suggestionsRef}
-                      className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border-2 border-gray-200 rounded-lg shadow-xl max-h-80 overflow-y-auto"
-                    >
-                      {loadingSuggestions && (
-                        <div className="px-4 py-3 text-sm text-brand-navy/60 flex items-center gap-2">
-                          <div className="animate-spin w-4 h-4 border-2 border-brand-royal border-t-transparent rounded-full"></div>
-                          Loading...
-                        </div>
-                      )}
-                      {suggestions.map((suggestion, index) => (
-                        <button
-                          key={suggestion.schemeCode}
-                          onClick={() => handleSuggestionClick(suggestion)}
-                          className={`w-full text-left px-4 py-3 hover:bg-brand-royal/10 transition-colors border-b border-gray-100 last:border-b-0 ${
-                            index === 0 ? 'rounded-t-lg' : ''
-                          } ${index === suggestions.length - 1 ? 'rounded-b-lg' : ''}`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm md:text-base font-medium text-brand-navy truncate">
-                                {suggestion.schemeName}
-                              </p>
-                              <p className="text-xs text-brand-navy/60 mt-0.5">
-                                Code: {suggestion.schemeCode}
-                                {suggestion.amcCode && ` • ${suggestion.amcCode.replace(' Mutual Fund', '')}`}
-                              </p>
-                            </div>
-                            <svg className="w-4 h-4 text-brand-royal flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </div>
-                        </button>
-                      ))}
-                      <div className="px-4 py-2 bg-gray-50 text-xs text-brand-navy/50 rounded-b-lg">
-                        Click to view fund details or press Enter to search
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-2 md:gap-4">
-                  <button
-                    onClick={() => handleSearch(1)}
-                    disabled={loading}
-                    className="flex-1 md:flex-none bg-brand-royal text-white px-4 md:px-8 py-3 md:py-4 rounded-lg font-semibold hover:bg-brand-navy transition-all disabled:opacity-50 whitespace-nowrap text-sm md:text-base"
-                  >
-                    {loading ? 'Searching...' : 'Search'}
-                  </button>
-                  <button
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="bg-white border-2 border-brand-royal text-brand-royal px-3 md:px-6 py-3 md:py-4 rounded-lg font-semibold hover:bg-brand-royal hover:text-white transition-all whitespace-nowrap"
-                  >
-                    <svg className="w-5 h-5 inline md:mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                    </svg>
-                    <span className="hidden md:inline">Filters</span>
-                  </button>
+      {/* ── Fund name + AMC ── */}
+      <h2 className="font-['Space_Grotesk'] font-bold text-[#dce5df] group-hover:text-[#44f593] transition-colors leading-snug mb-1 line-clamp-2 flex-grow">
+        {fund.schemeName}
+      </h2>
+      {fund.amcCode && (
+        <p className="text-[11px] text-[#859586] mb-4">
+          {fund.amcCode.replace(/ Mutual Fund$/i, '')}
+        </p>
+      )}
+
+      {/* ── NAV + Return ── */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div>
+          <p className="text-xs uppercase text-[#859586] tracking-widest mb-1">Current NAV</p>
+          <p className="font-['JetBrains_Mono'] text-lg text-[#dce5df]">{formatNav(fund.latestNav)}</p>
+        </div>
+        {ret && (
+          <div className="text-right">
+            <p className="text-xs uppercase text-[#859586] tracking-widest mb-1">1Y Return</p>
+            <span
+              className="inline-flex items-center px-2 py-1 rounded font-['JetBrains_Mono'] text-sm font-bold"
+              style={{
+                background: positive ? 'rgba(68,245,147,0.1)' : 'rgba(255,71,87,0.1)',
+                color: positive ? '#44f593' : '#ff4757',
+              }}
+            >
+              {ret.label}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Trend indicator (no fake data) ── */}
+      <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between">
+        <span className="text-xs uppercase text-[#859586] tracking-widest">1Y Trend</span>
+        <span
+          className="material-symbols-outlined text-lg"
+          style={{
+            fontVariationSettings: "'FILL' 1",
+            color: positive ? '#44f593' : '#ff4757',
+          }}
+        >
+          {positive ? 'trending_up' : 'trending_down'}
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Skeleton card
+// ─────────────────────────────────────────────────────────────
+function SkeletonCard() {
+  return (
+    <div className="glass-card-vi rounded-2xl p-6 flex flex-col gap-4 animate-pulse">
+      <div className="flex justify-between items-start">
+        <div className="w-12 h-12 rounded-full bg-[#1a2420]" />
+        <div className="h-6 w-28 rounded-full bg-[#1a2420]" />
+      </div>
+      <div className="space-y-2 flex-grow">
+        <div className="h-5 rounded bg-[#1a2420] w-full" />
+        <div className="h-5 rounded bg-[#1a2420] w-3/4" />
+        <div className="h-3 rounded bg-[#1a2420] w-2/5 mt-1" />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="h-10 rounded bg-[#1a2420]" />
+        <div className="h-10 rounded bg-[#1a2420]" />
+      </div>
+      <div className="h-12 rounded bg-[#1a2420] mt-2" />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Sort options
+// ─────────────────────────────────────────────────────────────
+function applySort(funds: FundResult[], mode: SortMode): FundResult[] {
+  if (mode === 'cagr')    return [...funds].sort((a, b) => (b.return1y ?? -Infinity) - (a.return1y ?? -Infinity));
+  if (mode === 'sharpe')  return [...funds].sort((a, b) => (b.sharpeRatio ?? -Infinity) - (a.sharpeRatio ?? -Infinity));
+  if (mode === 'expense') return [...funds].sort((a, b) => (a.expenseRatio ?? Infinity) - (b.expenseRatio ?? Infinity));
+  return funds;
+}
+
+const SORT_LABELS: Record<SortMode, string> = {
+  name: 'Name',
+  cagr: '1Y Returns',
+  sharpe: 'Sharpe Ratio',
+  expense: 'Expense Ratio',
+};
+
+// ─────────────────────────────────────────────────────────────
+// Category + Risk filter data
+// ─────────────────────────────────────────────────────────────
+const CATEGORIES = ['Equity Funds', 'Debt Funds', 'Hybrid Funds', 'Index Funds', 'ELSS', 'Thematic'];
+const AMC_OPTIONS = ['HDFC Mutual Fund', 'ICICI Prudential', 'SBI Mutual Fund', 'Axis Mutual Fund', 'Nippon India', 'Kotak Mahindra', 'Mirae Asset', 'DSP Mutual Fund'];
+const RISK_LEVELS = ['Low Risk', 'Moderate', 'High Risk', 'Very High'];
+
+// ─────────────────────────────────────────────────────────────
+// Default Fund Grid — 5 categories × 5 funds each
+// ─────────────────────────────────────────────────────────────
+const DEFAULT_CATS = [
+  { label: 'Large Cap', sub: 'Large Cap', icon: 'trending_up', color: '#44f593' },
+  { label: 'Mid Cap', sub: 'Mid Cap', icon: 'show_chart', color: '#f59e0b' },
+  { label: 'Small Cap', sub: 'Small Cap', icon: 'rocket_launch', color: '#ec4899' },
+  { label: 'Liquid', sub: 'Liquid', icon: 'water_drop', color: '#06b6d4' },
+  { label: 'Debt', sub: 'Corporate Bond', icon: 'account_balance', color: '#a855f7' },
+];
+
+interface TopFund {
+  schemeCode: string;
+  schemeName: string;
+  return1y?: number;
+  cagr3y?: number;
+}
+
+function DefaultFundGrid() {
+  const [catFunds, setCatFunds] = useState<Record<string, TopFund[]>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAll = async () => {
+      const results: Record<string, TopFund[]> = {};
+      await Promise.all(
+        DEFAULT_CATS.map(async (cat) => {
+          try {
+            const res = await fetch(`/api/funds/search?q=${encodeURIComponent(cat.sub)}&plan=Direct&option=Growth&limit=5`);
+            if (!res.ok) return;
+            const data = await res.json();
+            results[cat.sub] = (data.funds || []).slice(0, 5).map((f: any) => ({
+              schemeCode: f.schemeCode,
+              schemeName: f.schemeName || f.canonicalName || '',
+              return1y: f.return1y,
+              cagr3y: f.cagr3y,
+            }));
+          } catch {}
+        })
+      );
+      setCatFunds(results);
+      setLoading(false);
+    };
+    fetchAll();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="py-16 text-center">
+        <div className="w-10 h-10 rounded-full border-2 border-[#1F2B24] border-t-[#00D87A] animate-spin mx-auto mb-4" />
+        <p className="text-sm text-[#859586]">Loading top funds…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-10">
+      <div className="text-center mb-4">
+        <h2 className="font-['Space_Grotesk'] font-bold text-xl text-[#dce5df] mb-2">Top Performing Funds</h2>
+        <p className="text-[#859586] text-sm">Direct Growth plans · Ranked by returns · Or search 50,000+ schemes above</p>
+      </div>
+      {DEFAULT_CATS.map(cat => {
+        const funds = catFunds[cat.sub] || [];
+        if (funds.length === 0) return null;
+        return (
+          <div key={cat.sub}>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-lg" style={{ color: cat.color, fontVariationSettings: "'FILL' 1" }}>{cat.icon}</span>
+              <h3 className="font-['Space_Grotesk'] font-bold text-base text-[#dce5df]">{cat.label}</h3>
+              <div className="flex-1 h-px bg-white/5 ml-2" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              {funds.map(f => (
+                <Link
+                  key={f.schemeCode}
+                  href={`/funds/${f.schemeCode}`}
+                  className="glass-card-vi rounded-xl p-4 hover:border-[#44f593]/30 transition-all group"
+                >
+                  <p className="text-xs text-[#dce5df] font-medium line-clamp-2 mb-3 min-h-[2.5rem] group-hover:text-[#44f593] transition-colors">
+                    {f.schemeName.replace(/\s*-?\s*(Direct|Regular)\s*(Plan)?\s*-?\s*(Growth)?\s*/gi, '').trim() || f.schemeName}
+                  </p>
+                  <div className="flex items-baseline justify-between">
+                    {f.cagr3y != null ? (
+                      <>
+                        <span className="text-[10px] text-[#859586] uppercase">3Y CAGR</span>
+                        <span className={`font-['JetBrains_Mono'] text-sm font-bold ${(f.cagr3y ?? 0) >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+                          {f.cagr3y >= 0 ? '+' : ''}{f.cagr3y?.toFixed(1)}%
+                        </span>
+                      </>
+                    ) : f.return1y != null ? (
+                      <>
+                        <span className="text-[10px] text-[#859586] uppercase">1Y</span>
+                        <span className={`font-['JetBrains_Mono'] text-sm font-bold ${(f.return1y ?? 0) >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+                          {f.return1y >= 0 ? '+' : ''}{f.return1y?.toFixed(1)}%
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[10px] text-[#859586]">—</span>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Page
+// ─────────────────────────────────────────────────────────────
+export default function FundDiscoveryPage() {
+  const {
+    query, handleQueryChange,
+    activeAmc, handleAmcToggle,
+    activeCategory, handleCategoryToggle,
+    sortBy, setSortBy,
+    results, total, currentPage, totalPages, loading, searched,
+    suggestions, showSuggestions, setShowSuggestions,
+    searchInputRef,
+    handleSearch, handleSuggestionClick,
+    goToPage, reset,
+  } = useFundSearch();
+
+  const sorted = useMemo(() => applySort(results, sortBy), [results, sortBy]);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortOpen, setSortOpen] = useState(false);
+  const [amcSearch, setAmcSearch] = useState('');
+  const [selectedRisk, setSelectedRisk] = useState<string | null>(null);
+  const sortRef = useRef<HTMLDivElement>(null);
+
+  // Close sort dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) setSortOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filteredAmcs = AMC_OPTIONS.filter(a => a.toLowerCase().includes(amcSearch.toLowerCase()));
+  const hasFilters = activeAmc || activeCategory || selectedRisk;
+
+  return (
+    <div className="bg-[#060D0A] min-h-screen flex flex-col">
+
+      <NavBar />
+
+      {/* ── Main layout: sidebar + content ──────────────────────── */}
+      <main className="max-w-[1440px] mx-auto px-8 pb-20 flex gap-8 pt-[152px] w-full flex-1">
+
+        {/* ── Left Sidebar: Precision Filters ─────────────────── */}
+        <aside className="w-80 flex-shrink-0 sticky top-[152px] h-[calc(100vh-172px)] overflow-y-auto pr-4 hidden lg:block">
+          <div className="space-y-8">
+            <div>
+              <h3 className="font-['Space_Grotesk'] font-bold text-2xl mb-8 text-[#dce5df]">Precision Filters</h3>
+
+              {/* Category */}
+              <div className="mb-10">
+                <label className="text-xs uppercase tracking-widest text-[#859586] font-bold mb-5 block">
+                  Category
+                </label>
+                <div className="space-y-4">
+                  {CATEGORIES.map(cat => (
+                    <label key={cat} className="flex items-center group cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={activeCategory === cat}
+                        onChange={() => handleCategoryToggle(activeCategory === cat ? '' : cat)}
+                        className="w-5 h-5 rounded border-[#3c4a3e] bg-[#08100d] accent-[#44f593] focus:ring-[#44f593]"
+                      />
+                      <span className="ml-3 text-base text-[#bacbbb] group-hover:text-[#44f593] transition-colors">
+                        {cat}
+                      </span>
+                    </label>
+                  ))}
                 </div>
               </div>
 
-              {/* Advanced Filters */}
-              {showFilters && (
-                <div className="border-t-2 border-gray-200 pt-4 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* AMC Filter */}
-                    <div>
-                      <label className="block text-sm font-medium text-brand-navy mb-2">
-                        AMC / Fund House
-                      </label>
-                      <select
-                        value={filters.amc}
-                        onChange={(e) => setFilters({ ...filters, amc: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal"
-                      >
-                        <option value="">All AMCs</option>
-                        {popularAMCs.map(amc => (
-                          <option key={amc} value={amc}>{amc}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Category Filter */}
-                    <div>
-                      <label className="block text-sm font-medium text-brand-navy mb-2">
-                        Category
-                      </label>
-                      <select
-                        value={filters.category}
-                        onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal"
-                      >
-                        <option value="">All Categories</option>
-                        {categories.map(cat => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Plan Type Filter */}
-                    <div>
-                      <label className="block text-sm font-medium text-brand-navy mb-2">
-                        Plan Type
-                      </label>
-                      <select
-                        value={filters.planType}
-                        onChange={(e) => setFilters({ ...filters, planType: e.target.value as any })}
-                        className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal"
-                      >
-                        <option value="All">All Plans</option>
-                        <option value="Direct">Direct Plan</option>
-                        <option value="Regular">Regular Plan</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Sort By */}
-                  <div>
-                    <label className="block text-sm font-medium text-brand-navy mb-2">
-                      Sort By
-                    </label>
-                    <div className="flex gap-2">
-                      {[
-                        { value: 'name', label: 'Name (A-Z)' },
-                        { value: 'nav', label: 'NAV (High to Low)' },
-                        { value: 'recent', label: 'Recently Updated' }
-                      ].map(option => (
-                        <button
-                          key={option.value}
-                          onClick={() => setFilters({ ...filters, sortBy: option.value as any })}
-                          className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                            filters.sortBy === option.value
-                              ? 'bg-brand-royal text-white'
-                              : 'bg-gray-100 text-brand-navy hover:bg-gray-200'
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Reset Button */}
-                  <div className="flex justify-end">
-                    <button
-                      onClick={resetFilters}
-                      className="text-brand-royal hover:text-brand-navy font-medium"
-                    >
-                      Reset All Filters
-                    </button>
-                  </div>
+              {/* AMC */}
+              <div className="mb-10">
+                <label className="text-xs uppercase tracking-widest text-[#859586] font-bold mb-5 block">
+                  Asset Management Co.
+                </label>
+                <div className="relative mb-4">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-base text-[#859586]"
+                    style={{ fontVariationSettings: "'FILL' 0" }}>search</span>
+                  <input
+                    type="text"
+                    placeholder="Search AMC..."
+                    value={amcSearch}
+                    onChange={e => setAmcSearch(e.target.value)}
+                    className="w-full bg-[#08100d] border border-[#3c4a3e]/40 rounded-lg pl-10 pr-4 py-2.5 text-base text-[#dce5df] placeholder:text-[#3c4a3e] focus:outline-none focus:ring-1 focus:ring-[#44f593]"
+                  />
                 </div>
-              )}
-            </div>
+                <div className="space-y-4 max-h-56 overflow-y-auto pr-1">
+                  {filteredAmcs.map(amc => (
+                    <label key={amc} className="flex items-center group cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={activeAmc === amc}
+                        onChange={() => handleAmcToggle(activeAmc === amc ? '' : amc)}
+                        className="w-5 h-5 rounded border-[#3c4a3e] bg-[#08100d] accent-[#44f593]"
+                      />
+                      <span className="ml-3 text-base text-[#bacbbb] group-hover:text-[#44f593] transition-colors">
+                        {amc}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-            {/* Quick AMC Filters */}
-            {!searched && (
-              <div className="max-w-4xl mx-auto">
-                <h3 className="text-xl font-semibold text-brand-navy mb-4 flex items-center">
-                  <span className="w-2 h-2 bg-brand-gold rounded-full mr-3 animate-pulse"></span>
-                  Popular AMCs
-                </h3>
-                <div className="flex flex-wrap gap-3">
-                  {popularAMCs.map((amc) => (
+              {/* Risk Profile */}
+              <div>
+                <label className="text-xs uppercase tracking-widest text-[#859586] font-bold mb-5 block">
+                  Risk Profile
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {RISK_LEVELS.map(r => (
                     <button
-                      key={amc}
-                      onClick={() => quickFilterAMC(amc)}
-                      className="px-6 py-3 bg-white border-2 border-brand-royal/20 text-brand-navy rounded-lg font-medium hover:border-brand-royal hover:bg-brand-royal hover:text-white transition-all"
+                      key={r}
+                      onClick={() => setSelectedRisk(selectedRisk === r ? null : r)}
+                      className="py-2.5 px-3 text-sm rounded-lg transition-colors font-medium"
+                      style={{
+                        background: selectedRisk === r ? 'rgba(68,245,147,0.1)' : 'rgba(36,44,40,1)',
+                        border: selectedRisk === r ? '1px solid #44f593' : '1px solid #3c4a3e',
+                        color: selectedRisk === r ? '#44f593' : '#bacbbb',
+                      }}
                     >
-                      {amc}
+                      {r}
                     </button>
                   ))}
                 </div>
               </div>
-            )}
 
-            {/* Search Results */}
-            {searched && !loading && (
-              <div className="max-w-4xl mx-auto">
-                {searchResults.length > 0 ? (
-                  <>
-                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-2">
-                      <h3 className="text-lg md:text-xl font-semibold text-brand-navy">
-                        Found {totalFunds} fund{totalFunds !== 1 ? 's' : ''} 
-                        <span className="text-brand-navy/60 text-sm md:text-base font-normal ml-1 md:ml-2 block md:inline">
-                          (Showing {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, totalFunds)} of {totalFunds})
-                        </span>
-                      </h3>
-                      <div className="text-xs md:text-sm text-brand-navy/70">
-                        {filters.amc && <span className="mr-2">AMC: {filters.amc}</span>}
-                        {filters.category && <span className="mr-2">Category: {filters.category}</span>}
-                        {filters.planType !== 'All' && <span>Plan: {filters.planType}</span>}
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      {searchResults.map((fund) => (
-                        <div
-                          key={fund.schemeCode}
-                          className="card-light p-4 md:p-6 hover:shadow-lg transition-all cursor-pointer group"
-                          onClick={() => viewFundDetails(fund.schemeCode)}
-                        >
-                          <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                <span className="px-2 py-0.5 md:px-3 md:py-1 bg-brand-royal/10 text-brand-royal text-xs md:text-sm font-medium rounded-full">
-                                  {fund.schemeCode}
-                                </span>
-                                {fund.schemeName.toLowerCase().includes('direct') && (
-                                  <span className="px-2 py-0.5 md:px-3 md:py-1 bg-green-100 text-green-700 text-xs md:text-sm font-medium rounded-full">
-                                    Direct
-                                  </span>
-                                )}
-                              </div>
-                              <h4 className="text-base md:text-lg font-semibold text-brand-navy mb-2 group-hover:text-brand-royal transition-colors leading-tight">
-                                {fund.schemeName}
-                              </h4>
-                              <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm text-brand-navy/70">
-                                {fund.latestNav && (
-                                  <span className="font-semibold text-brand-navy">
-                                    NAV: ₹{fund.latestNav.toFixed(4)}
-                                  </span>
-                                )}
-                                {fund.latestNavDate && (
-                                  <span>
-                                    {new Date(fund.latestNavDate).toLocaleDateString('en-IN')}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <button className="w-full md:w-auto bg-brand-royal text-white px-4 md:px-6 py-2 rounded-lg font-medium hover:bg-brand-navy transition-all md:opacity-0 md:group-hover:opacity-100 text-sm">
-                              View Details →
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Pagination Controls */}
-                    {totalPages > 1 && (
-                      <div className="flex flex-wrap items-center justify-center gap-2 mt-6 md:mt-8">
-                        {/* Previous Button */}
-                        <button
-                          onClick={() => goToPage(currentPage - 1)}
-                          disabled={currentPage === 1}
-                          className={`px-3 md:px-4 py-2 rounded-lg font-medium transition-all text-sm md:text-base ${
-                            currentPage === 1
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-white border-2 border-brand-royal text-brand-royal hover:bg-brand-royal hover:text-white'
-                          }`}
-                        >
-                          <span className="hidden md:inline">←</span> Prev
-                        </button>
-
-                        {/* Page Numbers */}
-                        <div className="flex items-center gap-1">
-                          {/* First page */}
-                          {currentPage > 3 && (
-                            <>
-                              <button
-                                onClick={() => goToPage(1)}
-                                className="w-10 h-10 rounded-lg font-medium bg-white border border-gray-200 text-brand-navy hover:bg-brand-royal hover:text-white transition-all"
-                              >
-                                1
-                              </button>
-                              {currentPage > 4 && <span className="px-2 text-brand-navy/50">...</span>}
-                            </>
-                          )}
-
-                          {/* Pages around current */}
-                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            let pageNum;
-                            if (totalPages <= 5) {
-                              pageNum = i + 1;
-                            } else if (currentPage <= 3) {
-                              pageNum = i + 1;
-                            } else if (currentPage >= totalPages - 2) {
-                              pageNum = totalPages - 4 + i;
-                            } else {
-                              pageNum = currentPage - 2 + i;
-                            }
-                            
-                            if (pageNum < 1 || pageNum > totalPages) return null;
-                            
-                            return (
-                              <button
-                                key={pageNum}
-                                onClick={() => goToPage(pageNum)}
-                                className={`w-8 h-8 md:w-10 md:h-10 rounded-lg font-medium transition-all text-sm md:text-base ${
-                                  currentPage === pageNum
-                                    ? 'bg-brand-royal text-white'
-                                    : 'bg-white border border-gray-200 text-brand-navy hover:bg-brand-royal hover:text-white'
-                                }`}
-                              >
-                                {pageNum}
-                              </button>
-                            );
-                          })}
-
-                          {/* Last page */}
-                          {currentPage < totalPages - 2 && totalPages > 5 && (
-                            <>
-                              {currentPage < totalPages - 3 && <span className="px-2 text-brand-navy/50">...</span>}
-                              <button
-                                onClick={() => goToPage(totalPages)}
-                                className="w-10 h-10 rounded-lg font-medium bg-white border border-gray-200 text-brand-navy hover:bg-brand-royal hover:text-white transition-all"
-                              >
-                                {totalPages}
-                              </button>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Next Button */}
-                        <button
-                          onClick={() => goToPage(currentPage + 1)}
-                          disabled={currentPage === totalPages}
-                          className={`px-3 md:px-4 py-2 rounded-lg font-medium transition-all text-sm md:text-base ${
-                            currentPage === totalPages
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-white border-2 border-brand-royal text-brand-royal hover:bg-brand-royal hover:text-white'
-                          }`}
-                        >
-                          Next <span className="hidden md:inline">→</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Page Info */}
-                    {totalPages > 1 && (
-                      <div className="text-center mt-4 text-sm text-brand-navy/60">
-                        Page {currentPage} of {totalPages} • {PAGE_SIZE} funds per page
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="card-light p-12 text-center">
-                    <div className="w-20 h-20 bg-brand-pearl rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-10 h-10 text-brand-royal" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                    <h3 className="text-xl font-semibold text-brand-navy mb-2">No Funds Found</h3>
-                    <p className="text-brand-navy/70 mb-4">
-                      No funds match your search criteria
-                    </p>
-                    <button
-                      onClick={resetFilters}
-                      className="bg-brand-royal text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-navy transition-all"
-                    >
-                      Reset Filters
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Loading State */}
-            {loading && (
-              <div className="card-light p-12 text-center max-w-2xl mx-auto">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-brand-royal border-t-transparent mb-4"></div>
-                <p className="text-brand-navy/70">Searching 37,000+ funds...</p>
-              </div>
-            )}
-
-            {/* Info Box */}
-            <div className="card-light p-6 bg-blue-50 border-l-4 border-blue-400 max-w-4xl mx-auto">
-              <h3 className="font-semibold text-blue-900 mb-2">💡 Search Tips</h3>
-              <ul className="list-disc pl-5 space-y-1 text-sm text-blue-800">
-                <li>Use filters to narrow down results by AMC, category, or plan type</li>
-                <li>Search by fund name, scheme code, or keywords</li>
-                <li>Sort results by name, NAV value, or recent updates</li>
-                <li>Click on any fund to view detailed information and charts</li>
-                <li>Direct plans typically have lower expense ratios</li>
-              </ul>
+              {/* Clear filters */}
+              {hasFilters && (
+                <button
+                  onClick={() => { reset(); setSelectedRisk(null); }}
+                  className="mt-7 text-[#44f593] text-sm font-semibold hover:underline w-full text-left"
+                >
+                  Clear All Filters
+                </button>
+              )}
             </div>
           </div>
-        </ResponsiveContainer>
-      </Section>
-    </>
+        </aside>
+
+        {/* ── Right: Discovery area ────────────────────────────── */}
+        <section className="flex-grow min-w-0">
+
+          {/* Header */}
+          <div className="flex flex-col gap-6 mb-10">
+            <div className="flex items-center justify-between">
+              <h1 className="font-['Space_Grotesk'] font-bold text-4xl tracking-tight text-[#dce5df]">
+                Fund Discovery
+              </h1>
+              <div className="flex items-center gap-1 bg-[#161d1a] p-1 rounded-xl border border-[#3c4a3e]/20">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className="p-2 rounded-lg transition-colors"
+                  style={{ background: viewMode === 'grid' ? '#242c28' : 'transparent', color: viewMode === 'grid' ? '#44f593' : '#859586' }}
+                  aria-label="Grid view"
+                >
+                  <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 0" }}>grid_view</span>
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className="p-2 rounded-lg transition-colors"
+                  style={{ background: viewMode === 'list' ? '#242c28' : 'transparent', color: viewMode === 'list' ? '#44f593' : '#859586' }}
+                  aria-label="List view"
+                >
+                  <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 0" }}>list</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Wide search bar */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none z-10">
+                <span className="material-symbols-outlined text-[#859586]" style={{ fontVariationSettings: "'FILL' 0" }}>search</span>
+              </div>
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={query}
+                onChange={e => handleQueryChange(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSearch(1); }}
+                placeholder="Search for funds, sectors, or asset management companies..."
+                className="w-full glass-card-vi rounded-2xl py-5 pl-16 pr-20 text-lg focus:ring-2 focus:outline-none placeholder:text-[#859586]/40 text-[#dce5df] bg-white/5 border-white/10"
+                style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.5)' }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+              />
+              <div className="absolute inset-y-0 right-6 flex items-center gap-3">
+                {query && (
+                  <button
+                    onClick={() => { handleQueryChange(''); reset(); }}
+                    className="text-[#859586] hover:text-[#dce5df] transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 0" }}>close</span>
+                  </button>
+                )}
+                <kbd className="hidden md:block px-2 py-1 bg-[#242c28] rounded text-xs font-['JetBrains_Mono'] text-[#859586]">⌘K</kbd>
+              </div>
+
+              {/* Autocomplete dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div
+                  className="absolute top-full left-0 right-0 mt-2 rounded-2xl overflow-hidden z-50"
+                  style={{ background: '#19211e', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}
+                >
+                  {suggestions.slice(0, 8).map(s => (
+                    <button
+                      key={s.schemeCode}
+                      onMouseDown={() => handleSuggestionClick(s)}
+                      className="w-full text-left px-5 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors"
+                    >
+                      <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                        style={{ background: `${amcColor(s.amcCode)}18`, color: amcColor(s.amcCode) }}>
+                        {amcInitials(s.amcCode)}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm text-[#dce5df] truncate">{s.schemeName}</p>
+                        {s.amcCode && <p className="text-xs text-[#859586]">{s.amcCode}</p>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Results bar + sort */}
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-[#859586]">
+                {searched ? `Showing ${total.toLocaleString('en-IN')} results` : 'Explore 50,000+ funds'}
+              </span>
+              {searched && total > 0 && (
+                <>
+                  <div className="h-4 w-px bg-[#3c4a3e]" />
+                  {/* Sort dropdown */}
+                  <div className="relative" ref={sortRef}>
+                    <span className="text-[#dce5df]">
+                      Sorted by:{' '}
+                      <button
+                        onClick={() => setSortOpen(v => !v)}
+                        className="text-[#44f593] font-bold inline-flex items-center gap-1"
+                      >
+                        {SORT_LABELS[sortBy]}
+                        <span className="material-symbols-outlined text-sm align-middle" style={{ fontVariationSettings: "'FILL' 0" }}>
+                          {sortOpen ? 'expand_less' : 'expand_more'}
+                        </span>
+                      </button>
+                    </span>
+                    {sortOpen && (
+                      <div
+                        className="absolute top-8 left-0 rounded-xl overflow-hidden z-40 w-48"
+                        style={{ background: '#19211e', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
+                      >
+                        {(Object.keys(SORT_LABELS) as SortMode[]).map(mode => (
+                          <button
+                            key={mode}
+                            onClick={() => { setSortBy(mode); setSortOpen(false); }}
+                            className="w-full text-left px-4 py-3 text-sm transition-colors"
+                            style={{
+                              background: sortBy === mode ? 'rgba(68,245,147,0.06)' : 'transparent',
+                              color: sortBy === mode ? '#44f593' : '#bacbbb',
+                            }}
+                          >
+                            {SORT_LABELS[mode]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* ── Fund grid / list ── */}
+          {loading && (
+            <div className={viewMode === 'grid' ? 'grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6' : 'grid grid-cols-1 gap-4'}>
+              {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+            </div>
+          )}
+
+          {!loading && searched && sorted.length > 0 && (
+            <>
+              <div className={viewMode === 'grid' ? 'grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6' : 'grid grid-cols-1 gap-4'}>
+                {sorted.map(fund => <FundCard key={fund.schemeCode} fund={fund} />)}
+              </div>
+
+              {/* Load More / Pagination */}
+              {totalPages > 1 && (
+                <div className="mt-12 flex justify-center">
+                  {currentPage < totalPages ? (
+                    <button
+                      onClick={() => goToPage(currentPage + 1)}
+                      className="px-8 py-3 rounded-xl border border-[#859586]/20 text-[#dce5df] hover:bg-white/5 transition-all font-['Space_Grotesk'] font-bold"
+                    >
+                      Load More Funds
+                    </button>
+                  ) : (
+                    <p className="text-[#859586] text-sm font-['JetBrains_Mono']">All {total.toLocaleString()} funds loaded</p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* No results */}
+          {!loading && searched && sorted.length === 0 && (
+            <div className="glass-card-vi rounded-2xl p-12 flex flex-col items-center text-center mt-4">
+              <div className="w-14 h-14 rounded-xl bg-[#1a2420] border border-[#3c4a3e] flex items-center justify-center mb-5">
+                <span className="material-symbols-outlined text-2xl text-[#3c4a3e]" style={{ fontVariationSettings: "'FILL' 0" }}>
+                  search_off
+                </span>
+              </div>
+              <h3 className="text-[#dce5df] font-['Space_Grotesk'] font-bold text-lg mb-2">No Funds Found</h3>
+              <p className="text-[#859586] text-sm mb-6 max-w-[36ch]">
+                Try a different keyword, AMC, or category filter.
+              </p>
+              <button
+                onClick={() => { reset(); setSelectedRisk(null); }}
+                className="px-6 py-2.5 rounded-xl border border-[#44f593]/30 text-[#44f593] hover:bg-[#44f593]/5 transition-all text-sm font-bold"
+              >
+                Reset Filters
+              </button>
+            </div>
+          )}
+
+          {/* Pre-search state — show top funds by category */}
+          {!searched && !loading && (
+            <DefaultFundGrid />
+          )}
+        </section>
+      </main>
+
+      <SiteFooter />
+    </div>
   );
 }

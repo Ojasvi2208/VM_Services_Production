@@ -1,4 +1,4 @@
--- Notifications Database Schema for VM Financial Services
+-- Notifications Database Schema for Vijay Malik Financial Services
 
 -- Device tokens for push notifications
 CREATE TABLE IF NOT EXISTS device_tokens (

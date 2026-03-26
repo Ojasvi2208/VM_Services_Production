@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
         fr.cagr_3y AS "cagr3y",
         fr.cagr_5y AS "cagr5y",
         fr.return_1y AS "return1y",
-        fr.sharpe_1y AS "sharpeRatio",
+        fr.sharpe_ratio_1y AS "sharpeRatio",
         fr.volatility_1y AS "volatility",
         f.fund_size AS "fundSize",
         f.risk_level AS "riskLevel",
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
           fr.cagr_3y AS "cagr3y",
           fr.cagr_5y AS "cagr5y",
           fr.return_1y AS "return1y",
-          fr.sharpe_1y AS "sharpeRatio",
+          fr.sharpe_ratio_1y AS "sharpeRatio",
           fr.volatility_1y AS "volatility",
           f.fund_size AS "fundSize",
           f.risk_level AS "riskLevel"
@@ -168,7 +168,7 @@ export async function GET(request: NextRequest) {
             fr.cagr_3y AS "cagr3y",
             fr.cagr_5y AS "cagr5y",
             fr.return_1y AS "return1y",
-            fr.sharpe_1y AS "sharpeRatio",
+            fr.sharpe_ratio_1y AS "sharpeRatio",
             fr.volatility_1y AS "volatility",
             f.fund_size AS "fundSize",
             f.risk_level AS "riskLevel"
@@ -200,7 +200,7 @@ export async function GET(request: NextRequest) {
             fr.cagr_3y AS "cagr3y",
             fr.cagr_5y AS "cagr5y",
             fr.return_1y AS "return1y",
-            fr.sharpe_1y AS "sharpeRatio",
+            fr.sharpe_ratio_1y AS "sharpeRatio",
             fr.volatility_1y AS "volatility",
             f.fund_size AS "fundSize",
             f.risk_level AS "riskLevel"
@@ -240,7 +240,7 @@ export async function GET(request: NextRequest) {
         fr.cagr_5y AS "cagr5y",
         fr.return_1y AS "return1y",
         fr.return_1m AS "return1m",
-        fr.sharpe_1y AS "sharpeRatio",
+        fr.sharpe_ratio_1y AS "sharpeRatio",
         fr.volatility_1y AS "volatility",
         f.fund_size AS "fundSize",
         f.risk_level AS "riskLevel"

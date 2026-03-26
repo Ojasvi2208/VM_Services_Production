@@ -234,7 +234,7 @@ export async function calculateAllReturns(schemeCode: string, asOfDate?: Date): 
 
 // Save calculated returns to database
 // Production schema: PK is scheme_code only (no calculated_date column).
-// Uses sharpe_ratio_1y / sortino_ratio_1y (not sharpe_1y/3y/5y).
+// Uses sharpe_ratio_1y / sortino_ratio_1y (not sharpe_ratio_1y/3y/5y).
 export async function saveReturns(schemeCode: string, returns: Returns) {
   const client = await pool.connect();
 

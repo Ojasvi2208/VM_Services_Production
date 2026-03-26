@@ -37,14 +37,18 @@ export async function GET(request: NextRequest) {
     const result = await dailyNavUpdate();
     
     if (result.success) {
-      // Refresh category average materialized view after successful NAV sync
-      try {
-        await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY mv_category_avg_returns');
-      } catch (mvErr: any) {
-        // Non-critical: view may not exist yet or first refresh needs non-concurrent
+      // Refresh all materialized views after successful NAV sync
+      const VIEWS_TO_REFRESH = ['mv_category_avg_returns', 'mv_unified_search', 'mv_top_funds'];
+      for (const view of VIEWS_TO_REFRESH) {
         try {
-          await pool.query('REFRESH MATERIALIZED VIEW mv_category_avg_returns');
-        } catch { /* View not created yet — skip */ }
+          await pool.query(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`);
+          console.log(`[daily-update] Refreshed ${view}`);
+        } catch {
+          try {
+            await pool.query(`REFRESH MATERIALIZED VIEW ${view}`);
+            console.log(`[daily-update] Refreshed ${view} (non-concurrent)`);
+          } catch { /* View not created yet — skip */ }
+        }
       }
 
       return NextResponse.json({

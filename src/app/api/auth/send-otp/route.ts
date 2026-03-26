@@ -81,10 +81,10 @@ export async function POST(request: NextRequest) {
 
 async function sendOTPEmail(email: string, userName: string, otp: string, type: string): Promise<boolean> {
   const subject = type === 'signup' 
-    ? 'Verify Your Email - VM Financial Services'
+    ? 'Verify Your Email - Vijay Malik Financial Services'
     : type === 'reset'
-    ? 'Password Reset OTP - VM Financial Services'
-    : 'Sign In OTP - VM Financial Services';
+    ? 'Password Reset OTP - Vijay Malik Financial Services'
+    : 'Sign In OTP - Vijay Malik Financial Services';
 
   const actionText = type === 'signup'
     ? 'complete your registration'
@@ -109,7 +109,7 @@ async function sendOTPEmail(email: string, userName: string, otp: string, type: 
           <tr>
             <td style="background: linear-gradient(135deg, #18181B 0%, #14B8A6 100%); padding: 30px; border-radius: 16px 16px 0 0; text-align: center;">
               <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">
-                VM Financial Services
+                Vijay Malik Financial Services
               </h1>
             </td>
           </tr>
@@ -146,7 +146,7 @@ async function sendOTPEmail(email: string, userName: string, otp: string, type: 
           <tr>
             <td style="background-color: #f8fafc; padding: 20px; border-radius: 0 0 16px 16px; border: 1px solid #e2e8f0; border-top: none; text-align: center;">
               <p style="color: #94a3b8; font-size: 12px; margin: 0;">
-                VM Financial Services | ARN 317605
+                Vijay Malik Financial Services | ARN 317605
               </p>
             </td>
           </tr>

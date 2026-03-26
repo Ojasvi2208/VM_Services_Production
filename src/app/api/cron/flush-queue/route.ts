@@ -25,6 +25,17 @@ export async function GET(request: NextRequest) {
   try {
     const result = await flushDNDQueue();
 
+    // Cleanup: purge processed queue rows older than 7 days
+    try {
+      const { default: pool } = await import('@/lib/postgres-db');
+      const cleanup = await pool.query(
+        `DELETE FROM notification_queue WHERE queued_at < NOW() - INTERVAL '7 days'`
+      );
+      console.log(`[flush-queue] Cleaned up ${cleanup.rowCount} old queue rows`);
+    } catch (cleanupErr: any) {
+      console.error('[flush-queue] Cleanup error (non-fatal):', cleanupErr.message);
+    }
+
     return NextResponse.json({
       success: true,
       ...result,

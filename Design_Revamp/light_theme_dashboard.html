@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Akshaya Vault | Institutional Command Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface": "#FFFFFF",
+              "on-tertiary-fixed": "#141e1a",
+              "primary-fixed-dim": "#00d87a",
+              "inverse-primary": "#006d3b",
+              "surface-container-lowest": "#F8FAFB",
+              "surface-container-high": "#E2E8F0",
+              "outline-variant": "#CBD5E1",
+              "on-primary-fixed": "#00210e",
+              "surface-bright": "#FFFFFF",
+              "primary-container": "#D1FAE5",
+              "on-primary-container": "#065F46",
+              "background": "#F8FAFB",
+              "surface-container-low": "#F1F5F9",
+              "on-tertiary-fixed-variant": "#3f4945",
+              "surface-dim": "#F1F5F9",
+              "on-secondary-fixed": "#101e17",
+              "on-background": "#060D0A",
+              "surface-container-highest": "#E2E8F0",
+              "inverse-on-surface": "#F8FAFB",
+              "error": "#B91C1C",
+              "surface-tint": "#00d87a",
+              "secondary": "#475569",
+              "on-secondary": "#FFFFFF",
+              "secondary-container": "#F1F5F9",
+              "on-surface": "#060D0A",
+              "tertiary-container": "#f1f5f9",
+              "tertiary-fixed-dim": "#94a3b8",
+              "surface-container": "#F8FAFB",
+              "error-container": "#FEE2E2",
+              "tertiary": "#64748b",
+              "primary": "#00d87a",
+              "on-tertiary-container": "#1e293b",
+              "on-surface-variant": "#64748b",
+              "on-secondary-fixed-variant": "#334155",
+              "on-error-container": "#7F1D1D",
+              "outline": "#94A3B8",
+              "on-tertiary": "#FFFFFF",
+              "on-secondary-container": "#475569",
+              "on-primary": "#FFFFFF",
+              "tertiary-fixed": "#e2e8f0",
+              "secondary-fixed": "#f1f5f9",
+              "on-primary-fixed-variant": "#047857",
+              "secondary-fixed-dim": "#cbd5e1",
+              "surface-variant": "#F1F5F9",
+              "primary-fixed": "#10B981",
+              "inverse-surface": "#060D0A",
+              "on-error": "#FFFFFF"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"],
+              "mono": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+        }
+        .emerald-gradient {
+            background: linear-gradient(135deg, #00d87a 0%, #00b365 100%);
+        }
+        .vault-glow {
+            box-shadow: 0 20px 40px -20px rgba(0, 216, 122, 0.2);
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .active-nav {
+            background: rgba(0, 216, 122, 0.08);
+            color: #00d87a;
+            border-right: 4px solid #00d87a;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body selection:bg-primary/20 selection:text-primary-container">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200 shadow-sm">
+<div class="flex justify-between items-center h-16 px-8 w-full max-w-[1440px] mx-auto">
+<div class="text-2xl font-bold tracking-tighter text-[#00d87a] font-['Space_Grotesk']">Akshaya Vault</div>
+<nav class="hidden md:flex items-center gap-8 font-['Space_Grotesk'] font-bold tracking-tight">
+<a class="text-slate-500 hover:text-[#00d87a] transition-colors" href="#">Markets</a>
+<a class="text-slate-500 hover:text-[#00d87a] transition-colors" href="#">Discovery</a>
+<a class="text-slate-500 hover:text-[#00d87a] transition-colors" href="#">Portfolio</a>
+<a class="text-slate-500 hover:text-[#00d87a] transition-colors" href="#">Goals</a>
+<a class="text-slate-500 hover:text-[#00d87a] transition-colors" href="#">News</a>
+</nav>
+<div class="flex items-center gap-6">
+<div class="hidden lg:flex items-center bg-slate-100 px-4 py-1.5 rounded-full border border-slate-200">
+<span class="material-symbols-outlined text-slate-400 text-sm mr-2">search</span>
+<input class="bg-transparent border-none text-sm focus:ring-0 text-slate-700 w-48 placeholder:text-slate-400" placeholder="Search instruments..." type="text"/>
+</div>
+<div class="flex items-center gap-4 text-slate-600">
+<button class="hover:bg-slate-100 p-2 rounded-lg transition-all"><span class="material-symbols-outlined">notifications</span></button>
+<button class="hover:bg-slate-100 p-2 rounded-lg transition-all"><span class="material-symbols-outlined">account_balance_wallet</span></button>
+<button class="hover:bg-slate-100 p-2 rounded-lg transition-all"><span class="material-symbols-outlined">settings</span></button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-primary/30">
+<img alt="Executive profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCujiKgTs5VsjYmDTppCyuq2dtd_XhKuElHiReVUk_-SjLMBN1S1JgH83RrlI9aVMItc3avN8pE5X12WGdIiwImvPfbdzBlziH1_a-5WF6_Zmlt-iG4q85I0Fb-ge0F2Qqv1djeo2gzak4FsrdU_bqXBv59w8p4PUcA3h-1Rb_qAQcGyfQV3gqyFFNpulBng3_kIhR31qiOxthwNKkoYehxOai_wMSZfMQ5KSUKxiDw1RKk9BwjzRLrQZ7rf4Qu-hY49XwZj4Y3IQ"/>
+</div>
+</div>
+</div>
+</div>
+</header>
+<div class="flex pt-16 min-h-screen">
+<!-- SideNavBar -->
+<aside class="hidden md:flex flex-col h-[calc(100vh-64px)] w-64 fixed bg-white border-r border-slate-200 py-6">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+<div class="w-10 h-10 rounded-lg emerald-gradient flex items-center justify-center text-white">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">shield</span>
+</div>
+<div>
+<div class="text-[#00d87a] font-bold text-sm">Sovereign Vault</div>
+<div class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Tier 1 Access</div>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1 px-3">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg font-['Inter'] text-sm font-medium active-nav transition-all" href="#">
+<span class="material-symbols-outlined">dashboard</span> Dashboard
+                </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg font-['Inter'] text-sm font-medium text-slate-600 hover:bg-slate-50 hover:translate-x-1 transition-all" href="#">
+<span class="material-symbols-outlined">monitoring</span> Analytics
+                </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg font-['Inter'] text-sm font-medium text-slate-600 hover:bg-slate-50 hover:translate-x-1 transition-all" href="#">
+<span class="material-symbols-outlined">account_balance</span> Assets
+                </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg font-['Inter'] text-sm font-medium text-slate-600 hover:bg-slate-50 hover:translate-x-1 transition-all" href="#">
+<span class="material-symbols-outlined">verified_user</span> Compliance
+                </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg font-['Inter'] text-sm font-medium text-slate-600 hover:bg-slate-50 hover:translate-x-1 transition-all" href="#">
+<span class="material-symbols-outlined">description</span> Reports
+                </a>
+</nav>
+<div class="px-4 mt-auto space-y-4">
+<button class="w-full py-3 rounded-xl emerald-gradient text-white font-bold text-sm shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all">
+                    Execute Trade
+                </button>
+<div class="border-t border-slate-100 pt-4 space-y-1">
+<a class="flex items-center gap-3 px-4 py-2 text-xs text-slate-400 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-sm">contact_support</span> Support
+                    </a>
+<a class="flex items-center gap-3 px-4 py-2 text-xs text-slate-400 hover:text-error transition-colors" href="#">
+<span class="material-symbols-outlined text-sm">logout</span> Logout
+                    </a>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 md:ml-64 p-8 bg-surface-container-lowest overflow-y-auto">
+<!-- Hero Section: Aggregate Net Worth -->
+<section class="mb-8">
+<div class="glass-card rounded-3xl p-8 vault-glow relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-1/3 h-full opacity-5 group-hover:opacity-10 transition-opacity">
+<img class="w-full h-full object-cover grayscale" data-alt="Abstract visualization" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0EXuVMj540mEfvEtYIoGdpqA_6RdpXWd-ubqPOoxcpWC2F35G6kEoZ5jnnlpCfVuF84ubwg9mX53f8Cr9euDXpsdvV9DUFN63DFGV7jLEfyaCGV-10jyNi-LZmc96uU4gONVlHxF5hrqIhHUzE_SlcoAuHRriY9hGTSA1sZJR3kYOY5S7Gr3drMuyJKC-56Z-nV8r9sos-axttFJtrIShITKIn4ulLun4HEVfKV6pKWxCfyANQnluDCNafo1AOW_80FwKB-djMg"/>
+</div>
+<div class="relative z-10 flex flex-col md:flex-row justify-between items-end gap-8">
+<div>
+<span class="text-slate-400 uppercase tracking-[0.2em] font-bold text-[10px] mb-2 block">Aggregate Net Worth</span>
+<h1 class="text-6xl md:text-7xl font-headline font-bold text-on-background tracking-tighter flex items-baseline gap-2">
+<span class="font-mono text-4xl font-light text-slate-300">₹</span>14.82<span class="text-2xl text-slate-400">Cr</span>
+</h1>
+<div class="flex items-center gap-3 mt-4">
+<span class="flex items-center text-xs font-mono font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+<span class="material-symbols-outlined text-xs mr-1">trending_up</span> +2.4%
+                                </span>
+<span class="text-xs text-slate-500 font-medium">Last 24h: +₹32,45,000</span>
+</div>
+</div>
+<div class="w-full md:w-1/2 h-24">
+<!-- SVG Sparkline -->
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 400 100">
+<defs>
+<lineargradient id="sparkline-grad" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" style="stop-color:rgba(0, 216, 122, 0.2); stop-opacity:1"></stop>
+<stop offset="100%" style="stop-color:rgba(0, 216, 122, 0); stop-opacity:1"></stop>
+</lineargradient>
+</defs>
+<path d="M0,80 Q50,20 100,60 T200,40 T300,70 T400,20 L400,100 L0,100 Z" fill="url(#sparkline-grad)"></path>
+<path d="M0,80 Q50,20 100,60 T200,40 T300,70 T400,20" fill="none" stroke="#00d87a" stroke-linecap="round" stroke-width="3"></path>
+<circle cx="400" cy="20" fill="#00d87a" r="4"></circle>
+</svg>
+</div>
+</div>
+</div>
+</section>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+<!-- Column 1: Vault Intelligence -->
+<div class="lg:col-span-7 space-y-6">
+<div class="flex items-center justify-between">
+<h2 class="text-xl font-headline font-bold text-on-background flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">psychology</span>
+                            Vault Intelligence
+                        </h2>
+<button class="text-xs text-primary font-bold hover:underline">Full Analytics</button>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+<!-- Advanced Risk Modeling -->
+<div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all">
+<div class="flex justify-between items-start mb-6">
+<div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">analytics</span>
+</div>
+<div class="text-right">
+<span class="text-[10px] text-slate-400 uppercase font-bold">Sharpe Ratio</span>
+<div class="font-mono text-lg font-bold text-on-surface">1.82</div>
+</div>
+</div>
+<h3 class="font-headline font-bold mb-2">Advanced Risk Modeling</h3>
+<p class="text-sm text-slate-500 leading-relaxed mb-4">Real-time volatility tracking across all sovereign and private equity holdings.</p>
+<div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-3/4 rounded-full"></div>
+</div>
+<div class="flex justify-between mt-2 text-[10px] font-mono text-slate-400">
+<span>SYSTEM LOAD: 42%</span>
+<span>VAR: ₹1.2M</span>
+</div>
+</div>
+<!-- Asset Correlation -->
+<div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all">
+<div class="flex justify-between items-start mb-6">
+<div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">hub</span>
+</div>
+<div class="flex -space-x-2">
+<div class="w-6 h-6 rounded-full bg-emerald-100 border border-emerald-200"></div>
+<div class="w-6 h-6 rounded-full bg-blue-100 border border-blue-200"></div>
+<div class="w-6 h-6 rounded-full bg-amber-100 border border-amber-200"></div>
+</div>
+</div>
+<h3 class="font-headline font-bold mb-2">Asset Correlation</h3>
+<p class="text-sm text-slate-500 leading-relaxed mb-4">Inter-dependency matrix analyzing how local indices impact global tech bonds.</p>
+<div class="flex items-center gap-2">
+<span class="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-100">Diversified</span>
+<span class="text-xs bg-slate-50 text-slate-400 px-2 py-0.5 rounded border border-slate-100">0.42 Score</span>
+</div>
+</div>
+</div>
+<!-- Institutional Row -->
+<div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+<h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Institutional Funds Selection</h3>
+<div class="space-y-4">
+<div class="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-sm transition-all cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-emerald-50 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">diamond</span>
+</div>
+<div>
+<div class="font-bold text-on-surface">AV Quant Alpha Fund</div>
+<div class="text-xs text-slate-500">High-Frequency Algorithmic Equity</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-mono text-emerald-600 font-bold">+18.4%</div>
+<div class="text-[10px] text-slate-400 uppercase">Annualized</div>
+</div>
+</div>
+<div class="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-sm transition-all cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-emerald-50 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">account_balance</span>
+</div>
+<div>
+<div class="font-bold text-on-surface">Sovereign Debt Yield</div>
+<div class="text-xs text-slate-500">G-Sec &amp; Tier 1 Corporate Bonds</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-mono text-on-surface font-bold">7.42%</div>
+<div class="text-[10px] text-slate-400 uppercase">Current Yield</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Column 2: Market Pulse -->
+<div class="lg:col-span-5 flex flex-col gap-6">
+<div class="flex items-center justify-between">
+<h2 class="text-xl font-headline font-bold text-on-background flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">pulse_alert</span>
+                            Market Pulse
+                        </h2>
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="text-[10px] text-primary font-bold uppercase tracking-widest">Live</span>
+</div>
+</div>
+<div class="glass-card rounded-2xl overflow-hidden flex flex-col h-full bg-white border border-slate-100">
+<!-- Live Indices Ticker -->
+<div class="bg-slate-50 p-4 flex justify-around border-b border-slate-200">
+<div class="text-center">
+<div class="text-[10px] text-slate-400 font-bold">NIFTY 50</div>
+<div class="font-mono text-sm font-bold text-on-surface">22,147.20</div>
+<div class="text-[10px] text-emerald-600 font-bold">+1.12%</div>
+</div>
+<div class="w-px h-full bg-slate-200"></div>
+<div class="text-center">
+<div class="text-[10px] text-slate-400 font-bold">SENSEX</div>
+<div class="font-mono text-sm font-bold text-on-surface">73,088.33</div>
+<div class="text-[10px] text-emerald-600 font-bold">+0.94%</div>
+</div>
+<div class="w-px h-full bg-slate-200"></div>
+<div class="text-center">
+<div class="text-[10px] text-slate-400 font-bold">BANK NIFTY</div>
+<div class="font-mono text-sm font-bold text-on-surface">46,812.90</div>
+<div class="text-[10px] text-error font-bold">-0.15%</div>
+</div>
+</div>
+<!-- Mini Market Heatmap -->
+<div class="p-6 flex-1 space-y-4">
+<div class="grid grid-cols-4 gap-2 h-48">
+<div class="col-span-2 row-span-2 rounded-lg bg-emerald-100/50 border border-emerald-200 p-2 flex flex-col justify-end shadow-sm">
+<span class="text-[10px] font-bold text-emerald-700 font-mono">RELIANCE</span>
+<span class="text-xs font-bold text-slate-800">+2.1%</span>
+</div>
+<div class="rounded-lg bg-emerald-50 border border-emerald-100 p-2 flex flex-col justify-end">
+<span class="text-[10px] font-bold text-emerald-600 font-mono">TCS</span>
+</div>
+<div class="rounded-lg bg-emerald-100 border border-emerald-200 p-2 flex flex-col justify-end">
+<span class="text-[10px] font-bold text-emerald-700 font-mono">HDFC</span>
+</div>
+<div class="rounded-lg bg-red-50 border border-red-100 p-2 flex flex-col justify-end">
+<span class="text-[10px] font-bold text-red-600 font-mono">INFY</span>
+</div>
+<div class="rounded-lg bg-emerald-50 border border-emerald-100 p-2 flex flex-col justify-end">
+<span class="text-[10px] font-bold text-emerald-600 font-mono">ICICI</span>
+</div>
+</div>
+<!-- News Flash -->
+<div class="space-y-3">
+<div class="p-3 rounded-lg bg-slate-50 border-l-4 border-primary">
+<div class="text-[10px] text-primary font-bold mb-1">MONETARY POLICY</div>
+<p class="text-xs font-medium text-slate-700">RBI maintains repo rate at 6.5%, outlook remains optimistic for H2.</p>
+</div>
+<div class="p-3 rounded-lg bg-slate-50 border-l-4 border-slate-300">
+<div class="text-[10px] text-slate-500 font-bold mb-1">ENERGY SECTOR</div>
+<p class="text-xs font-medium text-slate-700">New green hydrogen subsidies expected in the upcoming budget.</p>
+</div>
+</div>
+</div>
+<!-- CTA -->
+<div class="p-4 bg-slate-50/50 border-t border-slate-100">
+<button class="w-full py-2.5 rounded-lg border border-primary/30 text-primary font-bold text-xs hover:bg-primary/5 transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">rocket_launch</span>
+                                Deploy Smart-Rebalancer
+                            </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Active NFOs Carousel -->
+<section class="mt-8 pb-12">
+<div class="flex items-center justify-between mb-6">
+<h2 class="text-xl font-headline font-bold text-on-background flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">auto_awesome</span>
+                        Active NFOs
+                    </h2>
+<div class="flex gap-2">
+<button class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors shadow-sm">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors shadow-sm">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+<div class="flex gap-6 overflow-x-auto hide-scrollbar pb-4 -mx-2 px-2">
+<!-- NFO Card 1 -->
+<div class="min-w-[320px] bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-4">
+<span class="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-1 rounded font-bold">EQUITY FUND</span>
+<span class="text-[10px] text-slate-400 font-bold">ENDS IN 4 DAYS</span>
+</div>
+<h4 class="font-headline font-bold text-lg mb-1 text-on-background">Global EV Transition Fund</h4>
+<p class="text-xs text-slate-500 mb-6">Capturing the lithium-ion supply chain and semiconductor manufacturing growth.</p>
+<div class="flex items-center justify-between">
+<div>
+<div class="text-[10px] text-slate-400 uppercase">Min Investment</div>
+<div class="font-mono text-on-surface font-bold">₹5,00,000</div>
+</div>
+<button class="px-4 py-2 rounded-lg bg-slate-50 text-primary text-xs font-bold hover:bg-primary hover:text-white transition-all border border-slate-100">Participate</button>
+</div>
+</div>
+<!-- NFO Card 2 -->
+<div class="min-w-[320px] bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-4">
+<span class="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-1 rounded font-bold">REAL ESTATE</span>
+<span class="text-[10px] text-slate-400 font-bold">ENDS IN 12 DAYS</span>
+</div>
+<h4 class="font-headline font-bold text-lg mb-1 text-on-background">Tier-1 Commercial REIT</h4>
+<p class="text-xs text-slate-500 mb-6">Fractional ownership of Grade-A IT parks in Bangalore and Hyderabad.</p>
+<div class="flex items-center justify-between">
+<div>
+<div class="text-[10px] text-slate-400 uppercase">Min Investment</div>
+<div class="font-mono text-on-surface font-bold">₹10,00,000</div>
+</div>
+<button class="px-4 py-2 rounded-lg bg-slate-50 text-primary text-xs font-bold hover:bg-primary hover:text-white transition-all border border-slate-100">Participate</button>
+</div>
+</div>
+<!-- NFO Card 3 -->
+<div class="min-w-[320px] bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-4">
+<span class="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-1 rounded font-bold">FIXED INCOME</span>
+<span class="text-[10px] text-slate-400 font-bold">ENDS IN 2 DAYS</span>
+</div>
+<h4 class="font-headline font-bold text-lg mb-1 text-on-background">Dynamic Bond 2030</h4>
+<p class="text-xs text-slate-500 mb-6">Active duration management seeking to capitalize on shifting yield curves.</p>
+<div class="flex items-center justify-between">
+<div>
+<div class="text-[10px] text-slate-400 uppercase">Min Investment</div>
+<div class="font-mono text-on-surface font-bold">₹1,00,000</div>
+</div>
+<button class="px-4 py-2 rounded-lg bg-slate-50 text-primary text-xs font-bold hover:bg-primary hover:text-white transition-all border border-slate-100">Participate</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+</div>
+<!-- Precision Ticker -->
+<footer class="fixed bottom-0 w-full h-8 bg-white border-t border-slate-200 flex items-center overflow-hidden z-50">
+<div class="flex items-center whitespace-nowrap animate-marquee px-4 w-full">
+<div class="flex items-center gap-8 text-[10px] font-mono text-slate-500 uppercase">
+<span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-primary"></span> GOLD: ₹62,450 <span class="text-emerald-600">+0.4%</span></span>
+<span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-primary"></span> USD/INR: 83.12 <span class="text-emerald-600">-0.02%</span></span>
+<span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-error"></span> BRENT CRUDE: $82.41 <span class="text-error">-1.2%</span></span>
+<span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-primary"></span> BITCOIN: $51,024 <span class="text-emerald-600">+3.8%</span></span>
+<span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-primary"></span> S&amp;P 500: 5,029 <span class="text-emerald-600">+0.6%</span></span>
+<span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-primary"></span> NIFTY 50: 22,147 <span class="text-emerald-600">+1.1%</span></span>
+<span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-primary"></span> EUR/USD: 1.08 <span class="text-emerald-600">+0.1%</span></span>
+</div>
+</div>
+</footer>
+<style>
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+            animation: marquee 30s linear infinite;
+        }
+        .animate-marquee:hover {
+            animation-play-state: paused;
+        }
+    </style>
+</body></html>

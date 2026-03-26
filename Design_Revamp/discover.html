@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-primary": "#00391c",
+              "surface": "#0d1512",
+              "outline": "#859586",
+              "on-error": "#690005",
+              "on-surface-variant": "#bacbbb",
+              "on-primary-container": "#00582e",
+              "primary-fixed-dim": "#25e283",
+              "on-surface": "#dce5df",
+              "on-error-container": "#ffdad6",
+              "secondary-fixed": "#d6e7db",
+              "tertiary-fixed": "#dae5df",
+              "primary-container": "#00d87a",
+              "background": "#0d1512",
+              "inverse-on-surface": "#2a322e",
+              "on-background": "#dce5df",
+              "surface-container-high": "#242c28",
+              "surface-bright": "#333b37",
+              "on-secondary": "#25342c",
+              "surface-variant": "#2f3733",
+              "surface-container": "#19211e",
+              "on-secondary-fixed-variant": "#3b4a42",
+              "error-container": "#93000a",
+              "primary": "#44f593",
+              "on-tertiary-fixed": "#141e1a",
+              "on-tertiary": "#29332f",
+              "tertiary-fixed-dim": "#bec9c3",
+              "tertiary-container": "#b4bfb9",
+              "surface-tint": "#25e283",
+              "surface-container-low": "#161d1a",
+              "error": "#ffb4ab",
+              "on-tertiary-fixed-variant": "#3f4945",
+              "tertiary": "#d0dbd5",
+              "secondary": "#bacbbf",
+              "primary-fixed": "#5cff9f",
+              "on-tertiary-container": "#444e49",
+              "inverse-primary": "#006d3b",
+              "surface-container-lowest": "#08100d",
+              "secondary-container": "#3e4c44",
+              "surface-dim": "#0d1512",
+              "on-primary-fixed": "#00210e",
+              "inverse-surface": "#dce5df",
+              "secondary-fixed-dim": "#bacbbf",
+              "on-secondary-container": "#acbcb1",
+              "outline-variant": "#3c4a3e",
+              "surface-container-highest": "#2f3733",
+              "on-secondary-fixed": "#101e17",
+              "on-primary-fixed-variant": "#00522b"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"],
+              "mono": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .glass-card-vi {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card-vi:hover {
+            background: rgba(255, 255, 255, 0.06);
+            transform: translateY(-4px);
+            border: 1px solid rgba(68, 245, 147, 0.3);
+        }
+        .precision-ticker {
+            background: #060D0A;
+            border-bottom: 1px solid rgba(60, 74, 62, 0.15);
+        }
+        .sparkline-gradient {
+            background: linear-gradient(90deg, transparent 0%, rgba(0, 216, 122, 0.2) 100%);
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0d1512; }
+        ::-webkit-scrollbar-thumb { background: #2f3733; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00d87a; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body selection:bg-primary selection:text-on-primary">
+<!-- Precision Ticker -->
+<div class="precision-ticker w-full h-8 flex items-center px-8 overflow-hidden whitespace-nowrap z-50 fixed top-0">
+<div class="flex space-x-8 animate-marquee font-mono text-[10px] uppercase tracking-widest text-outline">
+<span class="flex items-center gap-2">NIFTY 50 <span class="text-primary">+1.24%</span></span>
+<span class="flex items-center gap-2">S&amp;P 500 <span class="text-primary">+0.82%</span></span>
+<span class="flex items-center gap-2">BTC/USD <span class="text-error">-2.15%</span></span>
+<span class="flex items-center gap-2">GOLD <span class="text-primary">+0.45%</span></span>
+<span class="flex items-center gap-2">NASDAQ <span class="text-primary">+1.55%</span></span>
+<span class="flex items-center gap-2">ETH/USD <span class="text-error">-1.10%</span></span>
+<!-- Duplicated for loop -->
+<span class="flex items-center gap-2">NIFTY 50 <span class="text-primary">+1.24%</span></span>
+<span class="flex items-center gap-2">S&amp;P 500 <span class="text-primary">+0.82%</span></span>
+</div>
+</div>
+<!-- TopNavBar -->
+<header class="fixed top-8 w-full z-50 bg-white/5 dark:bg-[#0d1512]/30 backdrop-blur-xl border-b border-white/10 shadow-[0_24_48px_rgba(0,0,0,0.5)]">
+<div class="flex items-center justify-between px-8 py-4 max-w-[1440px] mx-auto">
+<div class="flex items-center gap-8">
+<a class="text-xl font-bold tracking-tighter text-[#00d87a] font-headline" href="#">Akshaya Vault</a>
+<nav class="hidden md:flex items-center gap-6 font-headline font-bold tracking-tight">
+<a class="text-[#c4cfc9] hover:text-[#00d87a] transition-colors" href="#">Markets</a>
+<a class="text-[#00d87a] border-b-2 border-[#00d87a] pb-1" href="#">Discover</a>
+<a class="text-[#c4cfc9] hover:text-[#00d87a] transition-colors" href="#">Portfolio</a>
+<a class="text-[#c4cfc9] hover:text-[#00d87a] transition-colors" href="#">Goals</a>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<button class="hover:bg-white/5 transition-all duration-300 p-2 rounded-full scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-outline">notifications</span>
+</button>
+<button class="bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold px-6 py-2 rounded-xl transition-all duration-300 hover:shadow-[0_0_20px_rgba(0,216,122,0.3)] scale-95 active:scale-90 transition-transform">
+                    Institutional Login
+                </button>
+<div class="w-10 h-10 rounded-full border border-primary/20 p-0.5">
+<img alt="User Profile" class="w-full h-full rounded-full object-cover" data-alt="Professional user profile avatar in green tint" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOyAEFGFPrQE-5Otv37UpjWVpWGm5nNcGvO3LuUm0bEaBN1ool29PpMM3FnaFy-R1Llomg7LYhXNBlA-DeV5SsfiZ4kr67C7XOsNBuEmljKMYYYagDQuiV5tIAZuzk5aSBQz4o5zoWwKmh2mV-DsgqR91pk6DRrYEiDiNy4xh0wPWcWhBWJ1lF10p1CfWZiEZu3-X88RhJpxfcJyI17M3PIIV8UL8MhkHdvlJujtroPlImA3NsXcvANhgcG0Visy42nmfuv_M4zQ"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Content Layout -->
+<main class="pt-32 pb-20 px-8 max-w-[1440px] mx-auto flex gap-8">
+<!-- Left Sidebar: Precision Filters -->
+<aside class="w-72 flex-shrink-0 sticky top-32 h-[calc(100vh-160px)] overflow-y-auto pr-4">
+<div class="space-y-8">
+<div>
+<h3 class="font-headline font-bold text-lg mb-6 text-on-surface">Precision Filters</h3>
+<!-- Category -->
+<div class="mb-8">
+<label class="text-[10px] uppercase tracking-widest text-outline font-bold mb-4 block">Category</label>
+<div class="space-y-3">
+<label class="flex items-center group cursor-pointer">
+<input checked="" class="w-4 h-4 rounded border-outline-variant bg-surface-container-lowest text-primary focus:ring-primary focus:ring-offset-background" type="checkbox"/>
+<span class="ml-3 text-sm text-on-surface group-hover:text-primary transition-colors">Equity Funds</span>
+</label>
+<label class="flex items-center group cursor-pointer">
+<input class="w-4 h-4 rounded border-outline-variant bg-surface-container-lowest text-primary focus:ring-primary focus:ring-offset-background" type="checkbox"/>
+<span class="ml-3 text-sm text-ink-silver group-hover:text-primary transition-colors">Debt Funds</span>
+</label>
+<label class="flex items-center group cursor-pointer">
+<input class="w-4 h-4 rounded border-outline-variant bg-surface-container-lowest text-primary focus:ring-primary focus:ring-offset-background" type="checkbox"/>
+<span class="ml-3 text-sm text-ink-silver group-hover:text-primary transition-colors">Hybrid Funds</span>
+</label>
+<label class="flex items-center group cursor-pointer">
+<input class="w-4 h-4 rounded border-outline-variant bg-surface-container-lowest text-primary focus:ring-primary focus:ring-offset-background" type="checkbox"/>
+<span class="ml-3 text-sm text-ink-silver group-hover:text-primary transition-colors">Index Funds</span>
+</label>
+</div>
+</div>
+<!-- AMC -->
+<div class="mb-8">
+<label class="text-[10px] uppercase tracking-widest text-outline font-bold mb-4 block">Asset Management Co.</label>
+<div class="relative mb-4">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-sm text-outline">search</span>
+<input class="w-full bg-surface-container-lowest border-none rounded-lg pl-10 text-sm focus:ring-1 focus:ring-primary placeholder:text-outline/50" placeholder="Search AMC..." type="text"/>
+</div>
+<div class="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+<label class="flex items-center group cursor-pointer">
+<input class="w-4 h-4 rounded border-outline-variant bg-surface-container-lowest text-primary" type="checkbox"/>
+<span class="ml-3 text-sm text-ink-silver group-hover:text-primary transition-colors">HDFC Mutual Fund</span>
+</label>
+<label class="flex items-center group cursor-pointer">
+<input class="w-4 h-4 rounded border-outline-variant bg-surface-container-lowest text-primary" type="checkbox"/>
+<span class="ml-3 text-sm text-ink-silver group-hover:text-primary transition-colors">ICICI Prudential</span>
+</label>
+<label class="flex items-center group cursor-pointer">
+<input class="w-4 h-4 rounded border-outline-variant bg-surface-container-lowest text-primary" type="checkbox"/>
+<span class="ml-3 text-sm text-ink-silver group-hover:text-primary transition-colors">SBI Mutual Fund</span>
+</label>
+<label class="flex items-center group cursor-pointer">
+<input class="w-4 h-4 rounded border-outline-variant bg-surface-container-lowest text-primary" type="checkbox"/>
+<span class="ml-3 text-sm text-ink-silver group-hover:text-primary transition-colors">Axis Mutual Fund</span>
+</label>
+</div>
+</div>
+<!-- Risk Rating -->
+<div>
+<label class="text-[10px] uppercase tracking-widest text-outline font-bold mb-4 block">Risk Profile</label>
+<div class="grid grid-cols-2 gap-2">
+<button class="py-2 px-3 text-xs rounded-lg bg-surface-container-high border border-outline-variant hover:border-primary transition-colors">Low Risk</button>
+<button class="py-2 px-3 text-xs rounded-lg bg-surface-container-high border border-outline-variant hover:border-primary transition-colors">Moderate</button>
+<button class="py-2 px-3 text-xs rounded-lg bg-primary/20 border border-primary text-primary">High Risk</button>
+<button class="py-2 px-3 text-xs rounded-lg bg-surface-container-high border border-outline-variant hover:border-primary transition-colors">Very High</button>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Area: Grid -->
+<section class="flex-grow">
+<!-- Header Section -->
+<div class="flex flex-col gap-6 mb-10">
+<div class="flex items-center justify-between">
+<h1 class="font-headline font-bold text-4xl tracking-tight text-on-surface">Fund Discovery</h1>
+<div class="flex items-center gap-3 bg-surface-container-low p-1 rounded-xl border border-outline-variant/10">
+<button class="p-2 rounded-lg bg-surface-container-highest text-primary">
+<span class="material-symbols-outlined">grid_view</span>
+</button>
+<button class="p-2 rounded-lg text-outline hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">list</span>
+</button>
+</div>
+</div>
+<!-- Wide Glassmorphic Search Bar -->
+<div class="relative">
+<div class="absolute inset-y-0 left-6 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-outline">search</span>
+</div>
+<input class="w-full glass-card-vi bg-white/5 border-white/10 rounded-2xl py-5 pl-16 pr-6 text-lg focus:ring-2 focus:ring-primary/50 focus:outline-none placeholder:text-outline/40" placeholder="Search for funds, sectors, or asset management companies..." type="text"/>
+<div class="absolute inset-y-0 right-6 flex items-center gap-4">
+<kbd class="hidden md:block px-2 py-1 bg-surface-container-highest rounded text-[10px] font-mono text-outline">CMD + K</kbd>
+</div>
+</div>
+<div class="flex items-center gap-4 text-sm">
+<span class="text-outline">Showing 1,240 Results</span>
+<div class="h-4 w-px bg-outline-variant/30"></div>
+<span class="text-on-surface">Sorted by: <button class="text-primary font-bold">1Y Returns <span class="material-symbols-outlined align-middle text-sm">expand_more</span></button></span>
+</div>
+</div>
+<!-- Fund Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+<!-- Fund Card 1 -->
+<div class="glass-card-vi rounded-2xl p-6 flex flex-col h-full">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-full bg-white flex items-center justify-center p-2">
+<img alt="HDFC AMC" class="w-full h-full object-contain" data-alt="HDFC Mutual Fund Logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBEUoZwu-y5XOw3l6c48A3z29_dsG3JeegNABY9BjRtl0pJuYZrhP3vcRF1dKvB2Y3jjHoA_xEXhGIJRy95vQmBr4tEl70RwrqNbS6_Ev9u3GslESAsVTn4kh8bcFuNsmPcGbGs7S_3hhxt9OmBLEyqJAd-es2OVLJR3VAAFIzPfFSfbcp7R8o0HnTdbWMaRY_Z1WcaTKK6WbL46nwcJ3psyu8sChoXrlLYMBB5EOrfTh5E8LeBlaqB_hHueatImCkCEV7zwRXPpA"/>
+</div>
+<span class="bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border border-primary/20">Equity Small Cap</span>
+</div>
+<h2 class="font-headline font-bold text-xl leading-tight mb-6 flex-grow">Akshaya Quant Momentum Growth Fund</h2>
+<div class="grid grid-cols-2 gap-4 mb-6">
+<div>
+<p class="text-[10px] uppercase text-outline mb-1">Current NAV</p>
+<p class="font-mono text-lg text-on-surface">₹142.85</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] uppercase text-outline mb-1">1Y Return</p>
+<span class="inline-flex items-center px-2 py-1 rounded bg-primary/20 text-primary font-mono text-sm font-bold">
+                                +38.42%
+                            </span>
+</div>
+</div>
+<div class="mt-auto pt-6 border-t border-white/5">
+<div class="flex justify-between items-end mb-2">
+<span class="text-[10px] uppercase text-outline">Historical Trend</span>
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+</div>
+<div class="h-12 w-full sparkline-gradient rounded overflow-hidden relative">
+<svg class="w-full h-full preserve-3d" viewbox="0 0 100 20">
+<path d="M0,15 Q10,18 20,12 T40,14 T60,8 T80,10 T100,2" fill="none" stroke="#00d87a" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- Fund Card 2 -->
+<div class="glass-card-vi rounded-2xl p-6 flex flex-col h-full">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-full bg-white flex items-center justify-center p-2">
+<img alt="ICICI AMC" class="w-full h-full object-contain" data-alt="ICICI Prudential Logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqYXXvyssAPz6vTJAhaqEsuwmecGePSzJrtFp5-U-lnExM4hsirweScxXZRO-Ut8nq_vwlGIHYVAODsEtYms2bz-JiESBs4-7zhav2MHaPOlzdCViI4MvwIhhYw8Wpkf-n4mh56ik3_dLYPzcjhQp7JTsRfHWmjbL0YfNYwepwGiI_kwnFMAKQ1VmgFUnERr8Abb_THTdBbF9i0px-C2Ne6uceHscAr98UYHSrT09AT7eP7z-oa5LVrghGNW0aqDUGOjzjZKd8fQ"/>
+</div>
+<span class="bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border border-primary/20">Bluechip Equity</span>
+</div>
+<h2 class="font-headline font-bold text-xl leading-tight mb-6 flex-grow">Institutional Emerald Large Cap Direct</h2>
+<div class="grid grid-cols-2 gap-4 mb-6">
+<div>
+<p class="text-[10px] uppercase text-outline mb-1">Current NAV</p>
+<p class="font-mono text-lg text-on-surface">₹84.22</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] uppercase text-outline mb-1">1Y Return</p>
+<span class="inline-flex items-center px-2 py-1 rounded bg-primary/20 text-primary font-mono text-sm font-bold">
+                                +24.15%
+                            </span>
+</div>
+</div>
+<div class="mt-auto pt-6 border-t border-white/5">
+<div class="flex justify-between items-end mb-2">
+<span class="text-[10px] uppercase text-outline">Historical Trend</span>
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+</div>
+<div class="h-12 w-full sparkline-gradient rounded overflow-hidden relative">
+<svg class="w-full h-full" viewbox="0 0 100 20">
+<path d="M0,18 L10,16 L20,17 L30,12 L40,14 L50,10 L60,8 L70,9 L80,5 L90,4 L100,2" fill="none" stroke="#00d87a" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- Fund Card 3 -->
+<div class="glass-card-vi rounded-2xl p-6 flex flex-col h-full">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-full bg-white flex items-center justify-center p-2">
+<img alt="SBI AMC" class="w-full h-full object-contain" data-alt="SBI Mutual Fund Logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAw0pCGr3P40dO_7QtnK0z1ELsqHe_bSKgRQw4lHmd6QciYgSO7bX4xM0Wno8TUjVmBBfHCvF3nBccEKEt5cFL9V5ihLMX0GoL3UqLl0FUHQ4-V_zbygodJ7t5V1FyGdgN3Kf1HH2GXCSdGkJ34VFRG9jP7kZCsY0HPNljBJjwkz7jxySvSYAQUBQq2sa4v6Q-xnENJzRluJr5Brmr06xTHmOI-JnbjeykuEr3yrfOGk3x5wh9dIRuTNcsLMP5mVFbTuLta4gTNPw"/>
+</div>
+<span class="bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border border-primary/20">Technology Focus</span>
+</div>
+<h2 class="font-headline font-bold text-xl leading-tight mb-6 flex-grow">Digital Sovereign High-Alpha Portfolio</h2>
+<div class="grid grid-cols-2 gap-4 mb-6">
+<div>
+<p class="text-[10px] uppercase text-outline mb-1">Current NAV</p>
+<p class="font-mono text-lg text-on-surface">₹210.40</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] uppercase text-outline mb-1">1Y Return</p>
+<span class="inline-flex items-center px-2 py-1 rounded bg-primary/20 text-primary font-mono text-sm font-bold">
+                                +42.88%
+                            </span>
+</div>
+</div>
+<div class="mt-auto pt-6 border-t border-white/5">
+<div class="flex justify-between items-end mb-2">
+<span class="text-[10px] uppercase text-outline">Historical Trend</span>
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+</div>
+<div class="h-12 w-full sparkline-gradient rounded overflow-hidden relative">
+<svg class="w-full h-full" viewbox="0 0 100 20">
+<path d="M0,20 Q20,15 40,18 T70,5 T100,2" fill="none" stroke="#00d87a" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- Fund Card 4 -->
+<div class="glass-card-vi rounded-2xl p-6 flex flex-col h-full">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-full bg-white flex items-center justify-center p-2">
+<img alt="Axis AMC" class="w-full h-full object-contain" data-alt="Axis Mutual Fund Logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6cLWXu875vWzutEWQqlzJksV9RHEfTdL84aJ-uAovZ_uCKaVEFNqeD1vlIF-vsB-yrX5FlE0jfZ1r0wVoTKlw7AJvQ1S8lU5svnUCj0R0N7scotOz_8yS2zUE3PdXaECreuDjiyAiFBbM3BDMQ9_Nc0mi6g62lw6ykf_3XBPNzqqiUah2U5JpHIibdtdjvipsA1cIHSnzbvxRSA4hZYB-RNRKz5TGXXUGO9MH4abJt1V0U55fKl63rTcQY_ESw5F5q-gu_fC8wg"/>
+</div>
+<span class="bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border border-primary/20">Mid Cap Alpha</span>
+</div>
+<h2 class="font-headline font-bold text-xl leading-tight mb-6 flex-grow">Axis Precision Midcap Growth</h2>
+<div class="grid grid-cols-2 gap-4 mb-6">
+<div>
+<p class="text-[10px] uppercase text-outline mb-1">Current NAV</p>
+<p class="font-mono text-lg text-on-surface">₹64.12</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] uppercase text-outline mb-1">1Y Return</p>
+<span class="inline-flex items-center px-2 py-1 rounded bg-primary/20 text-primary font-mono text-sm font-bold">
+                                +29.70%
+                            </span>
+</div>
+</div>
+<div class="mt-auto pt-6 border-t border-white/5">
+<div class="flex justify-between items-end mb-2">
+<span class="text-[10px] uppercase text-outline">Historical Trend</span>
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+</div>
+<div class="h-12 w-full sparkline-gradient rounded overflow-hidden relative">
+<svg class="w-full h-full" viewbox="0 0 100 20">
+<path d="M0,18 C10,18 20,5 50,8 S80,18 100,2" fill="none" stroke="#00d87a" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- Fund Card 5 -->
+<div class="glass-card-vi rounded-2xl p-6 flex flex-col h-full">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-full bg-white flex items-center justify-center p-2">
+<img alt="Tata AMC" class="w-full h-full object-contain" data-alt="Tata Mutual Fund Logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHG01_b3hf_LY5_e-Dqrc9fdKooRSb6K3RWV8-m_7g6IndDr10WTVIDtHv-7f5DNsKqqYDBXnhFZ5hzIXDkZmhbPZm1SVQoKT5QqsHn5bHT_LlmiztbmnGQDVeBkjf0SZS0TvDHkhMJlf-YuBZl-M1kte5qx1aiUzFUdBXpoDL4nF-ksshz4nHpaqhDxEdJlw5wKKYUJ-pNmw1DusfGDg5ZcuajUzOVVzTI-dBE3LG6fCPTMPxuQ2K1ZBm-gTjVzFDaxL_5umHEQ"/>
+</div>
+<span class="bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border border-primary/20">ESG Sustainable</span>
+</div>
+<h2 class="font-headline font-bold text-xl leading-tight mb-6 flex-grow">Tata Ethical Sovereign ESG Fund</h2>
+<div class="grid grid-cols-2 gap-4 mb-6">
+<div>
+<p class="text-[10px] uppercase text-outline mb-1">Current NAV</p>
+<p class="font-mono text-lg text-on-surface">₹52.18</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] uppercase text-outline mb-1">1Y Return</p>
+<span class="inline-flex items-center px-2 py-1 rounded bg-primary/20 text-primary font-mono text-sm font-bold">
+                                +19.33%
+                            </span>
+</div>
+</div>
+<div class="mt-auto pt-6 border-t border-white/5">
+<div class="flex justify-between items-end mb-2">
+<span class="text-[10px] uppercase text-outline">Historical Trend</span>
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+</div>
+<div class="h-12 w-full sparkline-gradient rounded overflow-hidden relative">
+<svg class="w-full h-full" viewbox="0 0 100 20">
+<path d="M0,15 L30,12 L60,18 L100,5" fill="none" stroke="#00d87a" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- Fund Card 6 -->
+<div class="glass-card-vi rounded-2xl p-6 flex flex-col h-full">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-full bg-white flex items-center justify-center p-2">
+<img alt="Nippon AMC" class="w-full h-full object-contain" data-alt="Nippon India Logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQJrDCLtRzwGlkS4y2OhXR1tgr1Y6fbiZeLGD1UjqDsaqPhZQy2XjSNEf7Bpohu03xQnjIr_EI6Y0XNnr1-EU5TtQe8zrEr99Kdw5FxN1jeG7JUfw-hBg0s64ZGWdYd05qy3fYfV4HarigWLfYmAhR_oy3kjKK6d9i6hBgyxPHlzfREAB4AdaNGHdo7und_ZI8kl_DTKH2c_wjuXyWvrfZfj2TMaEPJpecXnGDFl1UffgDIPpLC5dg7p4FK7L_rZ99jG85P2k1TA"/>
+</div>
+<span class="bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border border-primary/20">International</span>
+</div>
+<h2 class="font-headline font-bold text-xl leading-tight mb-6 flex-grow">US Nasdaq 100 Index Vault Fund</h2>
+<div class="grid grid-cols-2 gap-4 mb-6">
+<div>
+<p class="text-[10px] uppercase text-outline mb-1">Current NAV</p>
+<p class="font-mono text-lg text-on-surface">₹38.12</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] uppercase text-outline mb-1">1Y Return</p>
+<span class="inline-flex items-center px-2 py-1 rounded bg-primary/20 text-primary font-mono text-sm font-bold">
+                                +31.25%
+                            </span>
+</div>
+</div>
+<div class="mt-auto pt-6 border-t border-white/5">
+<div class="flex justify-between items-end mb-2">
+<span class="text-[10px] uppercase text-outline">Historical Trend</span>
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+</div>
+<div class="h-12 w-full sparkline-gradient rounded overflow-hidden relative">
+<svg class="w-full h-full" viewbox="0 0 100 20">
+<path d="M0,10 L20,12 L40,8 L60,5 L80,2 L100,10" fill="none" stroke="#00d87a" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+</div>
+</div>
+</div>
+<!-- Pagination/Load More -->
+<div class="mt-12 flex justify-center">
+<button class="px-8 py-3 rounded-xl border border-outline/20 text-on-surface hover:bg-white/5 transition-all font-headline font-bold">
+                    Load More Funds
+                </button>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full py-12 px-8 border-t border-[#161d1a] bg-[#060d0a]">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-8 max-w-7xl mx-auto">
+<div class="col-span-1 md:col-span-1">
+<div class="text-lg font-bold text-[#00d87a] mb-4 font-headline">Akshaya Vault</div>
+<p class="text-[#c4cfc9] text-xs leading-relaxed opacity-60">
+                    The premium standard in digital asset engineering and sovereign wealth management. Secure, precise, institutional.
+                </p>
+</div>
+<div>
+<h4 class="text-on-surface font-bold text-sm mb-4">Resources</h4>
+<ul class="space-y-2">
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors text-sm" href="#">Regulatory Disclosures</a></li>
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors text-sm" href="#">Privacy Policy</a></li>
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors text-sm" href="#">Terms of Service</a></li>
+</ul>
+</div>
+<div>
+<h4 class="text-on-surface font-bold text-sm mb-4">Integrity</h4>
+<ul class="space-y-2">
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors text-sm" href="#">SEC Filings</a></li>
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors text-sm" href="#">Security Audit</a></li>
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors text-sm" href="#">Contact Support</a></li>
+</ul>
+</div>
+<div>
+<h4 class="text-on-surface font-bold text-sm mb-4">Newsletter</h4>
+<div class="flex">
+<input class="bg-surface-container border-none rounded-l-lg text-sm w-full focus:ring-1 focus:ring-primary" placeholder="Email Address" type="text"/>
+<button class="bg-primary text-on-primary px-4 rounded-r-lg font-bold">
+<span class="material-symbols-outlined align-middle">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+<div class="max-w-7xl mx-auto mt-12 pt-8 border-t border-white/5 text-center">
+<p class="text-[#c4cfc9] text-[10px] leading-relaxed max-w-2xl mx-auto opacity-50 uppercase tracking-widest">
+                © 2024 Akshaya Vault Institutional. Member FINRA/SIPC. High-risk investment disclosure: Digital assets are volatile and carry significant risk.
+            </p>
+</div>
+</footer>
+</body></html>

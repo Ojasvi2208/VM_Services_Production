@@ -1,7 +1,7 @@
 /**
  * Geometric Brownian Motion (GBM) Monte Carlo Simulation Engine
  * 
- * Autonomous Quant Engine for Akshaya Goal Planning.
+ * Autonomous Quant Engine for VMFS Goal Planning.
  * Runs N iterations using GBM: dS = μS·dt + σS·dW
  * where μ = drift (real return), σ = volatility, dW = Wiener process
  *

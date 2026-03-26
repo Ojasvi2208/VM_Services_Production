@@ -21,8 +21,8 @@ function getPool(): Pool {
   if (!globalThis.__pgPool) {
     globalThis.__pgPool = new Pool({
       connectionString: process.env.DATABASE_URL || 'postgresql://localhost/vijaymalik_funds',
-      max: 10,                    // Conservative for serverless (was 20 — causes pool exhaustion)
-      idleTimeoutMillis: 20000,   // Release idle connections faster in serverless
+      max: 20,                    // Tuned for 13+ cron routes + user traffic (Railway allows 100 total)
+      idleTimeoutMillis: 10000,   // Release idle connections faster in serverless (was 20s)
       connectionTimeoutMillis: 5000,
       allowExitOnIdle: true,      // Let the process exit cleanly in serverless
     });

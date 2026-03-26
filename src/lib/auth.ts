@@ -47,7 +47,7 @@ export async function getUserFromSession(token: string): Promise<any | null> {
             u.income_range, u.occupation_type, u.tax_regime, u.pan_status
      FROM users u
      JOIN user_sessions s ON u.id = s.user_id
-     WHERE s.token = $1 AND s.expires_at > NOW() AND u.is_active = true`,
+     WHERE s.token = $1 AND s.expires_at > NOW() AND u.is_active IS NOT FALSE`,
     [token]
   );
 
@@ -79,7 +79,7 @@ async function getUserFromJWT(token: string): Promise<any | null> {
   const payload = verifyJWT(token);
   if (!payload) return null;
   const result = await pool.query(
-    'SELECT id, email, full_name, phone, created_at, email_verified, is_premium, premium_expires_at, income_range, occupation_type, tax_regime, pan_status FROM users WHERE id = $1 AND is_active = true',
+    'SELECT id, email, full_name, phone, created_at, email_verified, is_premium, premium_expires_at, income_range, occupation_type, tax_regime, pan_status FROM users WHERE id = $1 AND is_active IS NOT FALSE',
     [payload.userId]
   );
   return result.rows.length > 0 ? result.rows[0] : null;
@@ -174,7 +174,7 @@ export async function loginUser(
 
     const user = result.rows[0];
 
-    if (!user.is_active) {
+    if (user.is_active === false) {
       return { success: false, error: 'Account is deactivated' };
     }
 

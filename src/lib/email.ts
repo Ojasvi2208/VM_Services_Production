@@ -1,5 +1,5 @@
 /**
- * Email Service for VM Financial Services
+ * Email Service for Vijay Malik Financial Services
  * Uses nodemailer for sending emails
  */
 
@@ -25,7 +25,7 @@ const transporter = nodemailer.createTransport({
 });
 
 const FROM_EMAIL = process.env.SMTP_FROM || 'support@vmfinancialservices.com';
-const FROM_NAME = 'VM Financial Services';
+const FROM_NAME = 'Vijay Malik Financial Services';
 
 interface EmailOptions {
   to: string;
@@ -100,7 +100,7 @@ export async function sendWelcomeEmail(userEmail: string, userName: string): Pro
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Welcome to VM Financial Services</title>
+  <title>Welcome to Vijay Malik Financial Services</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f8fafc;">
   <table role="presentation" style="width: 100%; border-collapse: collapse;">
@@ -112,7 +112,7 @@ export async function sendWelcomeEmail(userEmail: string, userName: string): Pro
           <tr>
             <td style="background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); padding: 40px; border-radius: 16px 16px 0 0; text-align: center;">
               <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">
-                Welcome to VM Financial Services
+                Welcome to Vijay Malik Financial Services
               </h1>
               <p style="color: rgba(255,255,255,0.8); margin: 10px 0 0; font-size: 14px;">
                 ARN 317605 | Your Trusted Financial Partner
@@ -237,7 +237,7 @@ export function generateOTP(): string {
  * Send password reset OTP email
  */
 export async function sendPasswordResetOTP(userEmail: string, userName: string, otp: string): Promise<boolean> {
-  const subject = 'Your Password Reset OTP - VM Financial Services';
+  const subject = 'Your Password Reset OTP - Vijay Malik Financial Services';
   
   const html = `
 <!DOCTYPE html>

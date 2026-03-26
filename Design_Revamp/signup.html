@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-primary": "#00391c",
+              "surface": "#0d1512",
+              "outline": "#859586",
+              "on-error": "#690005",
+              "on-surface-variant": "#bacbbb",
+              "on-primary-container": "#00582e",
+              "primary-fixed-dim": "#25e283",
+              "on-surface": "#dce5df",
+              "on-error-container": "#ffdad6",
+              "secondary-fixed": "#d6e7db",
+              "tertiary-fixed": "#dae5df",
+              "primary-container": "#00d87a",
+              "background": "#0d1512",
+              "inverse-on-surface": "#2a322e",
+              "on-background": "#dce5df",
+              "surface-container-high": "#242c28",
+              "surface-bright": "#333b37",
+              "on-secondary": "#25342c",
+              "surface-variant": "#2f3733",
+              "surface-container": "#19211e",
+              "on-secondary-fixed-variant": "#3b4a42",
+              "error-container": "#93000a",
+              "primary": "#44f593",
+              "on-tertiary-fixed": "#141e1a",
+              "on-tertiary": "#29332f",
+              "tertiary-fixed-dim": "#bec9c3",
+              "tertiary-container": "#b4bfb9",
+              "surface-tint": "#25e283",
+              "surface-container-low": "#161d1a",
+              "error": "#ffb4ab",
+              "on-tertiary-fixed-variant": "#3f4945",
+              "tertiary": "#d0dbd5",
+              "secondary": "#bacbbf",
+              "primary-fixed": "#5cff9f",
+              "on-tertiary-container": "#444e49",
+              "inverse-primary": "#006d3b",
+              "surface-container-lowest": "#08100d",
+              "secondary-container": "#3e4c44",
+              "surface-dim": "#0d1512",
+              "on-primary-fixed": "#00210e",
+              "inverse-surface": "#dce5df",
+              "secondary-fixed-dim": "#bacbbf",
+              "on-secondary-container": "#acbcb1",
+              "outline-variant": "#3c4a3e",
+              "surface-container-highest": "#2f3733",
+              "on-secondary-fixed": "#101e17",
+              "on-primary-fixed-variant": "#00522b"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"],
+              "mono": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .glass-modal {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(68, 245, 147, 0.15);
+            box-shadow: 0 0 40px rgba(0, 216, 122, 0.05);
+        }
+        .emerald-glow {
+            box-shadow: 0 0 20px rgba(68, 245, 147, 0.1);
+        }
+        .input-glass {
+            background: #08100d;
+            border: 1px solid rgba(133, 149, 134, 0.2);
+            transition: all 0.3s ease;
+        }
+        .input-glass:focus-within {
+            border-color: #44f593;
+            box-shadow: 0 0 12px rgba(68, 245, 147, 0.15);
+        }
+        .primary-gradient {
+            background: linear-gradient(135deg, #44f593 0%, #00d87a 100%);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-[#060D0A] font-body text-on-surface min-h-screen flex items-center justify-center relative overflow-hidden">
+<!-- Abstract Background Elements -->
+<div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]"></div>
+<div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]"></div>
+<!-- Main Auth Canvas -->
+<main class="relative z-10 w-full max-w-md px-6 py-12">
+<!-- Auth Modal -->
+<div class="glass-modal rounded-2xl overflow-hidden emerald-glow">
+<!-- Header Section -->
+<div class="px-8 pt-10 pb-6 text-center">
+<div class="flex justify-center mb-6">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">shield_with_heart</span>
+<span class="font-headline font-bold text-2xl tracking-tighter text-primary">Akshaya Vault</span>
+</div>
+</div>
+<h1 class="font-headline text-2xl font-semibold text-on-surface tracking-tight mb-2">Secure Sign In</h1>
+<p class="text-on-surface-variant text-sm font-medium">Access your institutional digital asset portfolio</p>
+</div>
+<!-- Form Section -->
+<form class="px-8 pb-8 space-y-5">
+<!-- Email Input -->
+<div class="space-y-1.5">
+<label class="block text-xs font-medium uppercase tracking-widest text-outline pl-1">Email Address</label>
+<div class="input-glass flex items-center px-4 py-3.5 rounded-xl">
+<span class="material-symbols-outlined text-outline text-xl mr-3">alternate_email</span>
+<input class="bg-transparent border-none p-0 w-full text-on-surface placeholder:text-outline/50 focus:ring-0 text-sm" placeholder="name@institution.com" type="email"/>
+</div>
+</div>
+<!-- Security Key Input -->
+<div class="space-y-1.5">
+<div class="flex justify-between items-center px-1">
+<label class="block text-xs font-medium uppercase tracking-widest text-outline">Security Key</label>
+<a class="text-[10px] font-bold text-primary uppercase tracking-tighter hover:underline" href="#">Forgot Key?</a>
+</div>
+<div class="input-glass flex items-center px-4 py-3.5 rounded-xl">
+<span class="material-symbols-outlined text-outline text-xl mr-3">key</span>
+<input class="bg-transparent border-none p-0 w-full text-on-surface placeholder:text-outline/50 focus:ring-0 text-sm font-mono tracking-widest" placeholder="••••••••••••" type="password"/>
+</div>
+</div>
+<!-- Primary CTA -->
+<button class="primary-gradient w-full py-4 rounded-xl flex items-center justify-center gap-2 group transition-transform active:scale-[0.98]" type="submit">
+<span class="text-on-primary font-headline font-bold text-sm tracking-wide">Sign In</span>
+<span class="material-symbols-outlined text-on-primary text-lg transition-transform group-hover:translate-x-1">arrow_forward</span>
+</button>
+</form>
+<!-- Modal Footer -->
+<div class="px-8 py-5 bg-surface-container-low/50 border-t border-white/5 text-center">
+<p class="text-sm text-on-surface-variant">
+                    New to Akshaya? 
+                    <a class="text-primary font-semibold ml-1 hover:underline" href="#">Establish Account</a>
+</p>
+</div>
+</div>
+<!-- Trust & Compliance Bar -->
+<div class="mt-8 flex flex-col items-center gap-6">
+<div class="flex items-center gap-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
+<!-- AES Badge -->
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-sm">lock</span>
+<span class="font-mono text-[10px] uppercase tracking-tighter text-on-surface-variant">256-bit AES encryption</span>
+</div>
+<!-- Divider -->
+<div class="h-3 w-[1px] bg-outline-variant/30"></div>
+<!-- AMFI Badge -->
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-sm">verified_user</span>
+<span class="font-mono text-[10px] uppercase tracking-tighter text-on-surface-variant">AMFI-Reg status</span>
+</div>
+</div>
+<!-- Regulatory Footer Text -->
+<p class="text-[10px] text-center text-outline/40 max-w-xs leading-relaxed uppercase tracking-tighter font-medium">
+                Protected by Akshaya Institutional Security protocols. 
+                Unauthorized access is strictly monitored and reported.
+            </p>
+</div>
+</main>
+<!-- Footer Decorative Gradient -->
+<div class="fixed bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
+</body></html>

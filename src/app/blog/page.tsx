@@ -1,9 +1,7 @@
 import Link from 'next/link';
-import Section from '@/components/Section';
-import ComplianceNotice from '@/components/ComplianceNotice';
-import ResponsiveContainer from '@/components/ResponsiveContainer';
+import NavBar from '@/components/home/NavBar';
+import SiteFooter from '@/components/home/SiteFooter';
 
-// Blog post type definition
 type BlogPost = {
   id: string;
   title: string;
@@ -14,259 +12,194 @@ type BlogPost = {
   date: string;
   readTime: string;
   featured?: boolean;
-  imagePath?: string;
 };
 
-// Blog post card component
-const BlogPostCard = ({ 
-  post, 
-  featured = false 
-}: { 
-  post: BlogPost; 
-  featured?: boolean 
-}) => {
+const blogPosts: BlogPost[] = [
+  {
+    id: '1',
+    title: 'Understanding SIP: Your Path to Disciplined Investing',
+    slug: 'understanding-sip-disciplined-investing',
+    excerpt: 'Learn how Systematic Investment Plans can help you build wealth steadily regardless of market volatility, and why rupee cost averaging works in your favor.',
+    category: 'Investing Basics',
+    author: 'Vijay Malik',
+    date: 'August 15, 2023',
+    readTime: '5 min read',
+    featured: true,
+  },
+  {
+    id: '2',
+    title: "Debt Funds vs Fixed Deposits: What's Right for You?",
+    slug: 'debt-funds-vs-fixed-deposits',
+    excerpt: 'Compare the tax efficiency, returns potential, and liquidity of debt mutual funds against traditional bank fixed deposits to optimize your investment strategy.',
+    category: 'Tax Planning',
+    author: 'Financial Team',
+    date: 'July 28, 2023',
+    readTime: '4 min read',
+  },
+  {
+    id: '3',
+    title: 'Goal-Based Investing: Align Your Finances With Life Objectives',
+    slug: 'goal-based-investing-align-finances',
+    excerpt: 'How to structure your investments around specific life goals like education, retirement, or home buying, and why this approach leads to better financial outcomes.',
+    category: 'Financial Planning',
+    author: 'Vijay Malik',
+    date: 'July 12, 2023',
+    readTime: '6 min read',
+  },
+  {
+    id: '4',
+    title: "Understanding SEBI's New Mutual Fund Categories",
+    slug: 'understanding-sebi-mutual-fund-categories',
+    excerpt: 'A comprehensive guide to the mutual fund categorization by SEBI and how it impacts your investment choices and portfolio diversification strategy.',
+    category: 'Market Updates',
+    author: 'Research Team',
+    date: 'June 25, 2023',
+    readTime: '7 min read',
+  },
+  {
+    id: '5',
+    title: 'The Power of Compounding in Wealth Creation',
+    slug: 'power-of-compounding-wealth-creation',
+    excerpt: 'Discover how starting early with even modest investments can lead to significant wealth over time through the mathematical magic of compounding.',
+    category: 'Investing Basics',
+    author: 'Financial Team',
+    date: 'June 10, 2023',
+    readTime: '4 min read',
+  },
+  {
+    id: '6',
+    title: 'Navigating Market Volatility: Staying Invested During Uncertainty',
+    slug: 'navigating-market-volatility',
+    excerpt: 'Strategies to maintain investment discipline during market downturns and why emotional reactions can harm your long-term financial goals.',
+    category: 'Market Updates',
+    author: 'Vijay Malik',
+    date: 'May 28, 2023',
+    readTime: '5 min read',
+  },
+  {
+    id: '7',
+    title: 'ETFs vs Index Funds: Understanding the Differences',
+    slug: 'etfs-vs-index-funds-differences',
+    excerpt: 'A comparative analysis of ETFs and Index Mutual Funds, their cost structures, tax implications, and suitability for different investor profiles.',
+    category: 'Investment Products',
+    author: 'Research Team',
+    date: 'May 15, 2023',
+    readTime: '6 min read',
+  },
+];
+
+const CATEGORIES = ['All Posts', 'Investing Basics', 'Financial Planning', 'Tax Planning', 'Market Updates', 'Investment Products'];
+
+const CAT_ICONS: Record<string, string> = {
+  'Investing Basics': 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253',
+  'Tax Planning': 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z',
+  'Financial Planning': 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+  'Market Updates': 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
+  'Investment Products': 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+};
+
+function BlogCard({ post, featured = false }: { post: BlogPost; featured?: boolean }) {
   return (
-    <div className={`rounded-lg overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] animate-fadeInUp ${featured ? 'col-span-2 border-2 border-brand-gold/20' : 'border border-brand-pearl'}`}>
-      <div className="relative group">
-        <div className={`bg-gradient-to-br from-brand-pearl to-blue-50 w-full ${featured ? 'h-64' : 'h-48'} transition-all duration-300 group-hover:from-blue-50 group-hover:to-brand-gold/10`}>
-          {/* Image placeholder - would be replaced with actual image */}
-          <div className="h-full w-full flex items-center justify-center text-brand-navy/40">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-brand-royal/20 rounded-full flex items-center justify-center mx-auto mb-2 animate-pulse">
-                <div className="w-6 h-6 bg-brand-gold rounded-sm"></div>
-              </div>
-              Blog Image Placeholder
-            </div>
+    <div className={`glass-card rounded-2xl overflow-hidden hover:border-[#44f593]/20 transition-all group ${featured ? 'md:col-span-2' : ''}`}>
+      {/* Image placeholder */}
+      <div className={`bg-gradient-to-br from-[#161d1a] to-[#0d1512] flex items-center justify-center ${featured ? 'h-52' : 'h-36'}`}>
+        <div className="text-center">
+          <div className="w-10 h-10 rounded-xl bg-[#44f593]/10 border border-[#44f593]/20 flex items-center justify-center mx-auto mb-2">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#44f593" strokeWidth="1.75">
+              <path strokeLinecap="round" strokeLinejoin="round" d={CAT_ICONS[post.category] || CAT_ICONS['Investing Basics']} />
+            </svg>
           </div>
         </div>
-        <div className="absolute top-4 left-4">
-          <span className="bg-gradient-to-r from-brand-royal to-brand-navy text-white px-4 py-1.5 text-xs font-medium rounded-full shadow-lg animate-shimmer">
+        <div className="absolute top-3 left-3">
+          <span className="px-2.5 py-1 rounded-full text-xs font-mono font-semibold bg-[#44f593]/10 text-[#44f593] border border-[#44f593]/20">
             {post.category}
           </span>
         </div>
-        {featured && (
-          <div className="absolute top-4 right-4">
-            <div className="w-3 h-3 bg-brand-gold rounded-full animate-pulse"></div>
-          </div>
-        )}
       </div>
-      
-      <div className="p-6 bg-white">
-        <div className="flex items-center text-xs text-brand-navy/60 mb-3">
-          <div className="w-2 h-2 bg-brand-gold rounded-full mr-2 animate-pulse"></div>
-          <span className="text-brand-royal font-medium">{post.date}</span>
-          <span className="mx-2 text-brand-gold">•</span>
-          <span>{post.readTime}</span>
+
+      <div className="p-5 relative">
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-xs font-mono text-[#859586]">{post.date}</span>
+          <span className="w-1 h-1 rounded-full bg-[#3c4a3e]" />
+          <span className="text-xs font-mono text-[#859586]">{post.readTime}</span>
         </div>
-        
-        <h3 className="text-xl font-semibold text-brand-navy mb-3 hover:text-brand-royal transition-colors duration-200">
-          <Link href={`/blog/${post.slug}`}>
-            {post.title}
-          </Link>
+
+        <h3 className={`font-display font-bold text-[#dce5df] group-hover:text-[#44f593] transition-colors mb-2 ${featured ? 'text-xl' : 'text-sm'}`}>
+          <Link href={`/blog/${post.slug}`}>{post.title}</Link>
         </h3>
-        
-        <p className="text-brand-navy/70 text-sm mb-4 line-clamp-2 leading-relaxed">
-          {post.excerpt}
-        </p>
-        
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-brand-navy/60">By <span className="text-brand-gold font-medium">{post.author}</span></span>
-          <Link href={`/blog/${post.slug}`} className="bg-gradient-to-r from-brand-royal to-brand-navy text-white px-4 py-2 rounded-lg text-sm font-medium hover:from-brand-navy hover:to-brand-royal transform hover:scale-105 transition-all duration-200 inline-flex items-center">
-            Read More
-            <div className="ml-2 w-1.5 h-1.5 bg-brand-gold rounded-full animate-pulse"></div>
+
+        <p className="text-xs text-[#859586] leading-relaxed line-clamp-2 mb-4">{post.excerpt}</p>
+
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-[#3c4a3e] font-mono">By {post.author}</span>
+          <Link href={`/blog/${post.slug}`}
+            className="flex items-center gap-1.5 text-[#44f593] text-xs font-semibold hover:underline">
+            Read
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
           </Link>
         </div>
       </div>
     </div>
   );
-};
+}
 
-// Main Blog Page
 export default function BlogPage() {
-  // Blog posts data
-  const blogPosts: BlogPost[] = [
-    {
-      id: '1',
-      title: 'Understanding SIP: Your Path to Disciplined Investing',
-      slug: 'understanding-sip-disciplined-investing',
-      excerpt: 'Learn how Systematic Investment Plans can help you build wealth steadily regardless of market volatility, and why rupee cost averaging works in your favor.',
-      category: 'Investing Basics',
-      author: 'Vijay Malik',
-      date: 'August 15, 2023',
-      readTime: '5 min read',
-      featured: true
-    },
-    {
-      id: '2',
-      title: 'Debt Funds vs Fixed Deposits: What\'s Right for You?',
-      slug: 'debt-funds-vs-fixed-deposits',
-      excerpt: 'Compare the tax efficiency, returns potential, and liquidity of debt mutual funds against traditional bank fixed deposits to optimize your investment strategy.',
-      category: 'Tax Planning',
-      author: 'Financial Team',
-      date: 'July 28, 2023',
-      readTime: '4 min read'
-    },
-    {
-      id: '3',
-      title: 'Goal-Based Investing: Align Your Finances With Life Objectives',
-      slug: 'goal-based-investing-align-finances',
-      excerpt: 'How to structure your investments around specific life goals like education, retirement, or home buying, and why this approach leads to better financial outcomes.',
-      category: 'Financial Planning',
-      author: 'Vijay Malik',
-      date: 'July 12, 2023',
-      readTime: '6 min read'
-    },
-    {
-      id: '4',
-      title: 'Understanding SEBI\'s New Mutual Fund Categories',
-      slug: 'understanding-sebi-mutual-fund-categories',
-      excerpt: 'A comprehensive guide to the mutual fund categorization by SEBI and how it impacts your investment choices and portfolio diversification strategy.',
-      category: 'Market Updates',
-      author: 'Research Team',
-      date: 'June 25, 2023',
-      readTime: '7 min read'
-    },
-    {
-      id: '5',
-      title: 'The Power of Compounding in Wealth Creation',
-      slug: 'power-of-compounding-wealth-creation',
-      excerpt: 'Discover how starting early with even modest investments can lead to significant wealth over time through the mathematical magic of compounding.',
-      category: 'Investing Basics',
-      author: 'Financial Team',
-      date: 'June 10, 2023',
-      readTime: '4 min read'
-    },
-    {
-      id: '6',
-      title: 'Navigating Market Volatility: Staying Invested During Uncertainty',
-      slug: 'navigating-market-volatility',
-      excerpt: 'Strategies to maintain investment discipline during market downturns and why emotional reactions can harm your long-term financial goals.',
-      category: 'Market Updates',
-      author: 'Vijay Malik',
-      date: 'May 28, 2023',
-      readTime: '5 min read'
-    },
-    {
-      id: '7',
-      title: 'ETFs vs Index Funds: Understanding the Differences',
-      slug: 'etfs-vs-index-funds-differences',
-      excerpt: 'A comparative analysis of Exchange Traded Funds and Index Mutual Funds, their cost structures, tax implications, and suitability for different investor profiles.',
-      category: 'Investment Products',
-      author: 'Research Team',
-      date: 'May 15, 2023',
-      readTime: '6 min read'
-    }
-  ];
-  
-  // Featured blog post (first one in the list)
-  const featuredPost = blogPosts[0];
-  
-  // Regular blog posts (excluding the featured one)
-  const regularPosts = blogPosts.slice(1);
-  
+  const featured = blogPosts[0];
+  const regular = blogPosts.slice(1);
+
   return (
-    <>
-      <div className="pt-24"></div> {/* Spacer for absolute header */}
-      <Section background="offwhite" padding="large">
-        <ResponsiveContainer maxWidth="xl">
-          <div className="text-center mb-12 animate-fadeInUp animation-delay-100">
-            <h1 className="text-4xl md:text-5xl font-bold text-brand-navy mb-6">
-              Financial <span className="bg-gradient-to-r from-brand-gold to-yellow-400 bg-clip-text text-transparent animate-shimmer">Education</span> Blog
-            </h1>
-            <p className="text-lg text-brand-navy/80 max-w-3xl mx-auto leading-relaxed">
-              Stay informed with expert insights on <span className="text-brand-gold font-semibold">investing</span>, <span className="text-brand-royal font-semibold">financial planning</span>, and market trends.
-            </p>
-            <div className="flex items-center justify-center mt-4 space-x-2">
-              <div className="w-2 h-2 bg-brand-gold rounded-full animate-pulse"></div>
-              <div className="w-2 h-2 bg-brand-royal rounded-full animate-pulse animation-delay-200"></div>
-              <div className="w-2 h-2 bg-brand-gold rounded-full animate-pulse animation-delay-300"></div>
-            </div>
-          </div>
-          
-          <div className="mb-8 md:mb-12">
-            {/* Filter buttons - in a real app, these would filter posts */}
-            <div className="flex flex-wrap gap-3 mb-8 justify-center animate-fadeInUp animation-delay-300">
-              <button className="px-6 py-2.5 rounded-lg text-sm font-medium bg-gradient-to-r from-brand-royal to-brand-navy text-white shadow-lg hover:from-brand-navy hover:to-brand-royal transform hover:scale-105 transition-all duration-200">
-                All Posts
-              </button>
-              <button className="px-6 py-2.5 rounded-lg text-sm font-medium bg-white text-brand-navy hover:bg-brand-pearl border-2 border-brand-royal/20 hover:border-brand-gold/50 shadow-sm transform hover:scale-105 transition-all duration-200">
-                Investing Basics
-              </button>
-              <button className="px-6 py-2.5 rounded-lg text-sm font-medium bg-white text-brand-navy hover:bg-brand-pearl border-2 border-brand-royal/20 hover:border-brand-gold/50 shadow-sm transform hover:scale-105 transition-all duration-200">
-                Financial Planning
-              </button>
-              <button className="px-6 py-2.5 rounded-lg text-sm font-medium bg-white text-brand-navy hover:bg-brand-pearl border-2 border-brand-royal/20 hover:border-brand-gold/50 shadow-sm transform hover:scale-105 transition-all duration-200">
-                Tax Planning
-              </button>
-              <button className="px-6 py-2.5 rounded-lg text-sm font-medium bg-white text-brand-navy hover:bg-brand-pearl border-2 border-brand-royal/20 hover:border-brand-gold/50 shadow-sm transform hover:scale-105 transition-all duration-200">
-                Market Updates
-              </button>
-            </div>
-            
-            {/* Featured blog post */}
-            <div className="animate-fadeInUp animation-delay-400">
-              <BlogPostCard post={featuredPost} featured={true} />
-            </div>
-          </div>
-          
-          {/* Regular blog posts grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-            {regularPosts.map((post, index) => (
-              <div key={post.id} className="animate-fadeInUp" style={{ animationDelay: `${600 + index * 100}ms` }}>
-                <BlogPostCard post={post} />
-              </div>
-            ))}
-          </div>
-          
-          {/* Pagination - static for now */}
-          <div className="mt-12 md:mt-16 flex justify-center animate-fadeInUp animation-delay-1000">
-            <div className="flex items-center space-x-3">
-              <button className="w-12 h-12 rounded-full flex items-center justify-center bg-white text-brand-navy hover:bg-brand-pearl border-2 border-brand-royal/20 hover:border-brand-gold/50 shadow-sm transform hover:scale-110 transition-all duration-200">
-                &lsaquo;
-              </button>
-              <button className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-r from-brand-royal to-brand-navy text-white shadow-lg">
-                1
-              </button>
-              <button className="w-12 h-12 rounded-full flex items-center justify-center bg-white text-brand-navy hover:bg-brand-pearl border-2 border-brand-royal/20 hover:border-brand-gold/50 shadow-sm transform hover:scale-110 transition-all duration-200">
-                2
-              </button>
-              <button className="w-12 h-12 rounded-full flex items-center justify-center bg-white text-brand-navy hover:bg-brand-pearl border-2 border-brand-royal/20 hover:border-brand-gold/50 shadow-sm transform hover:scale-110 transition-all duration-200">
-                3
-              </button>
-              <button className="w-12 h-12 rounded-full flex items-center justify-center bg-white text-brand-navy hover:bg-brand-pearl border-2 border-brand-royal/20 hover:border-brand-gold/50 shadow-sm transform hover:scale-110 transition-all duration-200">
-                &rsaquo;
-              </button>
-            </div>
-          </div>
-          
-          {/* Newsletter signup */}
-          <div className="mt-12 md:mt-16 bg-gradient-to-br from-brand-pearl to-blue-50/30 p-6 sm:p-8 rounded-lg text-center border-2 border-brand-royal/10 shadow-lg animate-fadeInUp animation-delay-1200">
-            <div className="flex items-center justify-center mb-4">
-              <div className="w-3 h-3 bg-brand-gold rounded-full animate-pulse mr-3"></div>
-              <h3 className="text-xl font-semibold text-brand-navy heading-with-accent">Stay Informed with Market Updates</h3>
-              <div className="w-3 h-3 bg-brand-gold rounded-full animate-pulse ml-3"></div>
-            </div>
-            <p className="text-brand-navy/80 mb-6 max-w-2xl mx-auto leading-relaxed">
-              Subscribe to our newsletter for educational content on <span className="text-brand-gold font-semibold">investing</span>, market insights, and <span className="text-brand-royal font-semibold">financial planning</span> tips. No spam, unsubscribe anytime.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-              <input
-                type="email"
-                placeholder="Your email address"
-                className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50"
-              />
-              <button className="bg-gradient-to-r from-brand-royal to-brand-navy text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-brand-navy hover:to-brand-royal transform hover:scale-105 transition-all duration-200 whitespace-nowrap">
-                Subscribe
-              </button>
-            </div>
-          </div>
-          
-          {/* Compliance notice */}
-          <div className="mt-8 md:mt-10">
-            <ComplianceNotice type="standard" />
-          </div>
-        </ResponsiveContainer>
-      </Section>
-    </>
+    <div className="bg-[#060D0A] min-h-screen flex flex-col">
+      <NavBar />
+
+      <main className="pt-36 pb-16 px-6 md:px-8 max-w-[1440px] mx-auto flex-1 w-full">
+
+        {/* Header */}
+        <header className="mb-12 text-center">
+          <h1 className="text-5xl md:text-6xl font-display font-bold tracking-tight gradient-text mb-4">
+            Insights
+          </h1>
+          <p className="text-[#859586] text-base max-w-lg mx-auto">
+            Expert perspectives on investing, financial planning, and market trends for Indian retail investors.
+          </p>
+        </header>
+
+        {/* Category pills */}
+        <div className="flex flex-wrap gap-2 justify-center mb-10">
+          {CATEGORIES.map(cat => (
+            <button key={cat}
+              className="px-4 py-1.5 rounded-full text-xs font-medium border border-[#3c4a3e] text-[#859586] hover:text-[#dce5df] hover:border-[#44f593]/30 transition-all first:bg-[#44f593]/10 first:text-[#44f593] first:border-[#44f593]/30">
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <BlogCard post={featured} featured />
+          {regular.map(post => (
+            <BlogCard key={post.id} post={post} />
+          ))}
+        </div>
+
+        {/* CTA */}
+        <div className="mt-14 text-center">
+          <p className="text-[#859586] text-sm mb-4">
+            Want to stay updated? Get financial insights directly to your inbox.
+          </p>
+          <Link href="/contact"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-[#44f593]/30 text-[#44f593] text-sm font-semibold hover:bg-[#44f593]/5 transition-colors">
+            Subscribe to Insights
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </Link>
+        </div>
+
+      </main>
+
+      <SiteFooter />
+    </div>
   );
 }

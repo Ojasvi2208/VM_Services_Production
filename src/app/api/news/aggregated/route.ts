@@ -397,6 +397,49 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get('limit') || '50');
   const feed = searchParams.get('feed') || 'all'; // 'home' | 'premium' | 'all'
 
+  // 1. Try DB cache first (populated by /api/cron/cache-news every 2 hours)
+  try {
+    const { default: pool } = await import('@/lib/postgres-db');
+    const dbResult = await pool.query(
+      `SELECT data, updated_at FROM market_cache
+       WHERE cache_key = 'news_aggregated'
+         AND is_stale = false
+         AND updated_at > NOW() - INTERVAL '3 hours'
+       LIMIT 1`
+    );
+    if (dbResult.rows.length > 0) {
+      const cached = typeof dbResult.rows[0].data === 'string'
+        ? JSON.parse(dbResult.rows[0].data)
+        : dbResult.rows[0].data;
+
+      if (cached.articles && cached.articles.length > 0) {
+        let filtered = cached.articles;
+
+        if (feed === 'home') {
+          filtered = filtered.filter((a: any) => a.feedSource === 'google');
+        } else if (feed === 'premium') {
+          filtered = filtered.filter((a: any) => a.feedSource === 'premium');
+        }
+
+        if (category !== 'all') {
+          filtered = filtered.filter((a: any) => a.category.toLowerCase() === category.toLowerCase());
+        }
+
+        return NextResponse.json({
+          success: true,
+          articles: filtered.slice(0, limit),
+          total: filtered.length,
+          source: 'db-cache',
+          categories: cached.categories || ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Commodities', 'Crypto', 'Global', 'FII/DII', 'Tax', 'NFO', 'Sports'],
+          timestamp: dbResult.rows[0].updated_at,
+        });
+      }
+    }
+  } catch (dbErr) {
+    // DB cache miss or error — fall through to live RSS fetch
+  }
+
+  // 2. Live RSS fetch (fallback when DB cache is empty or stale)
   try {
     const allArticles = await getArticles();
 

@@ -725,11 +725,13 @@ async function parseCASWithPython(pdfBuffer: Buffer, password?: string): Promise
               resolve(null);
             }
           } catch (e) {
-            console.log(`[CAS] Python casparser JSON parse failed: ${(e as Error).message}. stdout=${stdout.substring(0, 200)}`);
+            // DO NOT log stdout — it may contain raw PAN/folio data from the parsed PDF
+            console.warn(`[CAS] Python casparser JSON parse failed: ${(e as Error).message}. stdout_length=${stdout.length}`);
             resolve(null);
           }
         } else {
-          console.log(`[CAS] Python casparser exited code=${code} stderr=${stderr.substring(0, 300)}`);
+          // DO NOT log stderr content — may contain file paths or decoded PDF fragments
+          console.warn(`[CAS] Python casparser exited code=${code} stderr_length=${stderr.length}`);
           resolve(null);
         }
       });

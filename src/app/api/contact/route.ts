@@ -57,22 +57,15 @@ export async function POST(request: NextRequest) {
 
     const subjectText = subjectMap[body.subject] || 'General Inquiry';
 
-    // Log the inquiry (this will show in Railway logs)
-    console.log('=== NEW CONTACT FORM SUBMISSION ===');
-    console.log('Time:', new Date().toISOString());
-    console.log('Name:', body.name);
-    console.log('Email:', body.email);
-    console.log('Phone:', body.phone);
-    console.log('Subject:', subjectText);
-    console.log('Message:', body.message);
-    console.log('===================================');
+    // Zero-PII log — subject only, no name/email/phone/message
+    console.info('[contact] New inquiry received', { subject: subjectText, time: new Date().toISOString() });
 
     // Try to send emails using Resend (if API key is configured)
     const resendApiKey = process.env.RESEND_API_KEY;
     
     if (resendApiKey) {
       try {
-        // 1. Send notification email to VM Financial Services team
+        // 1. Send notification email to Vijay Malik Financial Services team
         const teamEmailResponse = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -80,7 +73,7 @@ export async function POST(request: NextRequest) {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            from: 'VM Financial Services <info@vmfinancialservices.com>',
+            from: 'Vijay Malik Financial Services <info@vmfinancialservices.com>',
             to: ['info@vmfinancialservices.com'],
             subject: `🔔 New Inquiry: ${subjectText} from ${body.name}`,
             html: `
@@ -140,7 +133,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (teamEmailResponse.ok) {
-          console.log('Team notification email sent successfully');
+          console.info('[contact] Team notification email sent');
         } else {
           const errorData = await teamEmailResponse.text();
           console.error('Team email error:', errorData);
@@ -215,7 +208,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (customerEmailResponse.ok) {
-          console.log('Customer confirmation email sent successfully to:', body.email);
+          console.info('[contact] Customer confirmation email sent');
         } else {
           const errorData = await customerEmailResponse.text();
           console.error('Customer email error:', errorData);
@@ -226,7 +219,7 @@ export async function POST(request: NextRequest) {
         // Don't fail the request if email fails - we still logged the inquiry
       }
     } else {
-      console.log('RESEND_API_KEY not configured - emails not sent, but inquiry logged');
+      console.warn('[contact] RESEND_API_KEY not configured — emails not sent');
     }
 
     // Return success

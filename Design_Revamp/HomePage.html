@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-primary": "#00391c",
+                        "surface": "#0d1512",
+                        "outline": "#859586",
+                        "on-error": "#690005",
+                        "on-surface-variant": "#bacbbb",
+                        "on-primary-container": "#00582e",
+                        "primary-fixed-dim": "#25e283",
+                        "on-surface": "#dce5df",
+                        "on-error-container": "#ffdad6",
+                        "secondary-fixed": "#d6e7db",
+                        "tertiary-fixed": "#dae5df",
+                        "primary-container": "#00d87a",
+                        "background": "#0d1512",
+                        "inverse-on-surface": "#2a322e",
+                        "on-background": "#dce5df",
+                        "surface-container-high": "#242c28",
+                        "surface-bright": "#333b37",
+                        "on-secondary": "#25342c",
+                        "surface-variant": "#2f3733",
+                        "surface-container": "#19211e",
+                        "on-secondary-fixed-variant": "#3b4a42",
+                        "error-container": "#93000a",
+                        "primary": "#44f593",
+                        "on-tertiary-fixed": "#141e1a",
+                        "on-tertiary": "#29332f",
+                        "tertiary-fixed-dim": "#bec9c3",
+                        "tertiary-container": "#b4bfb9",
+                        "surface-tint": "#25e283",
+                        "surface-container-low": "#161d1a",
+                        "error": "#ffb4ab",
+                        "on-tertiary-fixed-variant": "#3f4945",
+                        "tertiary": "#d0dbd5",
+                        "secondary": "#bacbbf",
+                        "primary-fixed": "#5cff9f",
+                        "on-tertiary-container": "#444e49",
+                        "inverse-primary": "#006d3b",
+                        "surface-container-lowest": "#08100d",
+                        "secondary-container": "#3e4c44",
+                        "surface-dim": "#0d1512",
+                        "on-primary-fixed": "#00210e",
+                        "inverse-surface": "#dce5df",
+                        "secondary-fixed-dim": "#bacbbf",
+                        "on-secondary-container": "#acbcb1",
+                        "outline-variant": "#3c4a3e",
+                        "surface-container-highest": "#2f3733",
+                        "on-secondary-fixed": "#101e17",
+                        "on-primary-fixed-variant": "#00522b"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["JetBrains Mono"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+        }
+        .emerald-gradient {
+            background: linear-gradient(135deg, #44f593 0%, #00d87a 100%);
+        }
+        .vault-glow {
+            box-shadow: 0 0 40px -10px rgba(0, 216, 122, 0.2);
+        }
+        body {
+            background-color: #060D0A;
+            color: #dce5df;
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="selection:bg-primary selection:text-on-primary overflow-x-hidden">
+<!-- Top Navigation Bar -->
+<nav class="fixed top-0 w-full z-50 border-b border-white/10 bg-white/5 dark:bg-[#0d1512]/30 backdrop-blur-xl">
+<div class="flex items-center justify-between px-8 py-4 max-w-7xl mx-auto">
+<div class="text-xl font-bold tracking-tighter text-[#00d87a] font-['Space_Grotesk']">
+                Akshaya Vault
+            </div>
+<div class="hidden md:flex items-center gap-8 font-['Space_Grotesk'] font-bold tracking-tight">
+<a class="text-[#00d87a] border-b-2 border-[#00d87a] pb-1" href="#">Markets</a>
+<a class="text-[#c4cfc9] hover:text-[#00d87a] transition-colors" href="#">Discover</a>
+<a class="text-[#c4cfc9] hover:text-[#00d87a] transition-colors" href="#">Portfolio</a>
+<a class="text-[#c4cfc9] hover:text-[#00d87a] transition-colors" href="#">Goals</a>
+<a class="text-[#c4cfc9] hover:text-[#00d87a] transition-colors" href="#">News</a>
+<a class="text-[#c4cfc9] hover:text-[#00d87a] transition-colors" href="#">Screener</a>
+</div>
+<div class="flex items-center gap-6">
+<button class="text-[#c4cfc9] hover:bg-white/5 p-2 rounded-full transition-all">
+<span class="material-symbols-outlined">search</span>
+</button>
+<button class="bg-[#00d87a] text-[#00391c] px-5 py-2 rounded-xl font-bold text-sm scale-95 active:scale-90 transition-transform">
+                    Institutional Login
+                </button>
+</div>
+</div>
+</nav>
+<main class="pt-24">
+<!-- Hero Section -->
+<section class="max-w-7xl mx-auto px-8 py-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+<div class="space-y-8">
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-high border border-outline-variant/20">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="text-xs font-mono uppercase tracking-widest text-primary-fixed-dim">Institutional Grade Engine Active</span>
+</div>
+<h1 class="text-6xl md:text-8xl font-headline font-bold leading-[0.9] tracking-tighter text-on-surface">
+                    Your Wealth. <br/>
+<span class="text-primary">Growing Smarter.</span>
+</h1>
+<p class="text-lg md:text-xl text-outline font-body max-w-lg leading-relaxed">
+                    Deploying sovereign-grade risk modeling and algorithmic rebalancing for the next generation of capital.
+                </p>
+<div class="flex flex-wrap gap-4">
+<button class="emerald-gradient text-on-primary px-8 py-4 rounded-xl font-bold text-lg vault-glow">
+                        Open Your Vault
+                    </button>
+<button class="px-8 py-4 rounded-xl border border-outline/20 font-bold text-lg hover:bg-surface-container-high transition-all">
+                        View Performance
+                    </button>
+</div>
+</div>
+<!-- Right Hero Card: Net Worth -->
+<div class="relative group">
+<div class="absolute -inset-1 bg-gradient-to-r from-primary/20 to-transparent rounded-2xl blur-2xl opacity-50 group-hover:opacity-100 transition duration-1000"></div>
+<div class="glass-card rounded-2xl p-10 relative">
+<div class="flex justify-between items-start mb-12">
+<div>
+<p class="text-outline text-sm font-label uppercase tracking-widest mb-2">Total Net Worth</p>
+<h2 class="text-5xl font-mono font-medium text-on-surface tracking-tighter">
+                                ₹8,42,15,400
+                            </h2>
+</div>
+<div class="bg-primary/10 text-primary px-3 py-1.5 rounded-lg border border-primary/20 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">trending_up</span>
+<span class="font-mono text-sm font-bold">+12.4%</span>
+</div>
+</div>
+<div class="space-y-6">
+<div class="flex justify-between items-end border-b border-white/5 pb-4">
+<span class="text-outline text-sm">Equity Portfolio</span>
+<span class="font-mono text-on-surface">₹5,12,04,000</span>
+</div>
+<div class="flex justify-between items-end border-b border-white/5 pb-4">
+<span class="text-outline text-sm">Fixed Income</span>
+<span class="font-mono text-on-surface">₹2,30,11,400</span>
+</div>
+<div class="flex justify-between items-end">
+<span class="text-outline text-sm">Alternative Assets</span>
+<span class="font-mono text-on-surface">₹1,00,00,000</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Stats Banner -->
+<section class="bg-surface-container-lowest border-y border-outline-variant/10 py-12">
+<div class="max-w-7xl mx-auto px-8 grid grid-cols-1 md:grid-cols-3 gap-12">
+<div class="flex flex-col items-center md:items-start">
+<span class="text-4xl font-headline font-bold text-primary">200+</span>
+<span class="text-outline font-label uppercase tracking-widest text-xs mt-2">Ultra HNI Families</span>
+</div>
+<div class="flex flex-col items-center md:items-start border-x border-outline-variant/10 px-0 md:px-12">
+<span class="text-4xl font-headline font-bold text-primary">200+</span>
+<span class="text-outline font-label uppercase tracking-widest text-xs mt-2">Active Strategic SIPs</span>
+</div>
+<div class="flex flex-col items-center md:items-start">
+<span class="text-4xl font-headline font-bold text-primary">15+</span>
+<span class="text-outline font-label uppercase tracking-widest text-xs mt-2">Global Financial Hubs</span>
+</div>
+</div>
+</section>
+<!-- Market Ticker Strip -->
+<div class="bg-background py-3 overflow-hidden border-b border-outline-variant/5">
+<div class="flex whitespace-nowrap animate-marquee items-center gap-12 px-8">
+<div class="flex items-center gap-3">
+<span class="text-outline font-mono text-xs">NIFTY 50</span>
+<span class="text-on-surface font-mono text-xs">22,123.45</span>
+<span class="text-primary font-mono text-xs">+0.45%</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-outline font-mono text-xs">SENSEX</span>
+<span class="text-on-surface font-mono text-xs">73,142.10</span>
+<span class="text-primary font-mono text-xs">+0.32%</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-outline font-mono text-xs">USD/INR</span>
+<span class="text-on-surface font-mono text-xs">82.89</span>
+<span class="text-error font-mono text-xs">-0.12%</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-outline font-mono text-xs">GOLD 24K</span>
+<span class="text-on-surface font-mono text-xs">65,420.00</span>
+<span class="text-primary font-mono text-xs">+1.20%</span>
+</div>
+<!-- Duplicate for seamless scroll -->
+<div class="flex items-center gap-3">
+<span class="text-outline font-mono text-xs">NIFTY 50</span>
+<span class="text-on-surface font-mono text-xs">22,123.45</span>
+<span class="text-primary font-mono text-xs">+0.45%</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-outline font-mono text-xs">SENSEX</span>
+<span class="text-on-surface font-mono text-xs">73,142.10</span>
+<span class="text-primary font-mono text-xs">+0.32%</span>
+</div>
+</div>
+</div>
+<!-- Vault Intelligence Section -->
+<section class="max-w-7xl mx-auto px-8 py-32">
+<div class="flex flex-col md:flex-row justify-between items-end mb-16 gap-8">
+<div>
+<h2 class="text-4xl md:text-5xl font-headline font-bold text-on-surface mb-4">Vault Intelligence</h2>
+<p class="text-outline max-w-md">Proprietary mathematical engines designed to protect and grow capital in volatile market regimes.</p>
+</div>
+<div class="hidden md:block">
+<span class="material-symbols-outlined text-primary text-6xl">query_stats</span>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Bento Card 1: Risk Modeling -->
+<div class="md:col-span-8 bg-surface-container-low rounded-2xl p-8 hover:bg-surface-container transition-colors group">
+<div class="flex flex-col h-full justify-between">
+<div>
+<div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary">security</span>
+</div>
+<h3 class="text-2xl font-headline font-bold mb-4">Dynamic Risk Modeling</h3>
+<p class="text-outline max-w-lg mb-8">Our Monte Carlo simulations run 10,000+ market scenarios daily to stress-test your portfolio against black-swan events.</p>
+</div>
+<div class="grid grid-cols-3 gap-4">
+<div class="bg-surface-container-highest p-4 rounded-xl border border-white/5">
+<div class="text-[10px] uppercase text-outline mb-1">VAR (95%)</div>
+<div class="font-mono text-primary">1.24%</div>
+</div>
+<div class="bg-surface-container-highest p-4 rounded-xl border border-white/5">
+<div class="text-[10px] uppercase text-outline mb-1">Beta</div>
+<div class="font-mono text-primary">0.82</div>
+</div>
+<div class="bg-surface-container-highest p-4 rounded-xl border border-white/5">
+<div class="text-[10px] uppercase text-outline mb-1">Sharpe</div>
+<div class="font-mono text-primary">2.41</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bento Card 2: Asset Correlation -->
+<div class="md:col-span-4 bg-surface-container-low rounded-2xl p-8 hover:bg-surface-container transition-colors relative overflow-hidden group">
+<div class="relative z-10">
+<div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary">grid_view</span>
+</div>
+<h3 class="text-2xl font-headline font-bold mb-4">Cross-Asset Correlation</h3>
+<p class="text-outline text-sm leading-relaxed">Identifying hidden dependencies between traditional and alternative assets to ensure true diversification.</p>
+</div>
+<div class="absolute bottom-[-20%] right-[-10%] opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-[180px] text-primary">hub</span>
+</div>
+</div>
+<!-- Bento Card 3: Algorithmic Rebalancing -->
+<div class="md:col-span-12 bg-surface-container-low rounded-2xl p-8 hover:bg-surface-container transition-colors group flex flex-col md:flex-row items-center gap-12">
+<div class="md:w-1/2">
+<div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary">autorenew</span>
+</div>
+<h3 class="text-2xl font-headline font-bold mb-4">Algorithmic Rebalancing</h3>
+<p class="text-outline max-w-md">Smart-trigger execution that buys low and sells high automatically based on pre-set mathematical thresholds, not emotions.</p>
+<button class="mt-8 text-primary font-bold flex items-center gap-2 group">
+                            Explore Algorithms <span class="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+</div>
+<div class="md:w-1/2 w-full">
+<div class="relative h-48 bg-surface-container-lowest rounded-xl border border-white/5 p-6 overflow-hidden">
+<div class="absolute inset-0 opacity-10">
+<svg class="w-full h-full stroke-primary stroke-1 fill-none" viewbox="0 0 100 100">
+<path d="M0,50 Q25,20 50,50 T100,50"></path>
+<path d="M0,40 Q25,70 50,40 T100,40"></path>
+</svg>
+</div>
+<div class="flex justify-between items-center relative z-10 h-full">
+<div class="text-center">
+<div class="text-outline text-[10px] uppercase">Drift Alert</div>
+<div class="text-error font-mono font-bold">+5.2%</div>
+</div>
+<div class="h-full w-[1px] bg-outline-variant/20"></div>
+<div class="text-center">
+<div class="text-outline text-[10px] uppercase">Execution</div>
+<div class="text-primary font-mono font-bold">In Progress</div>
+</div>
+<div class="h-full w-[1px] bg-outline-variant/20"></div>
+<div class="text-center">
+<div class="text-outline text-[10px] uppercase">Target Var</div>
+<div class="text-on-surface font-mono font-bold">±0.5%</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Institutional Funds Section -->
+<section class="bg-surface-container-lowest py-32">
+<div class="max-w-7xl mx-auto px-8 grid grid-cols-1 lg:grid-cols-12 gap-12">
+<div class="lg:col-span-8">
+<h2 class="text-4xl font-headline font-bold text-on-surface mb-12">Premier Institutional Funds</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- Fund Card 1 -->
+<div class="bg-surface p-8 rounded-2xl border border-outline-variant/10 hover:border-primary/30 transition-all cursor-pointer group">
+<div class="flex justify-between items-start mb-8">
+<div class="bg-primary/5 p-3 rounded-lg">
+<span class="material-symbols-outlined text-primary">account_balance</span>
+</div>
+<span class="text-[10px] font-mono bg-surface-container-high px-2 py-1 rounded">DEBT-ORIENTED</span>
+</div>
+<h4 class="text-xl font-headline font-bold mb-2">Akshaya Liquidity Vault</h4>
+<p class="text-outline text-sm mb-6">Optimized short-term treasury management with sovereign-backed assets.</p>
+<div class="flex justify-between items-end">
+<div>
+<span class="text-outline text-[10px] uppercase block mb-1">Expected Yield</span>
+<span class="font-mono text-primary text-xl font-bold">7.82%</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors">add_circle</span>
+</div>
+</div>
+<!-- Fund Card 2 -->
+<div class="bg-surface p-8 rounded-2xl border border-outline-variant/10 hover:border-primary/30 transition-all cursor-pointer group">
+<div class="flex justify-between items-start mb-8">
+<div class="bg-primary/5 p-3 rounded-lg">
+<span class="material-symbols-outlined text-primary">show_chart</span>
+</div>
+<span class="text-[10px] font-mono bg-surface-container-high px-2 py-1 rounded">EQUITY-ALPHA</span>
+</div>
+<h4 class="text-xl font-headline font-bold mb-2">Growth Catalyst Fund</h4>
+<p class="text-outline text-sm mb-6">Aggressive equity exposure focused on mid-cap disruptors with 10x potential.</p>
+<div class="flex justify-between items-end">
+<div>
+<span class="text-outline text-[10px] uppercase block mb-1">3Y CAGR</span>
+<span class="font-mono text-primary text-xl font-bold">24.15%</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors">add_circle</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Sidebar: Active NFOs -->
+<div class="lg:col-span-4 bg-surface-container-low rounded-2xl p-8 border border-outline-variant/5 h-fit">
+<div class="flex items-center gap-2 mb-8">
+<span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+<h3 class="text-sm font-bold uppercase tracking-widest text-on-surface">Active NFOs</h3>
+</div>
+<div class="space-y-8">
+<div class="group cursor-pointer">
+<p class="text-primary font-mono text-xs mb-1">CLOSING IN 2 DAYS</p>
+<h4 class="font-bold text-on-surface group-hover:text-primary transition-colors">Akshaya ESG Leaders Fund</h4>
+<p class="text-outline text-xs mt-1">NFO Price: ₹10.00</p>
+</div>
+<div class="group cursor-pointer">
+<p class="text-outline font-mono text-xs mb-1">OPENS MAR 15</p>
+<h4 class="font-bold text-on-surface group-hover:text-primary transition-colors">Global REITs Access Vault</h4>
+<p class="text-outline text-xs mt-1">Minimum: ₹5,00,000</p>
+</div>
+<div class="group cursor-pointer">
+<p class="text-outline font-mono text-xs mb-1">PRE-IPO STAGE</p>
+<h4 class="font-bold text-on-surface group-hover:text-primary transition-colors">Next-Gen FinTech Fund II</h4>
+<p class="text-outline text-xs mt-1">Exclusive Invite Only</p>
+</div>
+</div>
+<button class="w-full mt-10 py-3 rounded-xl border border-primary/20 text-primary font-bold hover:bg-primary/5 transition-all">
+                        View All Offers
+                    </button>
+</div>
+</div>
+</section>
+<!-- Ecosystem Section -->
+<section class="max-w-7xl mx-auto px-8 py-32 text-center">
+<h2 class="text-sm font-bold uppercase tracking-[0.3em] text-outline mb-16">Powering the Global Wealth Ecosystem</h2>
+<div class="flex flex-wrap justify-center items-center gap-16 md:gap-24 opacity-40 grayscale hover:grayscale-0 transition-all">
+<div class="flex items-center gap-2 font-headline font-bold text-2xl">
+<span class="material-symbols-outlined text-primary">token</span> NEXUS
+                </div>
+<div class="flex items-center gap-2 font-headline font-bold text-2xl">
+<span class="material-symbols-outlined text-primary">account_balance_wallet</span> AETHER
+                </div>
+<div class="flex items-center gap-2 font-headline font-bold text-2xl">
+<span class="material-symbols-outlined text-primary">data_exploration</span> VELOCITY
+                </div>
+<div class="flex items-center gap-2 font-headline font-bold text-2xl">
+<span class="material-symbols-outlined text-primary">verified_user</span> OMNI
+                </div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-[#060d0a] w-full py-16 px-8 border-t border-[#161d1a]">
+<div class="max-w-7xl mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+<div>
+<div class="text-lg font-bold text-[#00d87a] mb-6 font-headline">Akshaya Vault</div>
+<p class="text-[#c4cfc9] text-sm leading-relaxed mb-6">
+                        The ultimate repository for institutional-grade wealth management and sovereign risk intelligence.
+                    </p>
+<div class="flex gap-4">
+<a class="text-[#859586] hover:text-white transition-colors" href="#"><span class="material-symbols-outlined">public</span></a>
+<a class="text-[#859586] hover:text-white transition-colors" href="#"><span class="material-symbols-outlined">terminal</span></a>
+<a class="text-[#859586] hover:text-white transition-colors" href="#"><span class="material-symbols-outlined">alternate_email</span></a>
+</div>
+</div>
+<div>
+<h4 class="text-white font-bold mb-6 text-sm">Platform</h4>
+<ul class="space-y-4 text-sm font-['Inter']">
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors" href="#">Markets</a></li>
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors" href="#">Portfolio</a></li>
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors" href="#">Wealth Goals</a></li>
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors" href="#">Institutional Login</a></li>
+</ul>
+</div>
+<div>
+<h4 class="text-white font-bold mb-6 text-sm">Company</h4>
+<ul class="space-y-4 text-sm font-['Inter']">
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors" href="#">About Us</a></li>
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors" href="#">Regulatory Disclosures</a></li>
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors" href="#">Security Audit</a></li>
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors" href="#">Contact Support</a></li>
+</ul>
+</div>
+<div>
+<h4 class="text-white font-bold mb-6 text-sm">Legal &amp; Compliance</h4>
+<ul class="space-y-4 text-sm font-['Inter']">
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors" href="#">Privacy Policy</a></li>
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors" href="#">Terms of Service</a></li>
+<li><a class="text-[#859586] hover:text-[#ffffff] transition-colors" href="#">SEC Filings</a></li>
+</ul>
+</div>
+</div>
+<div class="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
+<p class="text-[#c4cfc9] text-xs font-['Inter'] max-w-3xl">
+                    © 2024 Akshaya Vault Institutional. Member FINRA/SIPC. High-risk investment disclosure: Digital assets are volatile and carry significant risk. Historical performance is not indicative of future results.
+                </p>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="text-[10px] font-mono text-[#859586]">SERVER: VAULT-01-SECURE</span>
+</div>
+</div>
+</div>
+</footer>
+<style>
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+            animation: marquee 30s linear infinite;
+        }
+        .animate-marquee:hover {
+            animation-play-state: paused;
+        }
+    </style>
+</body></html>

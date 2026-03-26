@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
 import { hashPassword } from '@/lib/auth';
+import { deobfuscateFromTransport } from '@/lib/encryption';
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,7 +11,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Reset token and new password are required' }, { status: 400 });
     }
 
-    if (newPassword.length < 8) {
+    // Deobfuscate if transported obfuscated (matches signup/signin contract)
+    const plainPassword = deobfuscateFromTransport(newPassword);
+
+    if (plainPassword.length < 8) {
       return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
     }
 
@@ -36,7 +40,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Hash new password using existing auth function
-      const hashedPassword = hashPassword(newPassword);
+      const hashedPassword = hashPassword(plainPassword);
 
       // Update user password
       await client.query(

@@ -59,6 +59,41 @@
       "path": "/api/cron/engagement-drops",
       "schedule": "0 3 * * *",
       "description": "Morning quote + monthly champions + holiday reminders (8:30 AM IST, daily)"
+    },
+    {
+      "path": "/api/cron/cache-indices",
+      "schedule": "*/15 3-10 * * 1-5",
+      "description": "Refresh shared index price cache every 15 min (market hours IST Mon–Fri)"
+    },
+    {
+      "path": "/api/cron/cache-indices",
+      "schedule": "0 20 * * *",
+      "description": "Refresh index cache once off-hours (3:30 AM IST) for closing prices"
+    },
+    {
+      "path": "/api/cron/cache-fuel",
+      "schedule": "30 1 * * *",
+      "description": "Daily fuel price cache refresh (7:00 AM IST) — 1 RapidAPI call/day (states only)"
+    },
+    {
+      "path": "/api/cron/cache-commodities",
+      "schedule": "*/30 3-10 * * 1-5",
+      "description": "Commodity prices cache every 30 min (8:30 AM–3:30 PM IST, Mon–Fri)"
+    },
+    {
+      "path": "/api/cron/cache-corporate-actions",
+      "schedule": "0 4,16 * * *",
+      "description": "Corporate actions cache twice daily (9:30 AM + 9:30 PM IST)"
+    },
+    {
+      "path": "/api/cron/cache-gainers-losers",
+      "schedule": "*/15 3-10 * * 1-5",
+      "description": "NSE gainers/losers cache every 15 min (market hours IST, Mon–Fri)"
+    },
+    {
+      "path": "/api/cron/cache-news",
+      "schedule": "0 */2 * * *",
+      "description": "News aggregation cache every 2 hours"
     }
   ]
 }

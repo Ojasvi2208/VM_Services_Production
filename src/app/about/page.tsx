@@ -1,295 +1,197 @@
-"use client";
-
+import NavBar from '@/components/home/NavBar';
+import SiteFooter from '@/components/home/SiteFooter';
 import Link from 'next/link';
-import Image from 'next/image';
-import Section from '@/components/Section';
-import ComplianceNotice from '@/components/ComplianceNotice';
-import ResponsiveContainer from '@/components/ResponsiveContainer';
-import AnimatedElement from '@/components/ui/AnimatedElement';
 
-// Team Member Type
-type TeamMember = {
-  name: string;
-  role: string;
-  description: string;
-  certifications: string[];
-  imagePath?: string;
-};
+const VALUES = [
+  {
+    icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z',
+    title: 'Zero-Storage PII',
+    description: 'No PAN, folio numbers or full names stored in plain text. Your financial identity stays private by design.',
+  },
+  {
+    icon: 'M13 10V3L4 14h7v7l9-11h-7z',
+    title: 'Sub-100ms Performance',
+    description: 'Every screen is interactive within 100ms using Stale-While-Revalidate cache patterns. Speed is trust.',
+  },
+  {
+    icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2',
+    title: 'AI-Powered Guidance',
+    description: 'AI-powered goal evaluation with Monte Carlo simulations — Coming Soon pending SEBI IA registration.',
+  },
+  {
+    icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z',
+    title: 'Family-First Philosophy',
+    description: 'Built as a tribute to Vijay Malik — dedicated to serving Indian families with clarity and integrity.',
+  },
+];
 
-// Team member card component
-const TeamMemberCard = ({ member, index }: { member: TeamMember; index: number }) => {
-  // Function to get initials from name
-  const getInitials = (name: string) => {
-    return name.split(' ').map(word => word[0]).join('').toUpperCase();
-  };
-
-  return (
-    <div className="bg-gradient-to-br from-white via-brand-pearl to-blue-50/30 rounded-2xl overflow-hidden h-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
-      {/* Team member photo or initials */}
-      <div className="h-60 relative overflow-hidden">
-        {member.imagePath ? (
-          <Image 
-            src={member.imagePath} 
-            alt={`${member.name}, ${member.role}`}
-            fill
-            sizes="(max-width: 768px) 100vw, 33vw"
-            className="object-cover"
-            priority={index === 0}
-          />
-        ) : (
-          <div className="bg-gradient-to-br from-brand-royal to-brand-navy h-full w-full flex items-center justify-center">
-            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-brand-gold to-yellow-400 flex items-center justify-center shadow-xl">
-              <span className="text-4xl font-bold text-brand-navy">
-                {getInitials(member.name)}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      <div className="p-6">
-        <div className="flex items-center mb-2">
-          <div className="w-2 h-2 bg-brand-gold rounded-full animate-pulse mr-3"></div>
-          <h3 className="text-lg font-bold text-brand-navy">{member.name}</h3>
-        </div>
-        <p className="text-brand-royal font-medium text-sm mb-4">{member.role}</p>
-        <p className="text-brand-navy/80 text-sm mb-4 leading-relaxed">{member.description}</p>
-        
-        {member.certifications.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {member.certifications.map((cert, index) => (
-              <span key={index} className="bg-gradient-to-r from-brand-gold/20 to-yellow-100 text-brand-navy text-xs px-3 py-1.5 rounded-full font-medium border border-brand-gold/30">
-                {cert}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// Milestone component
-const Milestone = ({ year, title, description, index }: { year: string; title: string; description: string; index: number }) => {
-  return (
-    <div className="flex mb-8">
-      <div className="mr-6 text-center">
-        <div className="h-10 w-10 rounded-full bg-olive text-white flex items-center justify-center font-semibold">
-          {year}
-        </div>
-        <div className="h-full w-0.5 bg-sage mx-auto mt-2"></div>
-      </div>
-      <div className="flex-1 pt-1">
-        <h3 className="text-lg font-semibold text-brand-navy mb-2">{title}</h3>
-        <p className="text-sm text-brand-navy">{description}</p>
-      </div>
-    </div>
-  );
-};
-
-// Values section component
-const ValueCard = ({ title, description, index }: { title: string; description: string; index: number }) => {
-  return (
-    <div className="card-light rounded-2xl p-4 sm:p-6 h-full">
-      <h3 className="text-lg font-semibold text-brand-navy mb-3">{title}</h3>
-      <p className="text-sm text-brand-navy">{description}</p>
-    </div>
-  );
-};
+const STATS = [
+  { value: '200+', label: 'Families Served' },
+  { value: '₹99/yr', label: 'Pro Plan' },
+  { value: 'ARN-317605', label: 'AMFI Registered' },
+  { value: '15+', label: 'Cities Covered' },
+];
 
 export default function AboutPage() {
-  // Team members data
-  const teamMembers: TeamMember[] = [
-    {
-      name: 'Vijay Malik',
-      role: 'Founder & Chief Investment Officer(2021-2024)',
-      description: 'With over 30 years Banking Industry, Vijay lead our investment research and client advisory services with a focus on long-term wealth creation.',
-      certifications: ['AMFI Registered', 'NISM Certified','Retd. Canara Bank'],
-      imagePath: '/About/CEO.jpg'
-    },
-    {
-      name: 'Ojasvi Malik',
-      role: 'AMFI Registered Mutual Fund Distributor (Sole Proprietorship)',
-      description: 'Ojasvi ensures our clients receive personalized attention and clear communication about their investments, with expertise in goal-based financial planning.',
-      certifications: ['NISM Certified', 'AMFI Registered']
-      // No imagePath - will show initials
-    }
-  ];
-  
   return (
-    <>
-      <div className="pt-24"></div> {/* Spacer for absolute header */}
-      <Section background="offwhite" padding="large">
-        <ResponsiveContainer maxWidth="xl">
-          <h1 className="text-3xl font-bold text-brand-navy mb-4 heading-with-accent relative">
-            <span className="relative z-10">About </span>
-            <span className="relative inline-block">
-              <span className="bg-gradient-to-r from-brand-gold via-yellow-300 to-brand-gold bg-clip-text text-transparent">Us</span>
-              <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent animate-pulse"></span>
-            </span>
+    <div className="bg-[#060D0A] min-h-screen flex flex-col">
+      <NavBar />
+
+      <main className="pt-36 pb-16 flex-1">
+
+        {/* ── Hero ─────────────────────────────────────────── */}
+        <section className="px-6 md:px-8 max-w-[1440px] mx-auto py-16 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#44f593]/10 border border-[#44f593]/20 text-[#44f593] text-xs font-semibold mb-8 uppercase tracking-widest">
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+            AMFI Registered Distributor · ARN-317605
+          </div>
+
+          <h1 className="text-5xl md:text-7xl font-display font-bold tracking-tight gradient-text mb-6">
+            Vijay Malik Financial Services
           </h1>
-          
-          {/* Mission section */}
-          <div className="mb-12 md:mb-16">
-            <p className="text-xl text-brand-navy mb-6 md:mb-8">
-              Vijay Malik Financial Services is a 
-              <span className="relative inline-block mx-1">
-                <span className="text-brand-gold font-semibold">mutual fund distribution</span>
-                <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-brand-gold/50"></span>
-              </span>
-              firm focused on helping 
-              <span className="bg-gradient-to-r from-brand-navy to-brand-royal bg-clip-text text-transparent font-semibold">Indian families</span>
-              {' '}achieve{' '}
-              <span className="text-brand-gold font-bold underline decoration-brand-gold/50 decoration-wavy">financial independence</span>
-              {' '}through disciplined, goal-oriented investing.
-            </p>
-            
-            <div className="card-light p-4 sm:p-8 rounded-2xl group hover:shadow-xl transition-shadow duration-300">
-              <h2 className="text-2xl font-semibold text-brand-navy mb-4 group-hover:text-brand-royal transition-colors">
-                Our <span className="text-brand-gold">Mission</span>
+          <p className="text-xl text-[#c0c9c2] max-w-2xl mx-auto leading-relaxed mb-4">
+            An autonomous wealth engine built for Indian retail investors.
+            A tribute to Vijay Malik — a mission-critical Fintech application
+            for high-trust, transparent financial guidance.
+          </p>
+          <p className="text-sm text-[#859586] max-w-xl mx-auto">
+            We believe every Indian family deserves institutional-grade wealth tools —
+            without the institutional price tag.
+          </p>
+        </section>
+
+        {/* ── Stats ────────────────────────────────────────── */}
+        <section className="px-6 md:px-8 max-w-[1440px] mx-auto mb-20">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {STATS.map(s => (
+              <div key={s.label} className="glass-card rounded-2xl p-6 text-center">
+                <div className="text-2xl md:text-3xl font-display font-black text-[#44f593] mb-2">{s.value}</div>
+                <div className="text-xs text-[#859586] uppercase tracking-widest font-semibold">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Story ────────────────────────────────────────── */}
+        <section className="px-6 md:px-8 max-w-[1440px] mx-auto mb-20">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <h2 className="text-4xl font-display font-bold text-[#dce5df] mb-6 leading-tight">
+                Why we built<br />
+                <span className="gradient-text">this platform</span>
               </h2>
-              <p className="text-lg text-brand-navy">
-                To <span className="font-semibold text-brand-gold">democratize access</span> to quality investment products and guidance, 
-                empowering <span className="bg-brand-gold/10 px-1 py-0.5 rounded font-medium text-brand-navy">everyday Indians</span> to build wealth through 
-                <span className="font-bold text-brand-royal">transparency</span>, 
-                <span className="font-bold text-brand-royal">education</span>, and 
-                <span className="font-bold text-brand-royal">disciplined investing</span>.
-              </p>
+              <div className="space-y-4 text-[#c0c9c2] leading-relaxed">
+                <p>
+                  Vijay Malik Financial Services was built as a tribute to Vijay Malik — to carry forward his legacy
+                  of clarity, integrity, and trust in financial matters. The goal is simple:
+                  give every Indian retail investor access to tools previously reserved for
+                  institutional players.
+                </p>
+                <p>
+                  We partner with AMFI-registered platforms to offer direct mutual fund
+                  investments, comprehensive portfolio analytics, and AI-powered goal planning.
+                  Our advanced analytics engine provides institutional-grade portfolio tracking,
+                  XIRR computation, and tax liability calculations. Monte Carlo goal probability
+                  simulations are coming soon pending SEBI IA registration.
+                </p>
+                <p>
+                  Our philosophy is Zero-Storage PII — no PANs, no folio numbers, no full
+                  names in plain text. Your financial identity is yours. We build for trust.
+                </p>
+              </div>
+            </div>
+            <div className="glass-card rounded-3xl p-8 space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-[#44f593]/10 border border-[#44f593]/20 flex items-center justify-center">
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#44f593" strokeWidth="1.75">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-bold text-[#dce5df]">AMFI Registered</p>
+                  <p className="text-xs text-[#859586]">ARN-317605 · NISM Certified</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-[#44f593]/10 border border-[#44f593]/20 flex items-center justify-center">
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#44f593" strokeWidth="1.75">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-bold text-[#dce5df]">Serverless-First Architecture</p>
+                  <p className="text-xs text-[#859586]">Edge Runtime · Cloudflare · Railway PostgreSQL</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-[#44f593]/10 border border-[#44f593]/20 flex items-center justify-center">
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#44f593" strokeWidth="1.75">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-bold text-[#dce5df]">Gemini 1.5 Flash AI Engine</p>
+                  <p className="text-xs text-[#859586]">Monte Carlo · Coming Soon (SEBI IA pending)</p>
+                </div>
+              </div>
             </div>
           </div>
-            
-            {/* Journey section */}
-            <div className="mb-16">
-              <h2 className="text-2xl font-semibold text-brand-navy mb-6 heading-with-accent">Our Journey</h2>
-              
-              <Milestone 
-                year="2021"
-                title="Founded in Chandigarh"
-                description="Vijay Malik established the firm with a focus on personalized mutual fund advice for families and young professionals."
-                index={0}
-              />
-              
-              <Milestone 
-                year="2025"
-                title="Expanded to Digital Services"
-                description="Launched our online platform to reach investors across India, especially in tier-2 and tier-3 cities with limited access to financial guidance."
-                index={1}
-              />
-              
-              <Milestone 
-                year="2025"
-                title="Introduced Goal Planning Tools"
-                description="Developed specialized calculators and planning frameworks to help clients align investments with specific life goals."
-                index={2}
-              />
-              
-              <Milestone 
-                year="2025"
-                title="Reached 1000+ Families"
-                description="Achieved the milestone of guiding 10,000 families on their investment journey with a focus on long-term SIPs."
-                index={3}
-              />
-              
-              <Milestone 
-                year="2025"
-                title="Launched Educational Content"
-                description="Expanded our commitment to investor education through webinars, workshops, and our comprehensive financial literacy blog."
-                index={4}
-              />
-            </div>
-            
-            {/* Values section */}
-            <div className="mb-16">
-              <h2 className="text-2xl font-semibold text-brand-navy mb-6">Our Values</h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ValueCard 
-                  title="Transparency" 
-                  description="We believe in clear communication about product features, risks, costs, and our compensation structure." 
-                  index={0}
-                />
-                
-                <ValueCard 
-                  title="Education" 
-                  description="We empower clients with knowledge, ensuring they understand their investments rather than just following recommendations." 
-                  index={1}
-                />
-                
-                <ValueCard 
-                  title="Client Focus" 
-                  description="Every recommendation starts with understanding client goals, risk comfort, and time horizons." 
-                  index={2}
-                />
-                
-                <ValueCard 
-                  title="Long-term Perspective" 
-                  description="We promote disciplined investing for wealth creation rather than market timing or speculative approaches." 
-                  index={3}
-                />
-              </div>
-            </div>
-            
-            {/* Team section */}
-            <div className="mb-16">
-              <h2 className="text-2xl font-semibold text-brand-navy mb-6 heading-with-accent">Our Team</h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {teamMembers.map((member, index) => (
-                  <TeamMemberCard key={index} member={member} index={index} />
-                ))}
-              </div>
-            </div>
-            
-            {/* Registration section */}
-            <div className="mb-12 md:mb-16 bg-gray-100 p-4 sm:p-6 rounded-2xl">
-              <h2 className="text-xl font-semibold text-brand-navy mb-4">Registration & Compliance</h2>
-              
-              <div className="space-y-4 text-brand-navy">
-                <div className="bg-gray-200 p-4 rounded-lg">
-                  <p className="text-sm font-medium mb-2">
-                    Vijay Malik Financial Services (Sole Proprietorship) is an AMFI Registered Mutual Fund Distributor (ARN-317605). All mutual fund investments are subject to market risks, read all scheme related documents carefully before investing.
-                  </p>
+        </section>
+
+        {/* ── Values ───────────────────────────────────────── */}
+        <section className="px-6 md:px-8 max-w-[1440px] mx-auto mb-20">
+          <h2 className="text-3xl font-display font-bold text-[#dce5df] mb-10 text-center">Our Principles</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {VALUES.map(v => (
+              <div key={v.title} className="glass-card rounded-2xl p-6 flex gap-5">
+                <div className="w-12 h-12 rounded-xl bg-[#44f593]/10 border border-[#44f593]/20 flex items-center justify-center shrink-0">
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#44f593" strokeWidth="1.75">
+                    <path strokeLinecap="round" strokeLinejoin="round" d={v.icon}/>
+                  </svg>
                 </div>
-                <p>
-                  <span className="font-medium">AMFI Registration:</span> 317605
-                </p>
-                <p>
-                  <span className="font-medium">EUIN:</span> E601818
-                </p>
-                <p>
-                  <span className="font-medium">NISM Certification:</span>&nbsp;Ojasvi Malik holds valid NISM Series V-A certification as required by SEBI
-                </p>
-                <p>
-                  <span className="font-medium">KYC Registration:</span> Registered with CVL KRA
-                </p>
-                <p>
-                  <span className="font-medium">Grievance Handling:</span> <Link href="/disclosures" className="text-teal hover:underline">View our grievance handling procedure</Link>
-                </p>
+                <div>
+                  <h3 className="font-display font-bold text-[#dce5df] mb-2">{v.title}</h3>
+                  <p className="text-sm text-[#c0c9c2] leading-relaxed">{v.description}</p>
+                </div>
               </div>
-            </div>
-            
-            {/* Compliance notice */}
-            <div className="mb-8 md:mb-12">
-              <ComplianceNotice type="standard" />
-            </div>
-            
-            {/* CTA section */}
-            <div className="text-center">
-              <h2 className="text-xl font-semibold text-brand-navy mb-4">Ready to Start Your Investment Journey?</h2>
-              <p className="text-sm text-brand-navy mb-2">
-                Schedule a complimentary 20-minute consultation to discuss your financial goals.
+            ))}
+          </div>
+        </section>
+
+        {/* ── CTA ──────────────────────────────────────────── */}
+        <section className="px-6 md:px-8 max-w-[1440px] mx-auto">
+          <div className="metallic-emerald rounded-3xl p-12 text-center text-[#001f10] relative overflow-hidden">
+            <div className="absolute -top-20 -right-20 w-64 h-64 bg-white/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10">
+              <h2 className="text-3xl md:text-4xl font-display font-black mb-4 uppercase">
+                Start Your Wealth Journey
+              </h2>
+              <p className="text-[#001f10]/70 mb-8 max-w-lg mx-auto">
+                Join 200+ Indian families who trust Vijay Malik Financial Services for clear, honest, and powerful mutual fund guidance.
               </p>
-              <div className="flex justify-center gap-4 flex-wrap">
-                <Link href="/goal-planning#lead-form" className="btn-primary">
-                  Schedule a Call
+              <div className="flex items-center justify-center gap-4 flex-wrap">
+                <Link
+                  href="/auth/signup"
+                  className="bg-[#001f10] text-[#44f593] px-6 py-3 rounded-full font-bold text-sm hover:bg-[#001f10]/90 transition-colors"
+                >
+                  Create Your Vault
                 </Link>
-                <Link href="/partners" className="btn-secondary">
-                  View Our Partners
+                <Link
+                  href="/funds/search"
+                  className="bg-white/20 text-[#001f10] px-6 py-3 rounded-full font-bold text-sm hover:bg-white/30 transition-colors"
+                >
+                  Explore Funds
                 </Link>
               </div>
             </div>
-          </ResponsiveContainer>
-        </Section>
-    </>
+          </div>
+        </section>
+
+      </main>
+
+      <SiteFooter />
+    </div>
   );
 }

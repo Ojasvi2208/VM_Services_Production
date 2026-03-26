@@ -14,7 +14,7 @@ interface FundSearchResult {
 export default function AddInvestmentPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FundSearchResult[]>([]);
   const [selectedFund, setSelectedFund] = useState<FundSearchResult | null>(null);
@@ -27,60 +27,42 @@ export default function AddInvestmentPage() {
     units: '',
     purchaseNav: '',
     purchaseDate: new Date().toISOString().split('T')[0],
-    notes: ''
+    notes: '',
   });
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/auth/signin');
-    }
+    if (!authLoading && !isAuthenticated) router.push('/auth/signin');
   }, [authLoading, isAuthenticated, router]);
 
   useEffect(() => {
     const searchFunds = async () => {
-      if (searchQuery.length < 3) {
-        setSearchResults([]);
-        return;
-      }
-
+      if (searchQuery.length < 3) { setSearchResults([]); return; }
       setIsSearching(true);
       try {
-        const response = await fetch(`/api/funds/search?q=${encodeURIComponent(searchQuery)}&limit=10`);
-        const data = await response.json();
-        
+        const res = await fetch(`/api/funds/search?q=${encodeURIComponent(searchQuery)}&limit=10`);
+        const data = await res.json();
         if (data.funds) {
-          setSearchResults(data.funds.map((f: any) => ({
+          setSearchResults(data.funds.map((f: Record<string, string>) => ({
             schemeCode: f.scheme_code || f.schemeCode,
             schemeName: f.scheme_name || f.schemeName,
-            latestNav: parseFloat(f.latest_nav || f.latestNav) || 0
+            latestNav: parseFloat(f.latest_nav || f.latestNav) || 0,
           })));
         }
-      } catch (error) {
-        console.error('Search error:', error);
-      } finally {
-        setIsSearching(false);
-      }
+      } catch { /* silent */ } finally { setIsSearching(false); }
     };
-
-    const debounce = setTimeout(searchFunds, 300);
-    return () => clearTimeout(debounce);
+    const t = setTimeout(searchFunds, 300);
+    return () => clearTimeout(t);
   }, [searchQuery]);
 
   const handleSelectFund = (fund: FundSearchResult) => {
     setSelectedFund(fund);
     setSearchQuery('');
     setSearchResults([]);
-    setFormData(prev => ({
-      ...prev,
-      purchaseNav: fund.latestNav.toString()
-    }));
+    setFormData(prev => ({ ...prev, purchaseNav: fund.latestNav.toString() }));
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     setError('');
   };
 
@@ -92,32 +74,15 @@ export default function AddInvestmentPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!selectedFund) {
-      setError('Please select a fund');
-      return;
-    }
-
-    if (!formData.units || parseFloat(formData.units) <= 0) {
-      setError('Please enter valid units');
-      return;
-    }
-
-    if (!formData.purchaseNav || parseFloat(formData.purchaseNav) <= 0) {
-      setError('Please enter valid purchase NAV');
-      return;
-    }
-
-    if (!formData.purchaseDate) {
-      setError('Please enter purchase date');
-      return;
-    }
+    if (!selectedFund) { setError('Please select a fund'); return; }
+    if (!formData.units || parseFloat(formData.units) <= 0) { setError('Please enter valid units'); return; }
+    if (!formData.purchaseNav || parseFloat(formData.purchaseNav) <= 0) { setError('Please enter valid purchase NAV'); return; }
+    if (!formData.purchaseDate) { setError('Please enter purchase date'); return; }
 
     setIsSubmitting(true);
     setError('');
-
     try {
-      const response = await fetch('/api/portfolio/holdings', {
+      const res = await fetch('/api/portfolio/holdings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -125,108 +90,94 @@ export default function AddInvestmentPage() {
           units: parseFloat(formData.units),
           purchaseNav: parseFloat(formData.purchaseNav),
           purchaseDate: formData.purchaseDate,
-          notes: formData.notes
-        })
+          notes: formData.notes,
+        }),
       });
-
-      const data = await response.json();
-
+      const data = await res.json();
       if (data.success) {
         setSuccess(true);
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 2000);
+        setTimeout(() => router.push('/dashboard'), 2000);
       } else {
         setError(data.error || 'Failed to add investment');
       }
-    } catch (error) {
-      setError('Network error. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch { setError('Network error. Please try again.'); } finally { setIsSubmitting(false); }
   };
+
+  const inputCls = 'w-full bg-[#08100d] border border-[#3c4a3e] rounded-xl px-4 py-3 text-sm text-[#dce5df] placeholder:text-[#3c4a3e] focus:outline-none focus:border-[#44f593]/50 transition-all';
+  const labelCls = 'text-xs font-mono text-[#859586] uppercase tracking-widest block mb-2';
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-royal"></div>
+      <div className="min-h-screen bg-[#060D0A] flex items-center justify-center">
+        <svg className="animate-spin w-10 h-10 text-[#44f593]" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
       </div>
     );
   }
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+      <div className="min-h-screen bg-[#060D0A] flex items-center justify-center px-4">
+        <div className="glass-card rounded-3xl p-10 text-center max-w-sm w-full">
+          <div className="w-16 h-16 rounded-full bg-[#44f593]/10 border border-[#44f593]/20 flex items-center justify-center mx-auto mb-6">
+            <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#44f593" strokeWidth="2">
+              <polyline points="20 6 9 17 4 12" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-brand-navy mb-2">Investment Added!</h2>
-          <p className="text-gray-600 mb-4">Your investment has been recorded successfully.</p>
-          <p className="text-sm text-gray-500">Redirecting to dashboard...</p>
+          <h2 className="text-xl font-display font-bold text-[#dce5df] mb-2">Investment Added</h2>
+          <p className="text-[#859586] text-sm mb-4">Your investment has been recorded successfully.</p>
+          <p className="text-xs text-[#3c4a3e] font-mono">Redirecting to dashboard…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#060D0A]">
       {/* Header */}
-      <header className="bg-gradient-to-r from-brand-navy via-brand-royal to-brand-navy text-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/dashboard"
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold">Add Investment</h1>
-              <p className="text-white/70">Record a new mutual fund investment</p>
-            </div>
+      <header className="bg-[#08100d] border-b border-white/8 px-6 py-4 sticky top-0 z-20">
+        <div className="max-w-2xl mx-auto flex items-center gap-4">
+          <Link href="/dashboard" className="p-2 rounded-xl hover:bg-white/5 transition-colors text-[#859586] hover:text-[#dce5df]">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </Link>
+          <div>
+            <h1 className="text-base font-display font-bold text-[#dce5df]">Add Investment</h1>
+            <p className="text-xs text-[#859586] font-mono">Record a new mutual fund holding</p>
           </div>
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-2xl shadow-lg p-6 md:p-8">
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
+        <div className="glass-card rounded-2xl p-6 md:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
+
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
-                <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              <div className="bg-[#ffb4ab]/10 border border-[#ffb4ab]/20 text-[#ffb4ab] px-4 py-3 rounded-xl text-sm flex items-center gap-3">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
-                <span className="text-sm">{error}</span>
+                {error}
               </div>
             )}
 
             {/* Fund Search */}
             <div>
-              <label className="block text-sm font-semibold text-brand-navy mb-2">
-                Select Fund <span className="text-red-500">*</span>
-              </label>
-              
+              <label className={labelCls}>Select Fund <span className="text-[#ffb4ab]">*</span></label>
               {selectedFund ? (
-                <div className="flex items-center justify-between p-4 bg-brand-royal/5 border-2 border-brand-royal rounded-xl">
+                <div className="flex items-center justify-between p-4 bg-[#44f593]/5 border border-[#44f593]/20 rounded-xl">
                   <div>
-                    <p className="font-semibold text-brand-navy">{selectedFund.schemeName}</p>
-                    <p className="text-sm text-gray-500">Code: {selectedFund.schemeCode} | NAV: ₹{selectedFund.latestNav.toFixed(4)}</p>
+                    <p className="text-sm font-semibold text-[#dce5df]">{selectedFund.schemeName}</p>
+                    <p className="text-xs text-[#859586] font-mono mt-0.5">Code: {selectedFund.schemeCode} · NAV: ₹{selectedFund.latestNav.toFixed(4)}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedFund(null)}
-                    className="text-red-500 hover:text-red-700 p-2"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <button type="button" onClick={() => setSelectedFund(null)}
+                    className="p-2 text-[#ffb4ab]/60 hover:text-[#ffb4ab] rounded-lg transition-colors">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
@@ -236,27 +187,25 @@ export default function AddInvestmentPage() {
                   <input
                     type="text"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search for a mutual fund..."
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal"
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search for a mutual fund…"
+                    className={inputCls}
                   />
                   {isSearching && (
                     <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-royal"></div>
+                      <svg className="animate-spin w-4 h-4 text-[#44f593]" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
                     </div>
                   )}
-                  
                   {searchResults.length > 0 && (
-                    <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                      {searchResults.map((fund) => (
-                        <button
-                          key={fund.schemeCode}
-                          type="button"
-                          onClick={() => handleSelectFund(fund)}
-                          className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0"
-                        >
-                          <p className="font-medium text-brand-navy text-sm">{fund.schemeName}</p>
-                          <p className="text-xs text-gray-500">NAV: ₹{fund.latestNav.toFixed(4)}</p>
+                    <div className="absolute z-10 w-full mt-1 glass-card rounded-xl overflow-hidden max-h-60 overflow-y-auto">
+                      {searchResults.map(fund => (
+                        <button key={fund.schemeCode} type="button" onClick={() => handleSelectFund(fund)}
+                          className="w-full text-left px-4 py-3 hover:bg-white/5 border-b border-white/5 last:border-b-0">
+                          <p className="text-sm font-medium text-[#dce5df]">{fund.schemeName}</p>
+                          <p className="text-xs text-[#859586] font-mono">NAV: ₹{fund.latestNav.toFixed(4)}</p>
                         </button>
                       ))}
                     </div>
@@ -265,64 +214,33 @@ export default function AddInvestmentPage() {
               )}
             </div>
 
-            {/* Units and NAV */}
+            {/* Units + NAV */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="units" className="block text-sm font-semibold text-brand-navy mb-2">
-                  Units <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  id="units"
-                  name="units"
-                  value={formData.units}
-                  onChange={handleChange}
-                  step="0.0001"
-                  min="0"
-                  placeholder="e.g., 100.5432"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal"
-                />
+                <label className={labelCls}>Units <span className="text-[#ffb4ab]">*</span></label>
+                <input type="number" name="units" value={formData.units} onChange={handleChange}
+                  step="0.0001" min="0" placeholder="e.g., 100.5432" className={inputCls} />
               </div>
-
               <div>
-                <label htmlFor="purchaseNav" className="block text-sm font-semibold text-brand-navy mb-2">
-                  Purchase NAV <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  id="purchaseNav"
-                  name="purchaseNav"
-                  value={formData.purchaseNav}
-                  onChange={handleChange}
-                  step="0.0001"
-                  min="0"
-                  placeholder="e.g., 45.6789"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal"
-                />
+                <label className={labelCls}>Purchase NAV <span className="text-[#ffb4ab]">*</span></label>
+                <input type="number" name="purchaseNav" value={formData.purchaseNav} onChange={handleChange}
+                  step="0.0001" min="0" placeholder="e.g., 45.6789" className={inputCls} />
               </div>
             </div>
 
             {/* Purchase Date */}
             <div>
-              <label htmlFor="purchaseDate" className="block text-sm font-semibold text-brand-navy mb-2">
-                Purchase Date <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                id="purchaseDate"
-                name="purchaseDate"
-                value={formData.purchaseDate}
-                onChange={handleChange}
+              <label className={labelCls}>Purchase Date <span className="text-[#ffb4ab]">*</span></label>
+              <input type="date" name="purchaseDate" value={formData.purchaseDate} onChange={handleChange}
                 max={new Date().toISOString().split('T')[0]}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal"
-              />
+                className={`${inputCls} [color-scheme:dark]`} />
             </div>
 
-            {/* Investment Amount Display */}
+            {/* Computed amount */}
             {formData.units && formData.purchaseNav && (
-              <div className="bg-gradient-to-r from-brand-royal/10 to-brand-gold/10 rounded-xl p-4">
-                <p className="text-sm text-gray-600">Investment Amount</p>
-                <p className="text-2xl font-bold text-brand-navy">
+              <div className="bg-[#44f593]/5 border border-[#44f593]/15 rounded-xl p-4">
+                <p className="text-xs font-mono text-[#859586] uppercase tracking-widest mb-1">Investment Amount</p>
+                <p className="text-2xl font-mono font-bold text-[#44f593]">
                   ₹{calculateAmount().toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                 </p>
               </div>
@@ -330,38 +248,26 @@ export default function AddInvestmentPage() {
 
             {/* Notes */}
             <div>
-              <label htmlFor="notes" className="block text-sm font-semibold text-brand-navy mb-2">
-                Notes (Optional)
-              </label>
-              <textarea
-                id="notes"
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                rows={3}
-                placeholder="Any additional notes about this investment..."
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal resize-none"
-              />
+              <label className={labelCls}>Notes (optional)</label>
+              <textarea name="notes" value={formData.notes} onChange={handleChange} rows={3}
+                placeholder="e.g., Monthly SIP installment"
+                className={`${inputCls} resize-none`} />
             </div>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isSubmitting || !selectedFund}
-              className="w-full bg-gradient-to-r from-brand-royal to-brand-navy text-white py-4 rounded-xl font-bold text-lg hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-            >
-              {isSubmitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Adding Investment...
-                </span>
-              ) : (
-                'Add Investment'
-              )}
-            </button>
+            {/* Actions */}
+            <div className="flex gap-3">
+              <Link href="/dashboard"
+                className="flex-1 py-3.5 rounded-xl border border-[#3c4a3e] text-[#859586] text-sm font-medium hover:bg-white/5 transition-colors text-center">
+                Cancel
+              </Link>
+              <button type="submit" disabled={isSubmitting}
+                className="flex-1 bg-gradient-to-br from-[#44f593] to-[#00d87a] text-[#001f10] py-3.5 rounded-xl font-bold text-sm hover:scale-[1.01] transition-transform disabled:opacity-50 flex items-center justify-center gap-2">
+                {isSubmitting ? (
+                  <><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Adding…</>
+                ) : 'Add Investment'}
+              </button>
+            </div>
+
           </form>
         </div>
       </main>

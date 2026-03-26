@@ -582,7 +582,7 @@ export async function filterCandidateFunds(
         COALESCE(f.expense_ratio, 0) as expense_ratio,
         COALESCE(fr.cagr_3y, fr.return_3y) as cagr_3y,
         fr.cagr_5y,
-        fr.sharpe_ratio_1y as sharpe_1y,
+        fr.sharpe_ratio_1y as sharpe_ratio_1y,
         fr.volatility_1y,
         -- Quality score: 60% return + 40% sharpe (normalized within sub_category)
         COALESCE(
@@ -628,7 +628,7 @@ export async function filterCandidateFunds(
         expenseRatio: parseFloat(row.expense_ratio) || 0,
         cagr3y: parseFloat(row.cagr_3y) || 0,
         cagr5y: row.cagr_5y ? parseFloat(row.cagr_5y) : null,
-        sharpe1y: row.sharpe_1y ? parseFloat(row.sharpe_1y) : null,
+        sharpe1y: row.sharpe_ratio_1y ? parseFloat(row.sharpe_ratio_1y) : null,
         volatility1y: row.volatility_1y ? parseFloat(row.volatility_1y) : null,
         qualityScore: parseFloat(row.quality_score) || 0,
       });
@@ -689,7 +689,7 @@ function buildGeminiPrompt(
     ).join('\n');
 
     linkedFundsSection = `LINKED FUNDS (currently assigned to this goal by user):
-scheme_code | fund_name | category | sub_category | allocation_pct | cagr_3y | sharpe_1y | volatility_1y | health_score
+scheme_code | fund_name | category | sub_category | allocation_pct | cagr_3y | sharpe_ratio_1y | volatility_1y | health_score
 ${linkedTable}`;
 
     dualPathInstructions = `DUAL-PATH AUDITOR MODE:
@@ -755,7 +755,7 @@ INPUT DATA:
 ${linkedFundsSection}
 
 CANDIDATE FUNDS (pre-filtered for tenure + quality):
-scheme_code | fund_name | category | sub_category | aum_cr | expense_ratio | cagr_3y | cagr_5y | sharpe_1y | volatility_1y | quality_score
+scheme_code | fund_name | category | sub_category | aum_cr | expense_ratio | cagr_3y | cagr_5y | sharpe_ratio_1y | volatility_1y | quality_score
 ${candidateTable}
 
 OVERLAP MATRIX (between candidate funds, pairs > 5%):

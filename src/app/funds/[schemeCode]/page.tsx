@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Section from '@/components/Section';
-import ResponsiveContainer from '@/components/ResponsiveContainer';
-import NAVChart from '@/components/NAVChart';
+import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
+import NavBar from '@/components/home/NavBar';
+import SiteFooter from '@/components/home/SiteFooter';
+import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
 
+// ─── Types ───────────────────────────────────────────────────
 interface FundData {
   fund: {
     schemeCode: string;
@@ -29,384 +32,527 @@ interface FundData {
     return3m?: number;
     return6m?: number;
     return1y?: number;
-    return2y?: number;
     return3y?: number;
     return5y?: number;
-    return10y?: number;
     cagr1y?: number;
-    cagr2y?: number;
     cagr3y?: number;
     cagr5y?: number;
-    cagr10y?: number;
     volatility1y?: number;
     maxDrawdown?: number;
     sharpeRatio1y?: number;
     sortinoRatio1y?: number;
-    rollingReturn1yAvg?: number;
-    updatedAt?: string;
   } | null;
   navHistory: Array<{ date: string; nav: number }>;
   managers: Array<{ name: string; isCurrent: boolean; tenure?: number }>;
-  expenseHistory: Array<{ date: string; ratio: number }>;
 }
 
-const formatPercent = (value: number | undefined | null): string => {
-  if (value === undefined || value === null) return '-';
-  const num = parseFloat(value.toString());
-  return `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
-};
+interface Holding {
+  holding_name: string;
+  weight_pct: number;
+  sector?: string;
+  rank?: number;
+}
 
-const formatNumber = (value: number | undefined | null, decimals: number = 2): string => {
-  if (value === undefined || value === null) return '-';
-  return parseFloat(value.toString()).toFixed(decimals);
-};
+// ─── Helpers ─────────────────────────────────────────────────
+function fmtPct(v?: number | null, decimals = 2): string {
+  if (v == null) return '—';
+  return `${v >= 0 ? '+' : ''}${v.toFixed(decimals)}%`;
+}
+function fmtNum(v?: number | null, d = 2): string {
+  if (v == null) return '—';
+  return v.toFixed(d);
+}
+function fmtCr(v?: number | null): string {
+  if (v == null) return '—';
+  if (v >= 100) return `₹${(v / 100).toFixed(0)} Cr`;
+  return `₹${v.toFixed(0)} Cr`;
+}
+function fmtDate(d?: string): string {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function fundAge(inception?: string): string {
+  if (!inception) return '—';
+  const years = (Date.now() - new Date(inception).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+  return `${years.toFixed(1)} Yrs`;
+}
 
-const getReturnColor = (value: number | undefined | null): string => {
-  if (value === undefined || value === null) return 'text-brand-navy';
-  return parseFloat(value.toString()) >= 0 ? 'text-green-600' : 'text-red-600';
-};
+// ─── Mini SVG Chart ──────────────────────────────────────────
+function MiniChart({ history }: { history: Array<{ date: string; nav: number }> }) {
+  if (history.length < 2) return null;
+  const navs = history.map(h => h.nav);
+  const min = Math.min(...navs);
+  const max = Math.max(...navs);
+  const range = max - min || 1;
+  const W = 1000;
+  const H = 300;
+  const points = navs.map((n, i) => {
+    const x = (i / (navs.length - 1)) * W;
+    const y = H - ((n - min) / range) * H * 0.85 - H * 0.05;
+    return `${x},${y}`;
+  }).join(' ');
+  const area = `M0,${H} L${points.split(' ').map(p => p).join(' L')} L${W},${H} Z`;
+  const line = `M${points.split(' ').join(' L')}`;
 
-export default function FundDetailsPageNew() {
+  return (
+    <div className="relative h-64 w-full overflow-hidden">
+      <div className="absolute inset-0 nav-area-gradient" />
+      <svg className="absolute inset-0 w-full h-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#44f593" stopOpacity="0.15"/>
+            <stop offset="100%" stopColor="#44f593" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#chartFill)"/>
+        <path d={line} fill="none" stroke="#44f593" strokeWidth="2.5"
+          style={{ filter: 'drop-shadow(0 0 8px rgba(68,245,147,0.5))' }}/>
+      </svg>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────
+export default function FundDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const schemeCode = params.schemeCode as string;
-  
-  const [fundData, setFundData] = useState<FundData | null>(null);
+  const schemeCode = params?.schemeCode as string;
+
+  const [data, setData] = useState<FundData | null>(null);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'1D' | '1M' | '6M' | '1Y' | '3Y' | 'SI'>('1Y');
+  const [investMode, setInvestMode] = useState<'sip' | 'onetime'>('sip');
+  const [amount, setAmount] = useState('5000');
+  const { user } = useAuth();
+  const isAuthenticated = !!user;
+  const isPremium = (user as any)?.is_premium ?? false;
 
-  useEffect(() => {
-    if (schemeCode) {
-      fetchFundData();
-    }
-  }, [schemeCode]);
+  const RETURN_TABS = ['1D', '1M', '6M', '1Y', '3Y', 'SI'] as const;
 
-  const fetchFundData = async () => {
+  const fetchData = useCallback(async () => {
+    if (!schemeCode) return;
     setLoading(true);
-    setError(null);
-    
     try {
-      const response = await fetch(`/api/funds/${schemeCode}`);
-      const result = await response.json();
-      
-      if (result.success) {
-        setFundData(result.data);
-      } else {
-        setError(result.error || 'Failed to load fund details');
+      const [fundRes, holdingsRes] = await Promise.all([
+        fetch(`/api/funds/${schemeCode}`),
+        fetch(`/api/funds/${schemeCode}/holdings`).catch(() => null),
+      ]);
+      const fundJson = await fundRes.json();
+      if (!fundJson.success) throw new Error(fundJson.error ?? 'Fund not found');
+      setData(fundJson.data);
+
+      if (holdingsRes) {
+        const hJson = await holdingsRes.json().catch(() => ({}));
+        setHoldings(hJson.holdings ?? hJson.data ?? []);
       }
-    } catch (err: any) {
-      console.error('Error fetching fund data:', err);
-      setError('Failed to load fund details');
+    } catch (e: any) {
+      setError(e.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [schemeCode]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Filter history by tab
+  const filteredHistory = (() => {
+    if (!data?.navHistory?.length) return [];
+    const h = [...data.navHistory].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const now = Date.now();
+    const MS: Record<string, number> = {
+      '1D': 1,
+      '1M': 30,
+      '6M': 180,
+      '1Y': 365,
+      '3Y': 1095,
+      'SI': 99999,
+    };
+    const days = MS[activeTab] ?? 365;
+    return h.filter(p => (now - new Date(p.date).getTime()) / 86400000 <= days);
+  })();
+
+  const currentReturn = (() => {
+    const r = data?.returns;
+    if (!r) return null;
+    const map: Record<string, number | undefined> = {
+      '1D': r.return1w,
+      '1M': r.return1m,
+      '6M': r.return6m,
+      '1Y': r.return1y,
+      '3Y': r.return3y,
+      'SI': r.return5y,
+    };
+    return map[activeTab] ?? null;
+  })();
 
   if (loading) {
     return (
-      <>
-        <div className="pt-24"></div>
-        <Section background="offwhite" padding="large">
-          <ResponsiveContainer maxWidth="xl">
-            <div className="card-light p-12 text-center">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-brand-royal border-t-transparent mb-4"></div>
-              <p className="text-brand-navy/70">Loading fund details...</p>
-            </div>
-          </ResponsiveContainer>
-        </Section>
-      </>
+      <div className="bg-[#0d1512] min-h-screen flex flex-col">
+        <NavBar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full border-2 border-[#3c4a3e] border-t-[#44f593] animate-spin" />
+        </div>
+      </div>
     );
   }
 
-  if (error || !fundData) {
+  if (error || !data) {
     return (
-      <>
-        <div className="pt-24"></div>
-        <Section background="offwhite" padding="large">
-          <ResponsiveContainer maxWidth="xl">
-            <div className="card-light p-12 text-center">
-              <div className="text-6xl mb-4">❌</div>
-              <h2 className="text-2xl font-bold text-brand-navy mb-2">Fund Not Found</h2>
-              <p className="text-brand-navy/70 mb-6">{error || 'The requested fund could not be found'}</p>
-              <button
-                onClick={() => router.push('/funds/advanced-search')}
-                className="bg-brand-royal text-white px-6 py-3 rounded-lg font-medium hover:bg-brand-navy transition-all"
-              >
-                Back to Search
-              </button>
-            </div>
-          </ResponsiveContainer>
-        </Section>
-      </>
+      <div className="bg-[#0d1512] min-h-screen flex flex-col">
+        <NavBar />
+        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <p className="text-[#ffb4ab] text-lg font-semibold">{error ?? 'Fund not found'}</p>
+          <button onClick={() => router.back()} className="text-[#44f593] hover:underline text-sm">
+            ← Go back
+          </button>
+        </div>
+      </div>
     );
   }
 
-  const { fund, returns, navHistory } = fundData;
+  const { fund, returns: ret } = data;
+  const navChange = currentReturn;
+  const navPos = (navChange ?? 0) >= 0;
 
-  // Detect plan type from scheme name
-  const isDirectPlan = fund.schemeName.toLowerCase().includes('direct');
+  const METRICS = [
+    { label: 'AUM',           value: fmtCr(fund.fundSize) },
+    { label: 'Expense Ratio', value: fund.expenseRatio != null ? `${fund.expenseRatio.toFixed(2)}%` : '—' },
+    { label: 'Exit Load',     value: fund.exitLoad ?? '—' },
+    { label: 'Min SIP',       value: fund.minSip != null ? `₹${fund.minSip}` : '—' },
+    { label: 'Alpha',         value: fmtPct(ret?.cagr1y), accent: true },
+    { label: 'Sharpe Ratio',  value: fmtNum(ret?.sharpeRatio1y) },
+    { label: 'Volatility',    value: fmtPct(ret?.volatility1y) },
+    { label: 'Age',           value: fundAge(fund.inceptionDate) },
+  ];
+
+  const QUICK_AMOUNTS = investMode === 'sip'
+    ? ['1000', '2500', '5000', '10000']
+    : ['5000', '10000', '25000', '50000'];
 
   return (
-    <>
-      <div className="pt-24"></div>
-      
-      <Section background="offwhite" padding="large">
-        <ResponsiveContainer maxWidth="xl">
-          <div className="space-y-8">
-            
-            {/* Fund Header - Premium Card */}
-            <div className="bg-gradient-to-br from-brand-navy via-brand-royal to-brand-navy rounded-xl md:rounded-2xl p-4 md:p-6 lg:p-8 text-white shadow-xl">
-              <div className="flex items-start justify-between mb-4 md:mb-6">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4 flex-wrap">
-                    <span className="px-2 py-1 md:px-4 md:py-1.5 bg-white/20 backdrop-blur-sm text-white text-xs md:text-sm font-semibold rounded-full border border-white/30">
-                      {fund.schemeCode}
-                    </span>
-                    <span className={`px-2 py-1 md:px-4 md:py-1.5 text-xs md:text-sm font-semibold rounded-full ${
-                      isDirectPlan 
-                        ? 'bg-green-500/90 text-white' 
-                        : 'bg-blue-400/90 text-white'
-                    }`}>
-                      {isDirectPlan ? '✓ Direct' : 'Regular'}
-                    </span>
+    <div className="bg-[#0d1512] min-h-screen flex flex-col">
+      <NavBar />
+
+      <main className="pt-36 pb-12 px-6 md:px-8 max-w-[1440px] mx-auto flex-1 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+          {/* ── Left Column (8 cols) ──────────────────────────── */}
+          <div className="lg:col-span-8 space-y-6">
+
+            {/* [1] Hero Info Block */}
+            <section className="glass-card p-6 md:p-8 rounded-2xl space-y-5">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-2">
+                  <span className="text-[#44f593] font-mono text-xs tracking-widest uppercase">
+                    {fund.amcCode ?? 'AMC'}
+                  </span>
+                  <h1 className="text-3xl md:text-4xl font-display font-bold tracking-tight text-[#dce5df] leading-tight">
+                    {fund.schemeName}
+                  </h1>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {fund.planType && (
+                      <span className="bg-[#242c28] px-3 py-1 rounded-full text-xs font-medium border border-[#3c4a3e]/20 text-[#c0c9c2]">
+                        {fund.planType}
+                      </span>
+                    )}
+                    {fund.optionType && (
+                      <span className="bg-[#242c28] px-3 py-1 rounded-full text-xs font-medium border border-[#3c4a3e]/20 text-[#c0c9c2]">
+                        {fund.optionType}
+                      </span>
+                    )}
                     {fund.schemeType && (
-                      <span className="px-2 py-1 md:px-4 md:py-1.5 bg-brand-gold/90 text-brand-navy text-xs md:text-sm font-semibold rounded-full">
+                      <span className="bg-[#242c28] px-3 py-1 rounded-full text-xs font-medium border border-[#3c4a3e]/20 text-[#c0c9c2]">
                         {fund.schemeType}
                       </span>
                     )}
                   </div>
-                  
-                  <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold mb-2 md:mb-3 leading-tight">
-                    {fund.schemeName}
-                  </h1>
-                  
-                  <p className="text-sm md:text-lg text-white/80">
-                    {fund.amcCode}
-                  </p>
                 </div>
-                
-                <button
-                  onClick={() => router.push('/funds/search')}
-                  className="hidden md:flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg font-medium transition-all border border-white/20 text-sm"
-                >
-                  ← Back
-                </button>
-              </div>
-
-              {/* NAV Display - Premium */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 pt-4 md:pt-6 border-t border-white/20">
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg md:rounded-xl p-3 md:p-4">
-                  <p className="text-xs md:text-sm text-white/70 mb-1">Current NAV</p>
-                  <p className="text-lg md:text-2xl lg:text-3xl font-bold text-brand-gold">
-                    ₹{fund.latestNav ? parseFloat(fund.latestNav.toString()).toFixed(2) : 'N/A'}
-                  </p>
-                  <p className="text-[10px] md:text-xs text-white/60 mt-1">
-                    {fund.latestNavDate ? new Date(fund.latestNavDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'}
-                  </p>
-                </div>
-                
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg md:rounded-xl p-3 md:p-4">
-                  <p className="text-xs md:text-sm text-white/70 mb-1">1Y Return</p>
-                  <p className={`text-lg md:text-2xl lg:text-3xl font-bold ${returns?.return1y && returns.return1y >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {formatPercent(returns?.return1y)}
-                  </p>
-                  <p className="text-[10px] md:text-xs text-white/60 mt-1">Absolute</p>
-                </div>
-                
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg md:rounded-xl p-3 md:p-4">
-                  <p className="text-xs md:text-sm text-white/70 mb-1">3Y CAGR</p>
-                  <p className={`text-lg md:text-2xl lg:text-3xl font-bold ${returns?.cagr3y && returns.cagr3y >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {formatPercent(returns?.cagr3y)}
-                  </p>
-                  <p className="text-[10px] md:text-xs text-white/60 mt-1">Annualized</p>
-                </div>
-                
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg md:rounded-xl p-3 md:p-4">
-                  <p className="text-xs md:text-sm text-white/70 mb-1">5Y CAGR</p>
-                  <p className={`text-lg md:text-2xl lg:text-3xl font-bold ${returns?.cagr5y && returns.cagr5y >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {formatPercent(returns?.cagr5y)}
-                  </p>
-                  <p className="text-[10px] md:text-xs text-white/60 mt-1">Annualized</p>
-                </div>
-              </div>
-
-              {/* Mobile Back Button */}
-              <button
-                onClick={() => router.push('/funds/search')}
-                className="md:hidden w-full mt-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg font-medium transition-all border border-white/20 text-sm"
-              >
-                ← Back to Search
-              </button>
-            </div>
-
-            {/* Returns Section */}
-            {returns && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Absolute Returns Card */}
-                <div className="card-light p-4 md:p-6 rounded-xl shadow-md">
-                  <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
-                    <div className="w-8 h-8 md:w-10 md:h-10 bg-brand-royal/10 rounded-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 md:w-5 md:h-5 text-brand-royal" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                      </svg>
-                    </div>
-                    <h3 className="text-base md:text-xl font-bold text-brand-navy">Absolute Returns</h3>
+                <div className="text-right shrink-0">
+                  <span className="text-[#859586] text-xs block mb-1">Live NAV</span>
+                  <div className="flex items-baseline justify-end gap-2">
+                    <span className="text-2xl font-mono font-bold text-[#dce5df]">₹{fund.latestNav?.toFixed(4)}</span>
+                    {navChange != null && (
+                      <span className={`text-sm font-mono ${navPos ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+                        {fmtPct(navChange)}
+                      </span>
+                    )}
                   </div>
-                  
-                  <div className="grid grid-cols-3 gap-2 md:gap-4">
-                    {[
-                      { label: '1W', value: returns.return1w },
-                      { label: '1M', value: returns.return1m },
-                      { label: '3M', value: returns.return3m },
-                      { label: '6M', value: returns.return6m },
-                      { label: '1Y', value: returns.return1y },
-                      { label: '2Y', value: returns.return2y },
-                      { label: '3Y', value: returns.return3y },
-                      { label: '5Y', value: returns.return5y },
-                      { label: '10Y', value: returns.return10y },
-                    ].map((item) => (
-                      <div key={item.label} className="text-center p-2 md:p-3 bg-gray-50 rounded-lg">
-                        <p className="text-[10px] md:text-xs text-brand-navy/60 mb-1">{item.label}</p>
-                        <p className={`text-sm md:text-lg font-bold ${getReturnColor(item.value)}`}>
-                          {formatPercent(item.value)}
-                        </p>
+                  <span className="text-xs text-[#859586] font-mono">as of {fmtDate(fund.latestNavDate)}</span>
+                </div>
+              </div>
+            </section>
+
+            {/* [2] Returns Tabs + Chart */}
+            <section className="glass-card p-6 rounded-2xl space-y-5">
+              <div className="flex items-center justify-between border-b border-[#3c4a3e]/20 pb-4">
+                <div className="flex gap-4">
+                  {RETURN_TABS.map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={[
+                        'pb-4 px-1 text-sm font-medium transition-colors',
+                        activeTab === tab
+                          ? 'text-[#44f593] border-b-2 border-[#44f593]'
+                          : 'text-[#c0c9c2] hover:text-[#dce5df]',
+                      ].join(' ')}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 text-xs font-mono text-[#859586]">
+                  <span className="w-2 h-2 rounded-full bg-[#44f593]" />
+                  Fund NAV
+                </div>
+              </div>
+
+              <MiniChart history={filteredHistory.length > 0 ? filteredHistory : data.navHistory ?? []} />
+            </section>
+
+            {/* [3] Metrics Grid 2×4 */}
+            <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {METRICS.map(m => (
+                <div key={m.label} className="glass-card p-4 rounded-2xl">
+                  <p className="text-[#859586] text-xs uppercase tracking-widest mb-1">{m.label}</p>
+                  <p className={`text-lg font-mono font-bold ${m.accent ? 'text-[#44f593]' : 'text-[#dce5df]'}`}>
+                    {m.value}
+                  </p>
+                </div>
+              ))}
+            </section>
+
+            {/* [4] Top Holdings */}
+            <section className="glass-card overflow-hidden rounded-2xl">
+              <div className="px-6 py-5 border-b border-[#3c4a3e]/20 flex justify-between items-center">
+                <h3 className="text-lg font-display font-bold text-[#dce5df]">Portfolio Holdings</h3>
+                <span className="text-[#859586] text-xs uppercase tracking-widest">
+                  {holdings.length} Assets Total
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-[#161d1a] text-xs font-mono text-[#859586] uppercase tracking-widest">
+                    <tr>
+                      <th className="px-6 py-4">Security Name</th>
+                      <th className="px-6 py-4">Sector</th>
+                      <th className="px-6 py-4 text-right">Weightage</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#3c4a3e]/15">
+                    {(holdings.length > 0 ? holdings.slice(0, 5) : []).map((h, i) => (
+                      <tr key={i} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="px-6 py-4 font-medium text-sm text-[#dce5df]">{h.holding_name}</td>
+                        <td className="px-6 py-4 text-sm text-[#859586]">{h.sector ?? '—'}</td>
+                        <td className="px-6 py-4 text-right font-mono text-sm text-[#dce5df]">
+                          {h.weight_pct?.toFixed(2)}%
+                        </td>
+                      </tr>
+                    ))}
+                    {holdings.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-8 text-center text-sm text-[#859586]">
+                          Holdings data not available.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Premium Gate — blur after row 5 */}
+              {holdings.length > 5 && (
+                <div className="relative">
+                  <div className="h-28 bg-gradient-to-t from-[#0d1512] to-transparent absolute inset-0 z-10" />
+                  <div className="px-6 py-4 blur-sm select-none opacity-40">
+                    {holdings.slice(5, 7).map((h, i) => (
+                      <div key={i} className="flex justify-between py-2 text-sm text-[#dce5df]">
+                        <span>{h.holding_name}</span>
+                        <span>{h.sector}</span>
+                        <span>{h.weight_pct?.toFixed(2)}%</span>
                       </div>
                     ))}
                   </div>
-                </div>
-
-                {/* CAGR Returns Card */}
-                <div className="card-light p-4 md:p-6 rounded-xl shadow-md">
-                  <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
-                    <div className="w-8 h-8 md:w-10 md:h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 md:w-5 md:h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  <div className="absolute inset-0 z-20 flex items-center justify-center">
+                    <Link href="/auth/signin?redirect=/funds" className="glass-card px-6 py-3 rounded-full border-[#44f593]/30 flex items-center gap-3 hover:border-[#44f593]/50 transition-colors">
+                      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#44f593" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M7 11V7a5 5 0 0110 0v4"/>
                       </svg>
-                    </div>
-                    <h3 className="text-base md:text-xl font-bold text-brand-navy">CAGR (Annualized)</h3>
+                      <span className="text-sm font-bold emerald-gradient-text uppercase tracking-widest">
+                        Sign In to Unlock Holdings
+                      </span>
+                    </Link>
                   </div>
-                  
-                  <div className="space-y-2 md:space-y-4">
-                    {[
-                      { label: '1 Year', value: returns.cagr1y },
-                      { label: '2 Year', value: returns.cagr2y },
-                      { label: '3 Year', value: returns.cagr3y },
-                      { label: '5 Year', value: returns.cagr5y },
-                      { label: '10 Year', value: returns.cagr10y },
-                    ].map((item) => (
-                      <div key={item.label} className="flex items-center justify-between p-2 md:p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm md:text-base text-brand-navy/70 font-medium">{item.label}</span>
-                        <span className={`text-base md:text-xl font-bold ${getReturnColor(item.value)}`}>
-                          {formatPercent(item.value)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                </div>
+              )}
+            </section>
+          </div>
+
+          {/* ── Right Sidebar (4 cols) ───────────────────────── */}
+          <aside className="lg:col-span-4 sticky top-24 space-y-5">
+
+            {/* Quick Invest Panel */}
+            <div className="glass-card p-6 rounded-2xl border-[#44f593]/20 shadow-lg shadow-[#44f593]/5">
+              <h3 className="text-xl font-display font-bold mb-5 text-[#dce5df]">Invest Now</h3>
+
+              {/* SIP / One-time toggle */}
+              <div className="flex p-1 bg-[#08100d] rounded-xl mb-5">
+                {(['sip', 'onetime'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => setInvestMode(mode)}
+                    className={[
+                      'flex-1 py-2 rounded-lg text-sm font-bold transition-all',
+                      investMode === mode
+                        ? 'bg-[#44f593] text-[#001f10]'
+                        : 'text-[#c0c9c2] hover:text-[#dce5df]',
+                    ].join(' ')}
+                  >
+                    {mode === 'sip' ? 'Monthly SIP' : 'One-time'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Amount input */}
+              <div className="space-y-3 mb-5">
+                <label className="text-xs font-mono text-[#859586] uppercase tracking-widest block">
+                  Investment Amount
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-mono text-[#c0c9c2]">₹</span>
+                  <input
+                    type="text"
+                    value={parseInt(amount).toLocaleString('en-IN')}
+                    onChange={e => {
+                      const v = e.target.value.replace(/,/g, '');
+                      if (/^\d*$/.test(v)) setAmount(v || '0');
+                    }}
+                    className="w-full bg-[#08100d] border border-[#3c4a3e] focus:border-[#44f593]/50 rounded-xl py-3.5 pl-10 pr-4 text-xl font-mono font-bold text-[#dce5df] focus:outline-none"
+                  />
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {QUICK_AMOUNTS.map(a => (
+                    <button
+                      key={a}
+                      onClick={() => setAmount(a)}
+                      className="bg-[#242c28] px-3 py-1.5 rounded-lg text-xs font-medium text-[#c0c9c2] hover:bg-[#2f3733] transition-colors"
+                    >
+                      +₹{parseInt(a).toLocaleString('en-IN')}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
 
-            {/* Risk Metrics Section */}
-            {returns && (returns.volatility1y || returns.maxDrawdown || returns.sharpeRatio1y || returns.sortinoRatio1y) && (
-              <div className="card-light p-4 md:p-6 rounded-xl shadow-md">
-                <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
-                  <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-4 h-4 md:w-5 md:h-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              {investMode === 'sip' && (
+                <div className="mb-5">
+                  <label className="text-xs font-mono text-[#859586] uppercase tracking-widest block mb-2">
+                    SIP Date
+                  </label>
+                  <div className="flex items-center justify-between p-3.5 bg-[#08100d] rounded-xl cursor-pointer border border-[#3c4a3e]">
+                    <span className="text-sm text-[#dce5df]">15th of every month</span>
+                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#44f593" strokeWidth="2">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                      <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                      <line x1="3" y1="10" x2="21" y2="10"/>
                     </svg>
                   </div>
-                  <h3 className="text-base md:text-xl font-bold text-brand-navy">Risk Metrics</h3>
-                  <span className="text-xs md:text-sm text-brand-navy/50">(1Y)</span>
                 </div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
-                  <div className="text-center p-3 md:p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg md:rounded-xl border border-orange-200">
-                    <p className="text-xs md:text-sm text-orange-700 font-medium mb-1 md:mb-2">Volatility</p>
-                    <p className="text-lg md:text-2xl font-bold text-orange-600">
-                      {formatNumber(returns.volatility1y)}%
-                    </p>
-                    <p className="text-[10px] md:text-xs text-orange-600/70 mt-1">Std Dev</p>
+              )}
+
+              <a
+                href="https://eonboard.njindiaonline.com/partner-tiny-url?njBrcode=14688"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full block text-center bg-gradient-to-br from-[#44f593] to-[#00d87a] text-[#001f10] font-bold py-4 rounded-xl text-base hover:scale-[1.02] transition-transform active:scale-95"
+              >
+                {investMode === 'sip' ? 'Start Systematic Investment' : 'Invest Now'}
+              </a>
+              <p className="text-center text-xs text-[#859586] px-4 mt-3">
+                Partner: <span className="font-bold text-[#c0c9c2]">Ojasvi Malik</span> (Vijay Malik Financial Services) · You will be redirected to NJ Wealth for transaction.
+              </p>
+            </div>
+
+            {/* Fund Governance */}
+            <div className="glass-card p-5 rounded-2xl space-y-4">
+              <h4 className="text-xs font-display font-bold uppercase tracking-widest text-[#44f593]">Fund Governance</h4>
+
+              {data.managers?.filter(m => m.isCurrent).slice(0, 2).map((mgr, i) => (
+                <div key={i} className="flex items-center gap-3 group cursor-pointer">
+                  <div className="w-9 h-9 rounded-full bg-[#242c28] flex items-center justify-center">
+                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#44f593" strokeWidth="1.75">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                    </svg>
                   </div>
-                  
-                  <div className="text-center p-3 md:p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-lg md:rounded-xl border border-red-200">
-                    <p className="text-xs md:text-sm text-red-700 font-medium mb-1 md:mb-2">Max DD</p>
-                    <p className="text-lg md:text-2xl font-bold text-red-600">
-                      {returns.maxDrawdown ? `-${formatNumber(Math.abs(returns.maxDrawdown))}%` : '-'}
-                    </p>
-                    <p className="text-[10px] md:text-xs text-red-600/70 mt-1">Peak-Trough</p>
+                  <div className="flex-1">
+                    <p className="font-bold text-sm text-[#dce5df]">{mgr.name}</p>
+                    <p className="text-xs text-[#859586]">Fund Manager{mgr.tenure ? ` · ${mgr.tenure.toFixed(1)} yrs` : ''}</p>
                   </div>
-                  
-                  <div className="text-center p-3 md:p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg md:rounded-xl border border-blue-200">
-                    <p className="text-xs md:text-sm text-blue-700 font-medium mb-1 md:mb-2">Sharpe</p>
-                    <p className="text-lg md:text-2xl font-bold text-blue-600">
-                      {formatNumber(returns.sharpeRatio1y)}
-                    </p>
-                    <p className="text-[10px] md:text-xs text-blue-600/70 mt-1">Risk-Adj</p>
-                  </div>
-                  
-                  <div className="text-center p-3 md:p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg md:rounded-xl border border-purple-200">
-                    <p className="text-xs md:text-sm text-purple-700 font-medium mb-1 md:mb-2">Sortino</p>
-                    <p className="text-lg md:text-2xl font-bold text-purple-600">
-                      {formatNumber(returns.sortinoRatio1y)}
-                    </p>
-                    <p className="text-[10px] md:text-xs text-purple-600/70 mt-1">Downside</p>
-                  </div>
+                  <svg className="text-[#859586] group-hover:text-[#44f593] transition-colors" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
                 </div>
-              </div>
-            )}
+              ))}
 
-            {/* NAV Chart */}
-            {navHistory && navHistory.length > 0 && (
-              <NAVChart data={navHistory} fundName={fund.schemeName} />
-            )}
+              {data.managers?.length === 0 && (
+                <p className="text-xs text-[#859586]">Fund manager data not available.</p>
+              )}
 
-            {/* Quick Actions */}
-            <div className="card-light p-4 md:p-6 rounded-xl shadow-md">
-              <h3 className="text-base md:text-xl font-bold text-brand-navy mb-3 md:mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2 md:gap-4">
-                <button className="relative bg-gradient-to-r from-brand-royal to-brand-navy text-white px-4 md:px-8 py-2 md:py-3 rounded-lg md:rounded-xl font-semibold opacity-70 cursor-not-allowed shadow-lg text-sm md:text-base">
-                  💰 Invest
-                  <span className="absolute -top-1 -right-1 md:-top-2 md:-right-2 bg-brand-gold text-brand-navy text-[10px] md:text-xs font-bold px-1.5 md:px-2 py-0.5 rounded-full shadow-md">
-                    Soon
-                  </span>
-                </button>
-                <button className="relative bg-gradient-to-r from-green-500 to-green-600 text-white px-4 md:px-8 py-2 md:py-3 rounded-lg md:rounded-xl font-semibold opacity-70 cursor-not-allowed shadow-lg text-sm md:text-base">
-                  📈 SIP
-                  <span className="absolute -top-1 -right-1 md:-top-2 md:-right-2 bg-brand-gold text-brand-navy text-[10px] md:text-xs font-bold px-1.5 md:px-2 py-0.5 rounded-full shadow-md">
-                    Soon
-                  </span>
-                </button>
-                <button 
-                  onClick={() => router.push('/funds/compare')}
-                  className="bg-white border-2 border-brand-royal text-brand-royal px-4 md:px-8 py-2 md:py-3 rounded-lg md:rounded-xl font-semibold hover:bg-brand-royal hover:text-white transition-all shadow-md text-sm md:text-base"
-                >
-                  ⚖️ Compare
-                </button>
-                <button 
-                  onClick={() => router.push('/funds/search')}
-                  className="bg-gray-100 text-brand-navy px-4 md:px-8 py-2 md:py-3 rounded-lg md:rounded-xl font-semibold hover:bg-gray-200 transition-all text-sm md:text-base"
-                >
-                  🔍 Search
-                </button>
+              <div className="flex items-center gap-3 opacity-50 cursor-not-allowed">
+                <div className="w-9 h-9 rounded-full bg-[#242c28] flex items-center justify-center">
+                  <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#859586" strokeWidth="1.75">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-sm text-[#859586]">Key Information Memo</p>
+                  <p className="text-xs text-[#859586]">SID / KIM Document</p>
+                </div>
+                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#44f593]/10 text-[#44f593] border border-[#44f593]/20 uppercase tracking-widest">Soon</span>
               </div>
             </div>
 
-            {/* Data Update Info */}
-            {returns?.updatedAt && (
-              <div className="text-center text-sm text-brand-navy/50">
-                Data last updated: {new Date(returns.updatedAt).toLocaleDateString('en-IN', { 
-                  day: 'numeric', 
-                  month: 'long', 
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
+            {/* Returns summary */}
+            {ret && (
+              <div className="glass-card p-5 rounded-2xl">
+                <h4 className="text-xs font-display font-bold uppercase tracking-widest text-[#44f593] mb-4">Historical Returns</h4>
+                <div className="flex justify-between items-center mb-3 pb-2 border-b border-white/5">
+                  <span className="text-[10px] uppercase tracking-widest text-[#859586] font-bold">Period</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] uppercase tracking-widest text-[#859586] font-bold">Return</span>
+                    <span className="text-[10px] text-[#859586]">(Absolute / CAGR)</span>
+                  </div>
+                </div>
+                <div className="space-y-2.5">
+                  {[
+                    { label: '1 Month',  value: ret.return1m, type: 'Absolute' },
+                    { label: '6 Month',  value: ret.return6m, type: 'Absolute' },
+                    { label: '1 Year',   value: ret.return1y, type: 'Absolute' },
+                    { label: '3 Years',  value: ret.cagr3y,   type: 'CAGR' },
+                    { label: '5 Years',  value: ret.cagr5y,   type: 'CAGR' },
+                  ].filter(r => r.value != null).map(r => (
+                    <div key={r.label} className="flex justify-between items-center">
+                      <span className="text-sm text-[#c0c9c2]">{r.label}</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-mono text-sm font-bold ${(r.value ?? 0) >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+                          {fmtPct(r.value)}
+                        </span>
+                        <span className="text-[9px] text-[#859586] font-mono w-12 text-right">{r.type}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
+          </aside>
+        </div>
 
-          </div>
-        </ResponsiveContainer>
-      </Section>
-    </>
+        <ComplianceDisclaimer variant="fund" className="mt-10 max-w-5xl" />
+      </main>
+
+      <SiteFooter />
+    </div>
   );
 }

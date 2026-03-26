@@ -184,61 +184,55 @@ export async function POST() {
 }
 
 export async function GET() {
+  // 1. Try DB cache first (populated by /api/cron/cache-gainers-losers)
   try {
-    // Check cache first
-    if (cachedData && Date.now() - cachedData.timestamp < CACHE_TTL) {
-      return NextResponse.json({
-        success: true,
-        gainers: cachedData.gainers,
-        losers: cachedData.losers,
-        source: 'cache',
-        timestamp: new Date(cachedData.timestamp).toISOString(),
-      });
+    const { default: pool } = await import('@/lib/postgres-db');
+    const dbResult = await pool.query(
+      `SELECT data, updated_at FROM market_cache WHERE cache_key = 'gainers_losers' AND is_stale = false AND updated_at > NOW() - INTERVAL '30 minutes' LIMIT 1`
+    );
+    if (dbResult.rows.length > 0) {
+      const cached = JSON.parse(dbResult.rows[0].data);
+      return NextResponse.json({ ...cached, source: 'db-cache' });
     }
+  } catch {}
 
-    // Try to fetch from NSE
-    try {
-      const { gainers, losers } = await fetchFromNSE();
-      
-      // Update cache
-      cachedData = {
-        gainers,
-        losers,
-        timestamp: Date.now(),
-      };
+  // 2. Serve from in-memory cache if fresh
+  if (cachedData && Date.now() - cachedData.timestamp < CACHE_TTL) {
+    return NextResponse.json({
+      success: true,
+      gainers: cachedData.gainers,
+      losers: cachedData.losers,
+      isLive: true,
+      source: 'cache',
+      timestamp: new Date(cachedData.timestamp).toISOString(),
+    });
+  }
 
-      return NextResponse.json({
-        success: true,
-        gainers,
-        losers,
-        source: 'nse',
-        timestamp: new Date().toISOString(),
-      });
-    } catch (nseError) {
-      console.log('NSE fetch failed, using mock data');
-      
-      // Use mock data as fallback
-      const { gainers, losers } = getMockData();
-      
-      return NextResponse.json({
-        success: true,
-        gainers,
-        losers,
-        source: 'mock',
-        timestamp: new Date().toISOString(),
-      });
-    }
-  } catch (error) {
-    console.error('Gainers/Losers API Error:', error);
-    
-    // Return mock data on any error
-    const { gainers, losers } = getMockData();
-    
+  // 3. Attempt live NSE fetch
+  try {
+    const { gainers, losers } = await fetchFromNSE();
+    cachedData = { gainers, losers, timestamp: Date.now() };
     return NextResponse.json({
       success: true,
       gainers,
       losers,
-      source: 'mock',
+      isLive: true,
+      source: 'nse',
+      timestamp: new Date().toISOString(),
+    });
+  } catch {
+    // NSE unavailable — serve representative data with explicit flag so
+    // the UI can show a "Market data delayed" disclaimer rather than
+    // silently presenting stale values as live.
+    console.warn('[gainers-losers] NSE fetch failed — serving representative data');
+    const { gainers, losers } = getMockData();
+    return NextResponse.json({
+      success: true,
+      gainers,
+      losers,
+      isLive: false,
+      source: 'representative',
+      disclaimer: 'NSE data temporarily unavailable. Values shown are representative.',
       timestamp: new Date().toISOString(),
     });
   }

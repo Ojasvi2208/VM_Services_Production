@@ -131,7 +131,7 @@ async function evaluateFundHealth(
   client: any
 ): Promise<FundHealthReport> {
   // Fetch the fund's metrics + its peer group stats in a single query
-  // Production fund_returns has sharpe_ratio_1y (NOT sharpe_1y), no calculated_date, no sharpe_3y.
+  // Production fund_returns has sharpe_ratio_1y (NOT sharpe_ratio_1y), no calculated_date, no sharpe_3y.
   // volatility_3y exists (added by migration 005).
   const result = await client.query(`
     WITH fund_data AS (
@@ -140,7 +140,7 @@ async function evaluateFundHealth(
         f.fund_size, f.expense_ratio,
         COALESCE(fr.cagr_3y, fr.return_3y) as cagr_3y,
         fr.cagr_5y, fr.cagr_1y,
-        fr.sharpe_ratio_1y as sharpe_1y,
+        fr.sharpe_ratio_1y as sharpe_ratio_1y,
         fr.volatility_1y, fr.volatility_3y
       FROM funds f
       LEFT JOIN fund_returns fr ON f.scheme_code = fr.scheme_code
@@ -217,7 +217,7 @@ async function evaluateFundHealth(
 
   // ── 2. RISK-ADJUSTED PERFORMANCE (25%) ──
   let riskScore = 50;
-  const sharpe = parseFloat(fd.sharpe_1y);
+  const sharpe = parseFloat(fd.sharpe_ratio_1y);
   const medianSharpe = parseFloat(fd.median_sharpe);
   const p75Sharpe = parseFloat(fd.p75_sharpe);
 
@@ -462,7 +462,7 @@ async function generateSuggestions(
       // Find the best alternative in the same sub-category
       const altResult = await client.query(`
         SELECT f.scheme_code, f.scheme_name,
-               COALESCE(fr2.cagr_3y, fr2.return_3y) as cagr_3y, fr2.sharpe_ratio_1y as sharpe_1y
+               COALESCE(fr2.cagr_3y, fr2.return_3y) as cagr_3y, fr2.sharpe_ratio_1y as sharpe_ratio_1y
         FROM funds f
         JOIN fund_returns fr2 ON f.scheme_code = fr2.scheme_code
         WHERE f.sub_category = $1
@@ -477,7 +477,7 @@ async function generateSuggestions(
       if (altResult.rows.length > 0) {
         const alt = altResult.rows[0];
         const altCagr = parseFloat(alt.cagr_3y);
-        const altSharpe = parseFloat(alt.sharpe_1y);
+        const altSharpe = parseFloat(alt.sharpe_ratio_1y);
         const sharpeStr = !isNaN(altSharpe) ? ` and Sharpe ${altSharpe.toFixed(2)}` : '';
         suggestions.push({
           type: 'swap',

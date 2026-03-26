@@ -3,9 +3,9 @@
   "top_n": 10,
   "amcs": [
     {
-      "id": "sbi",
-      "name": "SBI",
-      "file": "vijaymalik-mobile/androidApp/All-Schemes-Monthly-Portfolio---as-on-31st-January-2026.xlsx",
+      "id": "axis",
+      "name": "Axis",
+      "file": "Portfolio_AMC_Monthly/All-Schemes-Monthly-Portfolio---as-on-31st-January-2026.xlsx",
       "format": "index_sheet",
       "index_sheet": "Index",
       "index_start_row": 4,
@@ -26,7 +26,7 @@
     {
       "id": "kotak",
       "name": "Kotak",
-      "file": "vijaymalik-mobile/androidApp/ConsolidatedSEBIPortfolioJanuary2026.xlsx",
+      "file": "Portfolio_AMC_Monthly/ConsolidatedSEBIPortfolioJanuary2026.xlsx",
       "format": "title_row",
       "title_row": 0,
       "title_col": 2,

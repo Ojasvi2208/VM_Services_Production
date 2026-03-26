@@ -94,6 +94,13 @@ export async function GET(request: NextRequest) {
         const userEvaluations: { goalName: string; flag: string; successProbability: number; shortfall: number; suggestedAction: string }[] = [];
 
         for (const goal of goalsResult.rows) {
+          // SEBI_COMPLIANCE_HOLD: Monte Carlo + Gemini evaluation + Deep Eval disabled
+          // pending SEBI IA registration. These produce personalised advisory outputs
+          // (GREEN/AMBER/RED flags, success probability, suggested actions, fund health scores).
+          // Re-enable once VM Financial Advisory Pvt. Ltd. receives SEBI IA certificate.
+          stats.goalsSkipped++;
+          continue;
+
           // ── Step 4: Stale-While-Revalidate check ──
           const lastEval = await client.query(
             `SELECT portfolio_value_at_eval FROM goal_evaluations WHERE goal_id = $1 ORDER BY evaluated_at DESC LIMIT 1`,
@@ -284,10 +291,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ═══ LTCG Harvest Window Notifications (Jan–March only) ═══
+    // ═══ SEBI_COMPLIANCE_HOLD: LTCG Harvest + Teaser Notifications disabled ═══
+    // These sections send actionable tax-advisory pushes (specific fund redemption amounts,
+    // cost-basis reset suggestions, Pro upsell with gain amounts). All constitute personalised
+    // investment/tax advice under SEBI IA Regulations 2013 Reg 2(l).
+    // Re-enable once VM Financial Advisory Pvt. Ltd. receives SEBI IA certificate.
+    const LTCG_COMPLIANCE_HOLD = true;
     const nowDate = new Date();
-    const currentMonth = nowDate.getMonth(); // 0=Jan, 1=Feb, 2=Mar
-    if (currentMonth >= 0 && currentMonth <= 2) {
+    const currentMonth = nowDate.getMonth();
+    if (!LTCG_COMPLIANCE_HOLD && currentMonth >= 0 && currentMonth <= 2) {
       try {
         const fy = getCurrentFY();
         const monthsLeft = getMonthsLeftInFY();

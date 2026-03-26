@@ -109,23 +109,41 @@ async function fetchAllCommodities(): Promise<{ commodities: CommodityData[]; us
 
 export async function GET() {
   try {
+    // 1. Try DB cache first (populated by /api/cron/cache-commodities)
+    try {
+      const { default: pool } = await import('@/lib/postgres-db');
+      const dbResult = await pool.query(
+        `SELECT data, updated_at FROM market_cache WHERE cache_key = 'commodities_all' AND is_stale = false AND updated_at > NOW() - INTERVAL '2 hours' LIMIT 1`
+      );
+      if (dbResult.rows.length > 0) {
+        const cached = JSON.parse(dbResult.rows[0].data);
+        return NextResponse.json({
+          success: true,
+          commodities: cached.commodities,
+          usdInr: cached.usdInr,
+          source: 'db-cache',
+          timestamp: cached.fetchedAt,
+        });
+      }
+    } catch {}
+
+    // 2. Try in-memory cache (warm serverless instance)
     if (commodityCache && Date.now() - commodityCache.timestamp < CACHE_TTL) {
       return NextResponse.json({
         success: true,
         commodities: commodityCache.commodities,
         usdInr: commodityCache.usdInr,
-        source: 'cache',
+        source: 'memory-cache',
         timestamp: new Date(commodityCache.timestamp).toISOString(),
       });
     }
 
+    // 3. Fallback: live fetch (only if both caches miss)
     const { commodities, usdInr } = await fetchAllCommodities();
 
     if (commodities.length > 0) {
       commodityCache = { commodities, usdInr, timestamp: Date.now() };
     }
-
-    console.log(`Commodities: fetched ${commodities.length}/${COMMODITY_SYMBOLS.length} via CF relay, USD/INR=${usdInr}`);
 
     return NextResponse.json({
       success: true,

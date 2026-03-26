@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Akshaya Vault | Fund Detail</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+        }
+        .emerald-gradient-text {
+            background: linear-gradient(135deg, #44f593 0%, #00d87a 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .nav-area-gradient {
+            background: linear-gradient(to bottom, rgba(68, 245, 147, 0.15) 0%, rgba(68, 245, 147, 0) 100%);
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary": "#29332f",
+              "secondary-container": "#3e4c44",
+              "on-secondary-container": "#acbcb1",
+              "secondary": "#bacbbf",
+              "on-secondary": "#25342c",
+              "surface-container-highest": "#2f3733",
+              "surface-variant": "#2f3733",
+              "outline-variant": "#3c4a3e",
+              "on-error": "#690005",
+              "on-primary-container": "#00582e",
+              "on-tertiary-fixed": "#141e1a",
+              "on-primary": "#00391c",
+              "on-primary-fixed-variant": "#00522b",
+              "secondary-fixed": "#d6e7db",
+              "inverse-surface": "#dce5df",
+              "surface-container-lowest": "#08100d",
+              "on-secondary-fixed-variant": "#3b4a42",
+              "surface": "#0d1512",
+              "error": "#ffb4ab",
+              "on-primary-fixed": "#00210e",
+              "tertiary-fixed": "#dae5df",
+              "primary-fixed-dim": "#25e283",
+              "primary-container": "#00d87a",
+              "surface-dim": "#0d1512",
+              "on-tertiary-fixed-variant": "#3f4945",
+              "tertiary": "#d0dbd5",
+              "surface-container-high": "#242c28",
+              "surface-container": "#19211e",
+              "outline": "#859586",
+              "tertiary-container": "#b4bfb9",
+              "surface-tint": "#25e283",
+              "on-background": "#dce5df",
+              "inverse-primary": "#006d3b",
+              "tertiary-fixed-dim": "#bec9c3",
+              "inverse-on-surface": "#2a322e",
+              "primary": "#44f593",
+              "secondary-fixed-dim": "#bacbbf",
+              "on-surface": "#dce5df",
+              "on-error-container": "#ffdad6",
+              "background": "#0d1512",
+              "on-surface-variant": "#bacbbb",
+              "surface-container-low": "#161d1a",
+              "on-secondary-fixed": "#101e17",
+              "surface-bright": "#333b37",
+              "on-tertiary-container": "#444e49",
+              "primary-fixed": "#5cff9f",
+              "error-container": "#93000a"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"],
+              "mono": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body selection:bg-primary selection:text-on-primary">
+<!-- Top Navigation Bar (Shared Component) -->
+<header class="bg-emerald-950/40 dark:bg-emerald-950/40 backdrop-blur-xl fixed top-0 w-full z-50 border-b border-white/10 shadow-2xl shadow-emerald-950/50">
+<div class="flex justify-between items-center h-16 px-8 max-w-[1440px] mx-auto">
+<div class="text-xl font-bold tracking-tighter text-emerald-400 dark:text-emerald-400 font-headline">Akshaya Vault</div>
+<nav class="hidden md:flex items-center space-x-8">
+<a class="text-emerald-100/60 hover:text-emerald-100 font-medium transition-colors" href="#">Markets</a>
+<a class="text-emerald-100/60 hover:text-emerald-100 font-medium transition-colors" href="#">Discover</a>
+<a class="text-emerald-400 border-b-2 border-emerald-400 pb-1 font-bold" href="#">Portfolio</a>
+<a class="text-emerald-100/60 hover:text-emerald-100 font-medium transition-colors" href="#">Goals</a>
+<a class="text-emerald-100/60 hover:text-emerald-100 font-medium transition-colors" href="#">News</a>
+<a class="text-emerald-100/60 hover:text-emerald-100 font-medium transition-colors" href="#">Screener</a>
+</nav>
+<div class="flex items-center space-x-4">
+<div class="flex items-center space-x-2 mr-4">
+<span class="material-symbols-outlined text-emerald-100/60 hover:text-emerald-400 cursor-pointer">account_balance_wallet</span>
+<span class="material-symbols-outlined text-emerald-100/60 hover:text-emerald-400 cursor-pointer">notifications</span>
+<span class="material-symbols-outlined text-emerald-100/60 hover:text-emerald-400 cursor-pointer">settings</span>
+</div>
+<button class="bg-primary text-on-primary px-5 py-2 rounded-xl font-bold text-sm hover:scale-95 transition-all duration-200 ease-in-out">
+                    Connect Vault
+                </button>
+</div>
+</div>
+</header>
+<main class="pt-24 pb-12 px-8 max-w-[1440px] mx-auto min-h-screen">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+<!-- Left Column (Content) -->
+<div class="lg:col-span-8 space-y-8">
+<!-- [1] Hero Info Block -->
+<section class="glass-card p-8 rounded-[16px] space-y-6">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div class="space-y-2">
+<span class="text-primary font-mono text-sm tracking-widest uppercase">Akshaya Intelligence AMC</span>
+<h1 class="text-4xl md:text-5xl font-headline font-bold tracking-tight text-on-surface">Emerald Growth Frontier Fund</h1>
+<div class="flex flex-wrap gap-3 mt-4">
+<span class="bg-surface-container-high px-3 py-1 rounded-full text-xs font-medium border border-outline-variant/20">Direct Plan</span>
+<span class="bg-surface-container-high px-3 py-1 rounded-full text-xs font-medium border border-outline-variant/20">Growth Option</span>
+<span class="bg-surface-container-high px-3 py-1 rounded-full text-xs font-medium border border-outline-variant/20">Equity: Large Cap</span>
+</div>
+</div>
+<div class="text-right">
+<span class="text-ink-silver text-sm block mb-1">Live NAV</span>
+<div class="flex items-baseline justify-end gap-2">
+<span class="text-3xl font-mono font-bold">₹1,284.42</span>
+<span class="text-primary text-sm font-mono">+2.14%</span>
+</div>
+</div>
+</div>
+</section>
+<!-- [2] Returns Tab Row & [3] NAV Chart -->
+<section class="glass-card p-6 rounded-[16px] space-y-6">
+<div class="flex items-center justify-between border-b border-outline-variant/10 pb-4">
+<div class="flex space-x-6">
+<button class="text-primary border-b-2 border-primary pb-4 px-2 font-medium">1D</button>
+<button class="text-on-surface-variant hover:text-on-surface pb-4 px-2 transition-colors">1M</button>
+<button class="text-on-surface-variant hover:text-on-surface pb-4 px-2 transition-colors">6M</button>
+<button class="text-on-surface-variant hover:text-on-surface pb-4 px-2 transition-colors">1Y</button>
+<button class="text-on-surface-variant hover:text-on-surface pb-4 px-2 transition-colors">3Y</button>
+<button class="text-on-surface-variant hover:text-on-surface pb-4 px-2 transition-colors">SI</button>
+</div>
+<div class="flex items-center gap-2 text-xs font-mono text-ink-silver">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+                            Fund Performance
+                        </div>
+</div>
+<div class="relative h-80 w-full overflow-hidden">
+<!-- Simulated Area Chart -->
+<div class="absolute inset-0 nav-area-gradient"></div>
+<svg class="absolute inset-0 w-full h-full preserve-3d" viewbox="0 0 1000 300">
+<path class="drop-shadow-[0_0_8px_rgba(68,245,147,0.5)]" d="M0 250 Q 150 180 250 210 T 450 120 T 650 160 T 850 60 T 1000 80 V 300 H 0 Z" fill="none" stroke="#44f593" stroke-width="3"></path>
+</svg>
+<!-- Data Points -->
+<div class="absolute bottom-4 left-0 right-0 flex justify-between px-2 text-[10px] font-mono text-outline uppercase tracking-tighter">
+<span>Oct 2023</span>
+<span>Jan 2024</span>
+<span>Apr 2024</span>
+<span>Jul 2024</span>
+<span>Oct 2024</span>
+</div>
+</div>
+</section>
+<!-- [4] Fund Metrics 2x4 Grid -->
+<section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<div class="glass-card p-5 rounded-[16px]">
+<p class="text-ink-silver text-xs uppercase tracking-widest mb-1">AUM</p>
+<p class="text-xl font-mono font-bold text-on-surface">₹4,281 Cr</p>
+</div>
+<div class="glass-card p-5 rounded-[16px]">
+<p class="text-ink-silver text-xs uppercase tracking-widest mb-1">Expense Ratio</p>
+<p class="text-xl font-mono font-bold text-on-surface">0.42%</p>
+</div>
+<div class="glass-card p-5 rounded-[16px]">
+<p class="text-ink-silver text-xs uppercase tracking-widest mb-1">Exit Load</p>
+<p class="text-xl font-mono font-bold text-on-surface">1.00%</p>
+</div>
+<div class="glass-card p-5 rounded-[16px]">
+<p class="text-ink-silver text-xs uppercase tracking-widest mb-1">Min SIP</p>
+<p class="text-xl font-mono font-bold text-on-surface">₹500</p>
+</div>
+<div class="glass-card p-5 rounded-[16px]">
+<p class="text-ink-silver text-xs uppercase tracking-widest mb-1">Alpha</p>
+<p class="text-xl font-mono font-bold text-primary">+4.12%</p>
+</div>
+<div class="glass-card p-5 rounded-[16px]">
+<p class="text-ink-silver text-xs uppercase tracking-widest mb-1">Sharpe Ratio</p>
+<p class="text-xl font-mono font-bold text-on-surface">1.84</p>
+</div>
+<div class="glass-card p-5 rounded-[16px]">
+<p class="text-ink-silver text-xs uppercase tracking-widest mb-1">Beta</p>
+<p class="text-xl font-mono font-bold text-on-surface">0.88</p>
+</div>
+<div class="glass-card p-5 rounded-[16px]">
+<p class="text-ink-silver text-xs uppercase tracking-widest mb-1">Age</p>
+<p class="text-xl font-mono font-bold text-on-surface">8.4 Yrs</p>
+</div>
+</section>
+<!-- [5] Top Holdings Table -->
+<section class="glass-card overflow-hidden rounded-[16px]">
+<div class="p-6 border-b border-outline-variant/10 flex justify-between items-center">
+<h3 class="text-xl font-headline font-bold">Portfolio Holdings</h3>
+<span class="text-ink-silver text-xs uppercase tracking-widest">42 Assets Total</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead class="bg-surface-container-low text-xs font-mono text-ink-silver uppercase tracking-widest">
+<tr>
+<th class="px-6 py-4">Security Name</th>
+<th class="px-6 py-4">Sector</th>
+<th class="px-6 py-4 text-right">Weightage</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<tr class="hover:bg-white/5 transition-colors">
+<td class="px-6 py-4 font-medium">HDFC Bank Ltd</td>
+<td class="px-6 py-4 text-ink-silver">Financials</td>
+<td class="px-6 py-4 text-right font-mono">9.42%</td>
+</tr>
+<tr class="hover:bg-white/5 transition-colors">
+<td class="px-6 py-4 font-medium">Reliance Industries</td>
+<td class="px-6 py-4 text-ink-silver">Energy</td>
+<td class="px-6 py-4 text-right font-mono">8.15%</td>
+</tr>
+<tr class="hover:bg-white/5 transition-colors">
+<td class="px-6 py-4 font-medium">Infosys Limited</td>
+<td class="px-6 py-4 text-ink-silver">Technology</td>
+<td class="px-6 py-4 text-right font-mono">7.22%</td>
+</tr>
+<tr class="hover:bg-white/5 transition-colors">
+<td class="px-6 py-4 font-medium">ICICI Bank Ltd</td>
+<td class="px-6 py-4 text-ink-silver">Financials</td>
+<td class="px-6 py-4 text-right font-mono">6.84%</td>
+</tr>
+<tr class="hover:bg-white/5 transition-colors">
+<td class="px-6 py-4 font-medium">TCS Ltd</td>
+<td class="px-6 py-4 text-ink-silver">Technology</td>
+<td class="px-6 py-4 text-right font-mono">5.91%</td>
+</tr>
+<!-- Premium Gate Blur -->
+<tr class="relative">
+<td class="p-0" colspan="3">
+<div class="h-32 bg-gradient-to-t from-background to-transparent absolute inset-0 z-10"></div>
+<div class="px-6 py-4 blur-sm select-none opacity-40">
+<div class="flex justify-between">
+<span>Axis Bank Ltd</span>
+<span>Financials</span>
+<span class="text-right">4.12%</span>
+</div>
+</div>
+<div class="px-6 py-4 blur-sm select-none opacity-20">
+<div class="flex justify-between">
+<span>Larsen &amp; Toubro</span>
+<span>Infrastructure</span>
+<span class="text-right">3.88%</span>
+</div>
+</div>
+<div class="absolute inset-0 z-20 flex items-center justify-center">
+<div class="glass-card px-8 py-4 rounded-full border-primary/30 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-lg">lock</span>
+<span class="text-sm font-bold emerald-gradient-text uppercase tracking-widest">Connect Vault to Unlock Holdings</span>
+</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+<!-- Right Column (Quick Invest Sidebar) -->
+<aside class="lg:col-span-4 sticky top-24 space-y-6">
+<!-- [6] Quick Invest Sidebar -->
+<div class="glass-card p-8 rounded-[16px] border-primary/20 shadow-lg shadow-primary/5">
+<h3 class="text-2xl font-headline font-bold mb-6">Invest Now</h3>
+<div class="flex p-1 bg-surface-container-lowest rounded-xl mb-6">
+<button class="flex-1 py-2 rounded-lg text-sm font-bold bg-primary text-on-primary">Monthly SIP</button>
+<button class="flex-1 py-2 rounded-lg text-sm font-medium text-on-surface-variant">One-time</button>
+</div>
+<div class="space-y-4">
+<div class="space-y-2">
+<label class="text-xs font-mono text-ink-silver uppercase tracking-widest">Investment Amount</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-mono text-on-surface-variant">₹</span>
+<input class="w-full bg-surface-container-lowest border-none focus:ring-1 focus:ring-primary rounded-xl py-4 pl-10 pr-4 text-2xl font-mono font-bold text-on-surface" type="text" value="5,000"/>
+</div>
+<div class="flex gap-2">
+<button class="bg-surface-container-high px-3 py-1 rounded-lg text-xs hover:bg-surface-variant transition-colors">+₹1,000</button>
+<button class="bg-surface-container-high px-3 py-1 rounded-lg text-xs hover:bg-surface-variant transition-colors">+₹5,000</button>
+<button class="bg-surface-container-high px-3 py-1 rounded-lg text-xs hover:bg-surface-variant transition-colors">+₹10,000</button>
+</div>
+</div>
+<div class="space-y-2 pt-2">
+<label class="text-xs font-mono text-ink-silver uppercase tracking-widest">SIP Date</label>
+<div class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-xl cursor-pointer">
+<span class="font-medium text-on-surface">15th of every month</span>
+<span class="material-symbols-outlined text-primary">calendar_today</span>
+</div>
+</div>
+<div class="pt-6 space-y-3">
+<button class="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold py-4 rounded-xl text-lg hover:scale-[1.02] transition-transform active:scale-95">
+                                Start Systematic Investment
+                            </button>
+<p class="text-center text-[10px] text-ink-silver px-4">
+                                By clicking, you agree to the <a class="text-primary hover:underline" href="#">Mandate T&amp;Cs</a> and understand market risks.
+                            </p>
+</div>
+</div>
+</div>
+<!-- Related Information -->
+<div class="glass-card p-6 rounded-[16px] space-y-4">
+<h4 class="text-sm font-headline font-bold uppercase tracking-widest text-primary">Fund Governance</h4>
+<div class="flex items-center gap-4 group cursor-pointer">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-xl">person</span>
+</div>
+<div>
+<p class="font-bold text-sm">Vikram Malhotra</p>
+<p class="text-xs text-ink-silver">Lead Fund Manager</p>
+</div>
+<span class="material-symbols-outlined ml-auto text-ink-silver group-hover:text-primary transition-colors">chevron_right</span>
+</div>
+<div class="flex items-center gap-4 group cursor-pointer">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-xl">description</span>
+</div>
+<div>
+<p class="font-bold text-sm">Key Information Memo</p>
+<p class="text-xs text-ink-silver">PDF • 2.4 MB</p>
+</div>
+<span class="material-symbols-outlined ml-auto text-ink-silver group-hover:text-primary transition-colors">download</span>
+</div>
+</div>
+</aside>
+</div>
+</main>
+<!-- Footer (Shared Component) -->
+<footer class="bg-emerald-950 dark:bg-[#060D0A] w-full py-12 px-8 border-t border-emerald-900/30">
+<div class="max-w-[1440px] mx-auto">
+<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8 mb-12">
+<div class="col-span-2">
+<div class="text-lg font-space-grotesk font-black text-emerald-400 mb-4">Akshaya Intelligence</div>
+<p class="text-emerald-100/40 font-inter text-sm tracking-wide leading-relaxed">
+                        Precision-engineered sovereign wealth management for the modern era. Institutional grade security for individual autonomy.
+                    </p>
+</div>
+<div>
+<h5 class="text-emerald-500 font-bold text-xs uppercase tracking-widest mb-4">Legal</h5>
+<ul class="space-y-2">
+<li><a class="text-emerald-100/40 text-sm hover:text-emerald-400 transition-colors" href="#">Institutional Access</a></li>
+<li><a class="text-emerald-100/40 text-sm hover:text-emerald-400 transition-colors" href="#">Privacy Vault</a></li>
+<li><a class="text-emerald-100/40 text-sm hover:text-emerald-400 transition-colors" href="#">Terms of Sovereignty</a></li>
+</ul>
+</div>
+<div>
+<h5 class="text-emerald-500 font-bold text-xs uppercase tracking-widest mb-4">Resources</h5>
+<ul class="space-y-2">
+<li><a class="text-emerald-100/40 text-sm hover:text-emerald-400 transition-colors" href="#">API Documentation</a></li>
+<li><a class="text-emerald-100/40 text-sm hover:text-emerald-400 transition-colors" href="#">Security Protocol</a></li>
+<li><a class="text-emerald-100/40 text-sm hover:text-emerald-400 transition-colors" href="#">Risk Disclosure</a></li>
+</ul>
+</div>
+</div>
+<div class="border-t border-white/5 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+<p class="text-emerald-100/40 font-inter text-xs tracking-wide">
+                    © 2024 Akshaya Intelligence. Institutional Grade Security.
+                </p>
+<div class="flex gap-6">
+<span class="text-emerald-100/20 text-xs font-mono">MD-HASH: 9A82-C211</span>
+<span class="text-emerald-100/20 text-xs font-mono">LATENCY: 14ms</span>
+</div>
+</div>
+</div>
+</footer>
+</body></html>

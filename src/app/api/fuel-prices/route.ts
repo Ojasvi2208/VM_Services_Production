@@ -1,29 +1,25 @@
 /**
- * Fuel Prices API — RapidAPI Source
- * GET /api/fuel-prices?state=Punjab&city=mohali
- * GET /api/fuel-prices?all=true
+ * Fuel Prices API — DB-backed cache
  *
- * Data source: RapidAPI (daily-petrol-diesel-lpg-cng-fuel-prices-in-india)
- * Cache: 6-hour in-memory + /tmp file
+ * Primary path:  reads from market_cache (key: fuel_prices_all) written by
+ *                /api/cron/cache-fuel daily at 7:00 AM IST.
+ * Haversine:     ?lat=&lng= → nearest city from hardcoded coords map → city price
+ * Fallback:      ?state=&city= → traditional name lookup
+ * Emergency:     if DB cache is cold/stale, calls RapidAPI for states directly
+ *
+ * Zero RapidAPI calls from this endpoint as long as cron runs daily.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  getScrapedFuelCache, setScrapedFuelCache, isScrapedCacheFresh,
-  type ScrapedFuelData, type ScrapedCityPrice, type ScrapedStatePrice
-} from '@/lib/fuel-cache';
+import pool from '@/lib/postgres-db';
+import type { FuelCachePayload } from '@/app/api/cron/cache-fuel/route';
 
-// ── RapidAPI Config ──
-const RAPIDAPI_HOST = 'daily-petrol-diesel-lpg-cng-fuel-prices-in-india.p.rapidapi.com';
-const RAPIDAPI_BASE = `https://${RAPIDAPI_HOST}/v1/fuel-prices/today/india`;
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// ── Tax constants ─────────────────────────────────────────────────────────────
+const CENTRAL_EXCISE_PETROL = 19.90;
+const CENTRAL_EXCISE_DIESEL = 15.80;
+const DEALER_COMMISSION      = 3.69;
 
-// ── Central Government Taxes (same across India, gazette-notified) ──
-const CENTRAL_EXCISE_PETROL = 19.90;  // ₹/litre
-const CENTRAL_EXCISE_DIESEL = 15.80;  // ₹/litre
-const DEALER_COMMISSION = 3.69;        // Average dealer margin ₹/litre
-
-// ── State-wise VAT rates (% applied on base+excise+dealer) + cess ──
+// ── State-wise VAT rates ──────────────────────────────────────────────────────
 const STATE_VAT: Record<string, { pVat: number; dVat: number; pCess: number; dCess: number }> = {
   'Andaman and Nicobar Islands': { pVat: 6.0,   dVat: 6.0,   pCess: 0,    dCess: 0 },
   'Andhra Pradesh':              { pVat: 31.0,  dVat: 22.25, pCess: 4.0,  dCess: 4.0 },
@@ -64,356 +60,315 @@ const STATE_VAT: Record<string, { pVat: number; dVat: number; pCess: number; dCe
   'West Bengal':                 { pVat: 25.0,  dVat: 17.0,  pCess: 2.0,  dCess: 2.0 },
 };
 
-// City slug → normalized slug (resolves app city names to RapidAPI city IDs)
-const CITY_SLUG_MAP: Record<string, string> = {
-  'mohali': 'sas-nagar', 'sas nagar': 'sas-nagar', 'sahibzada ajit singh nagar': 'sas-nagar',
-  'new delhi': 'new-delhi', 'delhi': 'new-delhi',
-  'gurgaon': 'gurgaon', 'gurugram': 'gurgaon',
-  'bangalore': 'bangalore', 'bengaluru': 'bangalore',
-  'mumbai': 'mumbai', 'kolkata': 'kolkata', 'chennai': 'chennai',
-  'pune': 'pune', 'ahmedabad': 'ahmedabad', 'surat': 'surat',
-  'indore': 'indore', 'nagpur': 'nagpur', 'noida': 'noida',
-  'chandigarh': 'chandigarh', 'hyderabad': 'hyderabad',
-  'panchkula': 'panchkula',
-  'jaipur': 'jaipur', 'lucknow': 'lucknow', 'patna': 'patna',
-  'bhubaneswar': 'bhubaneswar', 'thiruvananthapuram': 'thiruvananthapuram',
-  'ludhiana': 'ludhiana', 'amritsar': 'amritsar',
-  'kochi': 'kochi', 'coimbatore': 'coimbatore', 'madurai': 'madurai',
-  'visakhapatnam': 'visakhapatnam', 'bhopal': 'bhopal',
-  'vadodara': 'vadodara', 'raipur': 'raipur', 'ranchi': 'ranchi',
-  'dehradun': 'dehradun', 'guwahati': 'guwahati',
-  'agra': 'agra', 'varanasi': 'varanasi', 'kanpur': 'kanpur',
-  'jodhpur': 'jodhpur', 'udaipur': 'udaipur',
-  'mysore': 'mysore', 'mangalore': 'mangalore',
-  'shimla': 'shimla',
+// ── City coordinates for Haversine nearest-city lookup ───────────────────────
+// slug (matches FuelCachePayload.cities keys) → { lat, lng, displayName, state }
+const CITY_COORDS: Record<string, { lat: number; lng: number; displayName: string; state: string }> = {
+  'mumbai':           { lat: 19.076,  lng: 72.877,  displayName: 'Mumbai',           state: 'Maharashtra' },
+  'delhi':            { lat: 28.704,  lng: 77.102,  displayName: 'Delhi',            state: 'Delhi' },
+  'new-delhi':        { lat: 28.613,  lng: 77.209,  displayName: 'New Delhi',        state: 'Delhi' },
+  'bangalore':        { lat: 12.972,  lng: 77.594,  displayName: 'Bangalore',        state: 'Karnataka' },
+  'hyderabad':        { lat: 17.385,  lng: 78.487,  displayName: 'Hyderabad',        state: 'Telangana' },
+  'chennai':          { lat: 13.083,  lng: 80.270,  displayName: 'Chennai',          state: 'Tamil Nadu' },
+  'kolkata':          { lat: 22.572,  lng: 88.364,  displayName: 'Kolkata',          state: 'West Bengal' },
+  'pune':             { lat: 18.520,  lng: 73.855,  displayName: 'Pune',             state: 'Maharashtra' },
+  'ahmedabad':        { lat: 23.022,  lng: 72.572,  displayName: 'Ahmedabad',        state: 'Gujarat' },
+  'jaipur':           { lat: 26.912,  lng: 75.788,  displayName: 'Jaipur',           state: 'Rajasthan' },
+  'lucknow':          { lat: 26.846,  lng: 80.946,  displayName: 'Lucknow',          state: 'Uttar Pradesh' },
+  'kanpur':           { lat: 26.460,  lng: 80.331,  displayName: 'Kanpur',           state: 'Uttar Pradesh' },
+  'nagpur':           { lat: 21.145,  lng: 79.088,  displayName: 'Nagpur',           state: 'Maharashtra' },
+  'visakhapatnam':    { lat: 17.686,  lng: 83.218,  displayName: 'Visakhapatnam',    state: 'Andhra Pradesh' },
+  'bhopal':           { lat: 23.259,  lng: 77.413,  displayName: 'Bhopal',           state: 'Madhya Pradesh' },
+  'indore':           { lat: 22.719,  lng: 75.858,  displayName: 'Indore',           state: 'Madhya Pradesh' },
+  'patna':            { lat: 25.594,  lng: 85.137,  displayName: 'Patna',            state: 'Bihar' },
+  'vadodara':         { lat: 22.309,  lng: 73.193,  displayName: 'Vadodara',         state: 'Gujarat' },
+  'ludhiana':         { lat: 30.901,  lng: 75.857,  displayName: 'Ludhiana',         state: 'Punjab' },
+  'agra':             { lat: 27.177,  lng: 78.008,  displayName: 'Agra',             state: 'Uttar Pradesh' },
+  'amritsar':         { lat: 31.634,  lng: 74.872,  displayName: 'Amritsar',         state: 'Punjab' },
+  'varanasi':         { lat: 25.317,  lng: 82.974,  displayName: 'Varanasi',         state: 'Uttar Pradesh' },
+  'jodhpur':          { lat: 26.295,  lng: 73.017,  displayName: 'Jodhpur',          state: 'Rajasthan' },
+  'madurai':          { lat: 9.925,   lng: 78.119,  displayName: 'Madurai',          state: 'Tamil Nadu' },
+  'raipur':           { lat: 21.250,  lng: 81.629,  displayName: 'Raipur',           state: 'Chhattisgarh' },
+  'kochi':            { lat: 9.931,   lng: 76.267,  displayName: 'Kochi',            state: 'Kerala' },
+  'chandigarh':       { lat: 30.734,  lng: 76.779,  displayName: 'Chandigarh',       state: 'Chandigarh' },
+  'thiruvananthapuram':{ lat: 8.524,  lng: 76.936,  displayName: 'Thiruvananthapuram', state: 'Kerala' },
+  'bhubaneswar':      { lat: 20.296,  lng: 85.825,  displayName: 'Bhubaneswar',      state: 'Odisha' },
+  'dehradun':         { lat: 30.316,  lng: 78.032,  displayName: 'Dehradun',         state: 'Uttarakhand' },
+  'guwahati':         { lat: 26.144,  lng: 91.736,  displayName: 'Guwahati',         state: 'Assam' },
+  'noida':            { lat: 28.535,  lng: 77.391,  displayName: 'Noida',            state: 'Uttar Pradesh' },
+  'gurgaon':          { lat: 28.459,  lng: 77.026,  displayName: 'Gurgaon',          state: 'Haryana' },
+  'surat':            { lat: 21.170,  lng: 72.831,  displayName: 'Surat',            state: 'Gujarat' },
+  'mangalore':        { lat: 12.914,  lng: 74.856,  displayName: 'Mangalore',        state: 'Karnataka' },
+  'mysore':           { lat: 12.296,  lng: 76.638,  displayName: 'Mysore',           state: 'Karnataka' },
+  'coimbatore':       { lat: 11.017,  lng: 76.955,  displayName: 'Coimbatore',       state: 'Tamil Nadu' },
+  'udaipur':          { lat: 24.571,  lng: 73.691,  displayName: 'Udaipur',          state: 'Rajasthan' },
+  'ranchi':           { lat: 23.344,  lng: 85.309,  displayName: 'Ranchi',           state: 'Jharkhand' },
+  'sas-nagar':        { lat: 30.705,  lng: 76.718,  displayName: 'Mohali',           state: 'Punjab' },
+  'panchkula':        { lat: 30.695,  lng: 76.853,  displayName: 'Panchkula',        state: 'Haryana' },
+  'shimla':           { lat: 31.104,  lng: 77.167,  displayName: 'Shimla',           state: 'Himachal Pradesh' },
+  'vijayawada':       { lat: 16.506,  lng: 80.648,  displayName: 'Vijayawada',       state: 'Andhra Pradesh' },
+  'jabalpur':         { lat: 23.182,  lng: 79.987,  displayName: 'Jabalpur',         state: 'Madhya Pradesh' },
+  'thane':            { lat: 19.218,  lng: 72.978,  displayName: 'Thane',            state: 'Maharashtra' },
 };
 
-// City → state mapping for location-based lookups
+// ── Haversine distance in km ──────────────────────────────────────────────────
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Find nearest city from lat/lng using CITY_COORDS (always works, no cache dependency).
+// Returns the geographically closest entry so we can derive the correct state even
+// when the DB city cache is cold (cron hasn't run yet).
+function nearestCity(lat: number, lng: number): {
+  slug: string;
+  km: number;
+  displayName: string;
+  state: string;
+} | null {
+  let best: { slug: string; km: number; displayName: string; state: string } | null = null;
+  for (const [slug, coord] of Object.entries(CITY_COORDS)) {
+    const km = haversineKm(lat, lng, coord.lat, coord.lng);
+    if (!best || km < best.km) {
+      best = { slug, km, displayName: coord.displayName, state: coord.state };
+    }
+  }
+  return best;
+}
+
+// ── City → state fallback mapping ────────────────────────────────────────────
 const CITY_STATE_MAP: Record<string, string> = {
   'mumbai': 'Maharashtra', 'pune': 'Maharashtra', 'nagpur': 'Maharashtra', 'thane': 'Maharashtra',
-  'delhi': 'Delhi', 'new delhi': 'Delhi', 'noida': 'Uttar Pradesh', 'gurgaon': 'Haryana', 'gurugram': 'Haryana',
-  'bangalore': 'Karnataka', 'bengaluru': 'Karnataka', 'mysore': 'Karnataka',
+  'delhi': 'Delhi', 'new-delhi': 'Delhi', 'noida': 'Uttar Pradesh', 'gurgaon': 'Haryana',
+  'bangalore': 'Karnataka', 'mysore': 'Karnataka', 'mangalore': 'Karnataka',
   'chennai': 'Tamil Nadu', 'coimbatore': 'Tamil Nadu', 'madurai': 'Tamil Nadu',
-  'hyderabad': 'Telangana', 'secunderabad': 'Telangana', 'warangal': 'Telangana',
-  'kolkata': 'West Bengal', 'howrah': 'West Bengal',
+  'hyderabad': 'Telangana',
+  'kolkata': 'West Bengal',
   'ahmedabad': 'Gujarat', 'surat': 'Gujarat', 'vadodara': 'Gujarat', 'rajkot': 'Gujarat',
   'jaipur': 'Rajasthan', 'jodhpur': 'Rajasthan', 'udaipur': 'Rajasthan',
-  'lucknow': 'Uttar Pradesh', 'kanpur': 'Uttar Pradesh', 'agra': 'Uttar Pradesh', 'varanasi': 'Uttar Pradesh',
-  'patna': 'Bihar', 'gaya': 'Bihar',
-  'bhopal': 'Madhya Pradesh', 'indore': 'Madhya Pradesh',
-  'chandigarh': 'Chandigarh', 'mohali': 'Punjab', 'sas-nagar': 'Punjab',
+  'lucknow': 'Uttar Pradesh', 'kanpur': 'Uttar Pradesh', 'agra': 'Uttar Pradesh', 'varanasi': 'Uttar Pradesh', 'noida': 'Uttar Pradesh',
+  'patna': 'Bihar',
+  'bhopal': 'Madhya Pradesh', 'indore': 'Madhya Pradesh', 'jabalpur': 'Madhya Pradesh',
+  'chandigarh': 'Chandigarh', 'sas-nagar': 'Punjab', 'panchkula': 'Haryana',
   'ludhiana': 'Punjab', 'amritsar': 'Punjab',
-  'dehradun': 'Uttarakhand', 'haridwar': 'Uttarakhand',
-  'bhubaneswar': 'Odisha', 'cuttack': 'Odisha',
+  'dehradun': 'Uttarakhand',
+  'bhubaneswar': 'Odisha',
   'raipur': 'Chhattisgarh',
-  'ranchi': 'Jharkhand', 'jamshedpur': 'Jharkhand',
+  'ranchi': 'Jharkhand',
   'guwahati': 'Assam',
-  'thiruvananthapuram': 'Kerala', 'kochi': 'Kerala', 'kozhikode': 'Kerala',
-  'panaji': 'Goa', 'margao': 'Goa',
-  'shimla': 'Himachal Pradesh', 'manali': 'Himachal Pradesh',
-  'srinagar': 'Jammu and Kashmir', 'jammu': 'Jammu and Kashmir',
-  'imphal': 'Manipur', 'shillong': 'Meghalaya', 'aizawl': 'Mizoram', 'kohima': 'Nagaland',
-  'agartala': 'Tripura', 'itanagar': 'Arunachal Pradesh', 'gangtok': 'Sikkim',
-  'visakhapatnam': 'Andhra Pradesh', 'vijayawada': 'Andhra Pradesh', 'tirupati': 'Andhra Pradesh',
-  'puducherry': 'Puducherry', 'pondicherry': 'Puducherry',
-  'panchkula': 'Haryana',
+  'thiruvananthapuram': 'Kerala', 'kochi': 'Kerala',
+  'shimla': 'Himachal Pradesh',
+  'visakhapatnam': 'Andhra Pradesh', 'vijayawada': 'Andhra Pradesh',
 };
 
-// ── City-level cache (per state, populated on demand) ──
-let cityCache: Record<string, { cities: Record<string, ScrapedCityPrice>; fetchedAt: number }> = {};
-
-// ── RapidAPI fetch: all states ──
-async function fetchRapidAPIStates(): Promise<ScrapedFuelData | null> {
-  const apiKey = process.env.RAPIDAPI_FUEL_KEY || '';
-  const resp = await fetch(`${RAPIDAPI_BASE}/states`, {
-    headers: {
-      'x-rapidapi-host': RAPIDAPI_HOST,
-      'x-rapidapi-key': apiKey,
-    },
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!resp.ok) return null;
-  const data = await resp.json();
-
-  const states: Record<string, ScrapedStatePrice> = {};
-
-  for (const sp of data.statePrices || []) {
-    const stateName = sp.stateName as string;
-    states[stateName] = {
-      petrol: sp.fuel?.petrol?.retailPrice || 0,
-      diesel: sp.fuel?.diesel?.retailPrice || 0,
-      petrolChange: String(sp.fuel?.petrol?.retailPriceChange || 0),
-      dieselChange: String(sp.fuel?.diesel?.retailPriceChange || 0),
-      cng: sp.fuel?.cng?.retailPrice || undefined,
-    };
+// ── DB read ───────────────────────────────────────────────────────────────────
+async function readFromDB(): Promise<FuelCachePayload | null> {
+  try {
+    const result = await pool.query(
+      `SELECT data, scraped_at FROM market_cache WHERE cache_key = 'fuel_prices_all' LIMIT 1`
+    );
+    if (!result.rows.length) return null;
+    const ageMs = Date.now() - new Date(result.rows[0].scraped_at).getTime();
+    // Accept up to 26h (cron runs daily; allow one missed day before treating as stale)
+    if (ageMs > 26 * 60 * 60 * 1000) return null;
+    return result.rows[0].data as FuelCachePayload;
+  } catch {
+    return null;
   }
-
-  return {
-    states,
-    cities: {},
-    fetchedAt: new Date().toISOString(),
-    source: 'RapidAPI',
-  };
 }
 
-// ── RapidAPI fetch: cities for a state ──
-async function fetchRapidAPICities(stateSlug: string): Promise<Record<string, ScrapedCityPrice>> {
-  const apiKey = process.env.RAPIDAPI_FUEL_KEY || '';
+// ── Emergency RapidAPI fallback (states only, 1 call) ────────────────────────
+async function emergencyFetchStates(): Promise<FuelCachePayload | null> {
+  const apiKey = process.env.RAPIDAPI_FUEL_KEY;
+  if (!apiKey) return null;
   try {
-    const resp = await fetch(`${RAPIDAPI_BASE}/${stateSlug}/cities`, {
-      headers: {
-        'x-rapidapi-host': RAPIDAPI_HOST,
-        'x-rapidapi-key': apiKey,
-      },
-      signal: AbortSignal.timeout(10000),
+    const host = 'daily-petrol-diesel-lpg-cng-fuel-prices-in-india.p.rapidapi.com';
+    const res = await fetch(`https://${host}/v1/fuel-prices/today/india/states`, {
+      headers: { 'x-rapidapi-host': host, 'x-rapidapi-key': apiKey },
+      signal: AbortSignal.timeout(10_000),
     });
-    if (!resp.ok) return {};
-    const data = await resp.json();
-
-    const cities: Record<string, ScrapedCityPrice> = {};
-    for (const cp of data.cityPrices || []) {
-      const cityId = cp.cityId as string;
-      cities[cityId] = {
-        name: cp.cityName,
-        petrol: cp.fuel?.petrol?.retailPrice || 0,
-        diesel: cp.fuel?.diesel?.retailPrice || 0,
-        petrolChange: String(cp.fuel?.petrol?.retailPriceChange || 0),
-        dieselChange: String(cp.fuel?.diesel?.retailPriceChange || 0),
-        cng: cp.fuel?.cng?.retailPrice || undefined,
+    if (!res.ok) return null;
+    const data = await res.json();
+    const states: FuelCachePayload['states'] = {};
+    for (const sp of data.statePrices ?? []) {
+      const name = String(sp.stateName || '').trim();
+      if (!name) continue;
+      const toNum = (v: any) => parseFloat(String(v ?? 0)) || 0;
+      states[name] = {
+        petrol:       toNum(sp.fuel?.petrol?.retailPrice),
+        diesel:       toNum(sp.fuel?.diesel?.retailPrice),
+        cng:          sp.fuel?.cng?.retailPrice ? toNum(sp.fuel.cng.retailPrice) : null,
+        petrolChange: toNum(sp.fuel?.petrol?.retailPriceChange),
+        dieselChange: toNum(sp.fuel?.diesel?.retailPriceChange),
       };
     }
-    return cities;
+    return Object.keys(states).length ? { fetchedAt: new Date().toISOString(), states, cities: {} } : null;
   } catch {
-    return {};
+    return null;
   }
 }
 
-// ── Ensure state-level cache (memory → /tmp → RapidAPI) ──
-async function ensureScrapedCache(): Promise<ScrapedFuelData | null> {
-  if (isScrapedCacheFresh()) return getScrapedFuelCache();
+// ── Tax breakdown ─────────────────────────────────────────────────────────────
+function round2(n: number) { return Math.round(n * 100) / 100; }
 
-  // Try /tmp file cache
-  try {
-    const fs = await import('fs');
-    if (fs.existsSync('/tmp/fuel-scraped-cache.json')) {
-      const raw = fs.readFileSync('/tmp/fuel-scraped-cache.json', 'utf-8');
-      const data: ScrapedFuelData = JSON.parse(raw);
-      const age = Date.now() - new Date(data.fetchedAt).getTime();
-      if (age < CACHE_TTL_MS) {
-        setScrapedFuelCache(data);
-        return data;
-      }
-    }
-  } catch { /* ignore */ }
-
-  // Fetch fresh from RapidAPI
-  try {
-    const fresh = await fetchRapidAPIStates();
-    if (fresh && Object.keys(fresh.states).length > 0) {
-      setScrapedFuelCache(fresh);
-      try {
-        const fs = await import('fs');
-        fs.writeFileSync('/tmp/fuel-scraped-cache.json', JSON.stringify(fresh));
-      } catch { /* non-critical */ }
-      return fresh;
-    }
-  } catch (e) {
-    console.error('RapidAPI fuel fetch failed:', e);
-  }
-
-  return getScrapedFuelCache(); // stale fallback
-}
-
-// ── Ensure city-level data for a state ──
-async function ensureCityData(stateSlug: string, scraped: ScrapedFuelData): Promise<void> {
-  const cached = cityCache[stateSlug];
-  if (cached && (Date.now() - cached.fetchedAt) < CACHE_TTL_MS) return;
-
-  const cities = await fetchRapidAPICities(stateSlug);
-  if (Object.keys(cities).length > 0) {
-    cityCache[stateSlug] = { cities, fetchedAt: Date.now() };
-    // Merge into main scraped cache so findScrapedCity can find them
-    Object.assign(scraped.cities, cities);
-  }
-}
-
-// ── Find scraped city price by name/slug ──
-function findScrapedCity(cityName: string, scraped: ScrapedFuelData): { slug: string; data: ScrapedCityPrice } | null {
-  const lower = cityName.toLowerCase().trim();
-
-  // Direct slug match
-  if (scraped.cities[lower]) return { slug: lower, data: scraped.cities[lower] };
-
-  // Map through alias
-  const mapped = CITY_SLUG_MAP[lower];
-  if (mapped && scraped.cities[mapped]) return { slug: mapped, data: scraped.cities[mapped] };
-
-  // Fuzzy: try matching city name field or slug
-  for (const [slug, city] of Object.entries(scraped.cities)) {
-    if (city.name.toLowerCase() === lower || slug === lower) {
-      return { slug, data: city };
-    }
-  }
-
-  return null;
-}
-
-// ── Resolve state name against STATE_VAT keys (fuzzy) ──
-function resolveStateVATKey(stateName: string): string {
-  if (STATE_VAT[stateName]) return stateName;
-
-  const lower = stateName.toLowerCase();
-  for (const key of Object.keys(STATE_VAT)) {
-    if (key.toLowerCase() === lower) return key;
-    if (key.toLowerCase().includes(lower) || lower.includes(key.toLowerCase())) return key;
-  }
-  return stateName;
-}
-
-// ── Build tax breakdown from real retail price + known VAT rates ──
 function buildBreakdown(retailPrice: number, vatPct: number, cess: number, excise: number) {
   const multiplier = 1 + vatPct / 100;
   const beforeVATTotal = (retailPrice - cess) / multiplier;
   const basePrice = Math.max(beforeVATTotal - excise - DEALER_COMMISSION, 0);
   const vatAmount = beforeVATTotal * vatPct / 100;
-
   return {
-    basePrice: round2(basePrice),
-    exciseDuty: round2(excise),
+    basePrice:        round2(basePrice),
+    exciseDuty:       round2(excise),
     dealerCommission: round2(DEALER_COMMISSION),
-    vatPercent: vatPct,
-    vatAmount: round2(vatAmount),
-    additionalCess: cess,
-    retailPrice: round2(retailPrice),
+    vatPercent:       vatPct,
+    vatAmount:        round2(vatAmount),
+    additionalCess:   cess,
+    retailPrice:      round2(retailPrice),
   };
 }
 
-function round2(n: number) { return Math.round(n * 100) / 100; }
+function resolveStateVATKey(stateName: string): string {
+  if (STATE_VAT[stateName]) return stateName;
+  const lower = stateName.toLowerCase();
+  for (const key of Object.keys(STATE_VAT)) {
+    if (key.toLowerCase() === lower || key.toLowerCase().includes(lower) || lower.includes(key.toLowerCase())) return key;
+  }
+  return stateName;
+}
 
-
+// ── Route ─────────────────────────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    let stateParam = searchParams.get('state')?.trim() || '';
-    const cityParam = searchParams.get('city')?.trim().toLowerCase() || '';
-    const allStates = searchParams.get('all') === 'true';
+    const latParam  = searchParams.get('lat');
+    const lngParam  = searchParams.get('lng');
+    const stateParam = searchParams.get('state')?.trim() || '';
+    const cityParam  = searchParams.get('city')?.trim().toLowerCase().replace(/\s+/g, '-') || '';
+    const allStates  = searchParams.get('all') === 'true';
 
-    // Resolve state from city
-    if (cityParam && !stateParam) {
-      stateParam = CITY_STATE_MAP[cityParam] || '';
+    // ── Load cache (DB-first, emergency fallback) ──────────────────────────
+    let cache = await readFromDB();
+    let cacheSource = 'db_cache';
+    if (!cache) {
+      cache = await emergencyFetchStates();
+      cacheSource = 'live_fallback';
     }
-    if (!stateParam && !cityParam && !allStates) {
-      stateParam = 'Delhi';
+    if (!cache) {
+      return NextResponse.json({ success: false, error: 'Fuel data unavailable — cache cold and RapidAPI unreachable.' }, { status: 503 });
     }
 
-    let scraped = await ensureScrapedCache();
+    const cacheKeys = new Set(Object.keys(cache.cities));
 
-    if (!scraped) {
-      return NextResponse.json({ success: false, error: 'Fuel price data unavailable.' }, { status: 503 });
-    }
-
-    // ── Return all states ──
+    // ── Return all states ──────────────────────────────────────────────────
     if (allStates) {
-      const allData = Object.entries(scraped.states).map(([state, data]) => {
+      const allData = Object.entries(cache.states).map(([state, d]) => {
         const vatKey = resolveStateVATKey(state);
         const vat = STATE_VAT[vatKey];
         return {
           state,
-          petrolPrice: data.petrol,
-          petrolChange: parseFloat(data.petrolChange) || 0,
-          dieselPrice: data.diesel,
-          dieselChange: parseFloat(data.dieselChange) || 0,
-          cngPrice: data.cng || null,
+          petrolPrice:      d.petrol,
+          petrolChange:     d.petrolChange,
+          dieselPrice:      d.diesel,
+          dieselChange:     d.dieselChange,
+          cngPrice:         d.cng ?? null,
           petrolVatPercent: vat?.pVat ?? null,
           dieselVatPercent: vat?.dVat ?? null,
         };
       });
-
-      return NextResponse.json({
-        success: true,
-        states: allData,
-        lastUpdated: scraped.fetchedAt,
-        source: scraped.source,
-      });
+      return NextResponse.json({ success: true, states: allData, lastUpdated: cache.fetchedAt, source: cacheSource });
     }
 
-    // ── Single city/state with full breakdown ──
-    const petrolPriceParam = parseFloat(searchParams.get('petrolPrice') || '0');
-    const dieselPriceParam = parseFloat(searchParams.get('dieselPrice') || '0');
+    // ── Resolve city and state ─────────────────────────────────────────────
+    let resolvedCitySlug = cityParam;
+    let resolvedCityName = '';
+    let resolvedState    = stateParam;
+    let nearestKm: number | null = null;
 
-    // Resolve state name (fuzzy match against scraped states)
-    let resolvedState = stateParam;
-    const stateQ = stateParam.toLowerCase();
-    for (const s of Object.keys(scraped.states)) {
+    // Strategy 1: lat/lng → Haversine nearest city
+    // nearestCity() always scans all CITY_COORDS regardless of cache — this
+    // guarantees the correct STATE is derived from GPS coordinates even when
+    // the daily fuel cron hasn't run yet and cache.cities is empty.
+    if (latParam && lngParam) {
+      const lat = parseFloat(latParam);
+      const lng = parseFloat(lngParam);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        const nearest = nearestCity(lat, lng);
+        if (nearest) {
+          nearestKm        = Math.round(nearest.km);
+          resolvedCityName = nearest.displayName;
+          resolvedState    = resolvedState || nearest.state; // ← always set from GPS
+
+          // Use city-level prices only if the cron has pre-fetched this city
+          if (cacheKeys.has(nearest.slug)) {
+            resolvedCitySlug = nearest.slug;
+          }
+          // else: fall through to state-level prices below (correct state, not Delhi)
+        }
+      }
+    }
+
+    // Strategy 2: explicit city slug
+    if (!resolvedCitySlug && cityParam) {
+      resolvedCitySlug = cityParam;
+      resolvedState    = resolvedState || CITY_STATE_MAP[cityParam] || '';
+    }
+
+    // Default state
+    if (!resolvedState) resolvedState = 'Delhi';
+
+    // Fuzzy-match state name against cache keys
+    const stateQ = resolvedState.toLowerCase();
+    for (const s of Object.keys(cache.states)) {
       if (s.toLowerCase() === stateQ || s.toLowerCase().includes(stateQ) || stateQ.includes(s.toLowerCase())) {
         resolvedState = s;
         break;
       }
     }
-    if (cityParam && !resolvedState) {
-      resolvedState = CITY_STATE_MAP[cityParam] || 'Delhi';
-    }
 
     const vatKey = resolveStateVATKey(resolvedState);
-    const vat = STATE_VAT[vatKey] || { pVat: 15, dVat: 12, pCess: 0, dCess: 0 };
+    const vat    = STATE_VAT[vatKey] ?? { pVat: 15, dVat: 12, pCess: 0, dCess: 0 };
 
-    // If city requested, fetch city-level data from RapidAPI on demand
-    if (cityParam && !findScrapedCity(cityParam, scraped)) {
-      const stateForCity = CITY_STATE_MAP[cityParam] || resolvedState;
-      const stateSlug = stateForCity.toLowerCase().replace(/\s+/g, '-');
-      await ensureCityData(stateSlug, scraped);
+    // ── Resolve prices ─────────────────────────────────────────────────────
+    let petrolRetail = 0, dieselRetail = 0, petrolChange = 0, dieselChange = 0;
+    let cngPrice: number | null = null;
+    let priceSource = 'state';
+
+    // Try city from cache
+    const cityEntry = resolvedCitySlug ? cache.cities[resolvedCitySlug] : null;
+    if (cityEntry && cityEntry.petrol > 0) {
+      petrolRetail = cityEntry.petrol;
+      dieselRetail = cityEntry.diesel;
+      petrolChange = cityEntry.petrolChange;
+      dieselChange = cityEntry.dieselChange;
+      cngPrice     = cityEntry.cng ?? null;
+      resolvedCityName = resolvedCityName || cityEntry.name;
+      priceSource  = 'city';
     }
 
-    // Priority chain: 1) city match, 2) app-provided price, 3) state-level
-    let petrolRetail = 0;
-    let dieselRetail = 0;
-    let petrolChange = 0;
-    let dieselChange = 0;
-    let cngPrice: number | null = null;
-    let resolvedCityName = '';
-
-    // Try 1: city match
-    let scrapedCity: ScrapedCityPrice | null = null;
-    if (cityParam) {
-      const found = findScrapedCity(cityParam, scraped);
-      if (found) {
-        scrapedCity = found.data;
-        resolvedCityName = found.data.name;
+    // Fall back to state
+    if (petrolRetail === 0) {
+      const stateEntry = cache.states[resolvedState];
+      if (stateEntry?.petrol > 0) {
+        petrolRetail = stateEntry.petrol;
+        dieselRetail = stateEntry.diesel;
+        petrolChange = stateEntry.petrolChange;
+        dieselChange = stateEntry.dieselChange;
+        cngPrice     = stateEntry.cng ?? null;
       }
     }
 
-    if (scrapedCity && scrapedCity.petrol > 0) {
-      petrolRetail = scrapedCity.petrol;
-      dieselRetail = scrapedCity.diesel;
-      petrolChange = parseFloat(scrapedCity.petrolChange) || 0;
-      dieselChange = parseFloat(scrapedCity.dieselChange) || 0;
-      cngPrice = scrapedCity.cng || null;
-    } else if (petrolPriceParam > 0) {
-      // Try 2: app-provided prices (backward compat)
-      petrolRetail = petrolPriceParam;
-      dieselRetail = dieselPriceParam;
-    }
-
-    // Try 3: state-level price as fallback
-    if (petrolRetail === 0 && scraped.states[resolvedState]?.petrol > 0) {
-      const scrapedState = scraped.states[resolvedState];
-      petrolRetail = scrapedState.petrol;
-      dieselRetail = scrapedState.diesel;
-      petrolChange = parseFloat(scrapedState.petrolChange) || 0;
-      dieselChange = parseFloat(scrapedState.dieselChange) || 0;
-      if (!cngPrice) cngPrice = scrapedState.cng || null;
-    }
-
     // Fill CNG from state if city didn't have it
-    if (!cngPrice && scraped.states[resolvedState]?.cng) {
-      cngPrice = scraped.states[resolvedState].cng || null;
+    if (!cngPrice && cache.states[resolvedState]?.cng) {
+      cngPrice = cache.states[resolvedState].cng ?? null;
     }
 
-    if (petrolRetail === 0 && dieselRetail === 0) {
+    if (petrolRetail === 0) {
       return NextResponse.json({
         success: false,
-        error: `No fuel price data for: ${stateParam} ${cityParam}`,
-        availableStates: Object.keys(scraped.states).sort(),
+        error: `No price data for: ${resolvedState}${resolvedCitySlug ? ` / ${resolvedCitySlug}` : ''}`,
       }, { status: 404 });
     }
 
@@ -425,10 +380,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      state: resolvedState,
-      city: resolvedCityName || cityParam || resolvedState.toLowerCase(),
-      petrolPrice: petrolRetail,
-      dieselPrice: dieselRetail,
+      state:   resolvedState,
+      city:    resolvedCityName || resolvedCitySlug || resolvedState,
+      nearestCityKm: nearestKm,
+      priceSource,
+      petrolPrice:  petrolRetail,
+      dieselPrice:  dieselRetail,
       petrolChange,
       dieselChange,
       cngPrice,
@@ -436,25 +393,26 @@ export async function GET(request: NextRequest) {
       diesel,
       summary: {
         petrol: {
-          retailPrice: petrol.retailPrice,
-          totalTax: round2(petrolTotalTax),
-          totalTaxPercent: petrolRetail > 0 ? round2((petrolTotalTax / petrol.retailPrice) * 100) : 0,
+          retailPrice:       petrol.retailPrice,
+          totalTax:          round2(petrolTotalTax),
+          totalTaxPercent:   petrolRetail > 0 ? round2((petrolTotalTax / petrol.retailPrice) * 100) : 0,
           centralTaxPercent: petrolRetail > 0 ? round2((petrol.exciseDuty / petrol.retailPrice) * 100) : 0,
-          stateTaxPercent: petrolRetail > 0 ? round2(((petrol.vatAmount + petrol.additionalCess) / petrol.retailPrice) * 100) : 0,
+          stateTaxPercent:   petrolRetail > 0 ? round2(((petrol.vatAmount + petrol.additionalCess) / petrol.retailPrice) * 100) : 0,
         },
         diesel: {
-          retailPrice: diesel.retailPrice,
-          totalTax: round2(dieselTotalTax),
-          totalTaxPercent: dieselRetail > 0 ? round2((dieselTotalTax / diesel.retailPrice) * 100) : 0,
+          retailPrice:       diesel.retailPrice,
+          totalTax:          round2(dieselTotalTax),
+          totalTaxPercent:   dieselRetail > 0 ? round2((dieselTotalTax / diesel.retailPrice) * 100) : 0,
           centralTaxPercent: dieselRetail > 0 ? round2((diesel.exciseDuty / diesel.retailPrice) * 100) : 0,
-          stateTaxPercent: dieselRetail > 0 ? round2(((diesel.vatAmount + diesel.additionalCess) / diesel.retailPrice) * 100) : 0,
+          stateTaxPercent:   dieselRetail > 0 ? round2(((diesel.vatAmount + diesel.additionalCess) / diesel.retailPrice) * 100) : 0,
         },
       },
-      lastUpdated: scraped.fetchedAt,
-      source: scraped.source,
+      lastUpdated: cache.fetchedAt,
+      source: cacheSource,
     });
+
   } catch (error) {
-    console.error('Fuel prices API error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to get fuel prices' }, { status: 500 });
+    console.error('[fuel-prices] error:', error);
+    return NextResponse.json({ success: false, error: 'Internal error' }, { status: 500 });
   }
 }

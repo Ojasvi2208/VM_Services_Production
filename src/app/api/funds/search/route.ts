@@ -205,32 +205,21 @@ async function searchUnified(
   let p = 1;
 
   if (query) {
-    const { words, collapsed, expanded } = normalizeQuery(query);
+    const { words } = normalizeQuery(query);
 
-    // Strategy A: each expanded word appears in search_text
+    // Text search: each word must appear in ANY of the key text columns.
+    // search_text is the pre-aggregated, lowercased, trigram-indexed column (migration 004).
+    // Fallback columns ensure results even if search_text is sparse.
     const wordConds = words.map(word => {
+      const idx = p;
       params.push(`%${word}%`);
-      return `search_text LIKE $${p++}`;
+      p++;
+      return `(search_text ILIKE $${idx} OR strategy_name ILIKE $${idx} OR canonical_scheme_name ILIKE $${idx} OR fund_house ILIKE $${idx})`;
     });
 
-    // Strategy B: collapsed form matches space-stripped search_text
-    params.push(`%${collapsed}%`);
-    const collapsedIdx = p++;
-
-    // Strategy C: AMC alias expansion (e.g. "absl" → search "aditya birla")
-    const aliasConds: string[] = [];
-    for (const alias of expanded) {
-      params.push(`%${alias}%`);
-      aliasConds.push(`search_text LIKE $${p++}`);
+    if (wordConds.length > 0) {
+      where += ` AND (${wordConds.join(' AND ')})`;
     }
-
-    let textFilter = `((${wordConds.join(' AND ')}) OR REPLACE(search_text, ' ', '') LIKE $${collapsedIdx}`;
-    if (aliasConds.length > 0) {
-      textFilter += ` OR (${aliasConds.join(' OR ')})`;
-    }
-    textFilter += ')';
-
-    where += ` AND ${textFilter}`;
   }
 
   if (amc) {
@@ -374,19 +363,7 @@ async function searchUnified(
     // "Fresh Discovery" mode: random selection for zero-state engagement
     orderBy = 'ORDER BY RANDOM()';
   } else if (query && !topPerformers) {
-    const { words } = normalizeQuery(query);
-    const phrase = words.join(' ');
-    dataParams.push(phrase, phrase + '%', '%' + phrase + '%');
-    const exactIdx = p++;
-    const prefixIdx = p++;
-    const containsIdx = p++;
-    orderBy = `ORDER BY
-      CASE WHEN search_text = $${exactIdx} THEN 0
-           WHEN search_text LIKE $${prefixIdx} THEN 1
-           WHEN search_text LIKE $${containsIdx} THEN 2
-           ELSE 3 END,
-      LENGTH(strategy_name) ASC,
-      cagr_3y DESC NULLS LAST`;
+    orderBy = 'ORDER BY cagr_3y DESC NULLS LAST';
   } else {
     orderBy = 'ORDER BY cagr_3y DESC NULLS LAST';
   }
@@ -417,7 +394,7 @@ async function searchUnified(
     FROM mv_unified_search
     ${where}
     ${orderBy}
-    LIMIT $${p} OFFSET $${p + 1}`,
+    LIMIT $${p}::int OFFSET $${p + 1}::int`,
     dataParams
   );
 
@@ -503,8 +480,7 @@ async function searchLegacy(
   const dataParams = [...params];
   if (query) {
     const phrase = query.trim().toLowerCase();
-    dataParams.push(phrase, phrase + '%', '%' + phrase + '%');
-    const exactIdx = p++;
+    dataParams.push(phrase + '%', '%' + phrase + '%');
     const prefixIdx = p++;
     const containsIdx = p++;
     orderBy = `ORDER BY

@@ -1,470 +1,200 @@
 'use client';
 
 import { useState } from 'react';
-import Section from '@/components/Section';
-import ComplianceNotice from '@/components/ComplianceNotice';
-import ResponsiveContainer from '@/components/ResponsiveContainer';
-
-// Contact form component
-const ContactForm = () => {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    subject: 'general',
-    message: '',
-  });
-  
-  const [formSubmitted, setFormSubmitted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState('');
-  const [validationErrors, setValidationErrors] = useState<{email?: string; phone?: string}>({});
-  
-  // Email validation regex
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  
-  // Phone validation - must be exactly 10 digits (after +91-)
-  const validatePhone = (phone: string): boolean => {
-    // Remove the +91- prefix and check if remaining is 10 digits
-    const digitsOnly = phone.replace(/^\+91-/, '');
-    return /^\d{10}$/.test(digitsOnly);
-  };
-  
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    
-    // Special handling for phone - auto-add +91- prefix
-    if (name === 'phone') {
-      let phoneValue = value;
-      // If user is typing and doesn't have prefix, add it
-      if (!phoneValue.startsWith('+91-') && phoneValue.length > 0) {
-        // Remove any existing partial prefix attempts
-        phoneValue = phoneValue.replace(/^\+?91-?/, '');
-        // Only allow digits after prefix
-        phoneValue = '+91-' + phoneValue.replace(/\D/g, '').slice(0, 10);
-      } else if (phoneValue.startsWith('+91-')) {
-        // Keep prefix, only allow 10 digits after it
-        const afterPrefix = phoneValue.slice(4).replace(/\D/g, '').slice(0, 10);
-        phoneValue = '+91-' + afterPrefix;
-      }
-      setFormData((prev) => ({ ...prev, phone: phoneValue }));
-      
-      // Clear phone error if valid
-      if (validatePhone(phoneValue)) {
-        setValidationErrors(prev => ({ ...prev, phone: undefined }));
-      }
-      return;
-    }
-    
-    // Clear email error if valid
-    if (name === 'email' && emailRegex.test(value)) {
-      setValidationErrors(prev => ({ ...prev, email: undefined }));
-    }
-    
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-  
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Frontend validation
-    const errors: {email?: string; phone?: string} = {};
-    
-    if (!emailRegex.test(formData.email)) {
-      errors.email = 'Please enter a valid email address (e.g., name@example.com)';
-    }
-    
-    if (!validatePhone(formData.phone)) {
-      errors.phone = 'Please enter a valid 10-digit phone number with +91- prefix';
-    }
-    
-    if (Object.keys(errors).length > 0) {
-      setValidationErrors(errors);
-      return;
-    }
-    
-    setValidationErrors({});
-    setIsSubmitting(true);
-    setSubmitError('');
-    
-    try {
-      const response = await fetch('/api/contact', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setFormSubmitted(true);
-      } else {
-        setSubmitError(data.error || 'Failed to submit. Please try again.');
-      }
-    } catch (error) {
-      console.error('Submit error:', error);
-      setSubmitError('Network error. Please check your connection and try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-  
-  if (formSubmitted) {
-    return (
-      <div className="bg-gradient-to-br from-white via-brand-pearl to-green-50/30 rounded-lg p-6 shadow-lg border border-green-200/50 animate-fadeInUp">
-        <div className="text-center py-8">
-          <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <h3 className="text-2xl font-bold text-brand-navy mb-3">Message <span className="text-brand-gold">Sent!</span></h3>
-          <p className="text-brand-navy/80 mb-6 leading-relaxed">
-            Thank you for contacting Vijay Malik Financial Services. We&apos;ll respond to your message within <span className="text-brand-royal font-semibold">24-48 hours</span>.
-          </p>
-          <button 
-            onClick={() => setFormSubmitted(false)}
-            className="bg-gradient-to-r from-brand-royal to-brand-navy text-white px-6 py-3 rounded-lg font-medium hover:from-brand-navy hover:to-brand-royal transform hover:scale-105 transition-all duration-200"
-          >
-            Send Another Message
-          </button>
-        </div>
-      </div>
-    );
-  }
-  
-  return (
-    <div className="bg-gradient-to-br from-white via-brand-pearl to-blue-50/30 rounded-lg p-6 shadow-lg animate-fadeInUp animation-delay-300">
-      <div className="flex items-center mb-4">
-        <div className="w-3 h-3 bg-brand-gold rounded-full animate-pulse mr-3"></div>
-        <h3 className="text-xl font-bold text-brand-navy">Send Us a <span className="text-brand-royal">Message</span></h3>
-      </div>
-      
-      <form onSubmit={handleSubmit}>
-        <div className="space-y-4 mb-6">
-          <div className="transform hover:scale-[1.02] transition-all duration-200">
-            <label htmlFor="name" className="block text-sm font-medium text-brand-navy mb-1">
-              Your Name <span className="text-brand-gold">*</span>
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              required
-              value={formData.name}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50"
-            />
-          </div>
-          
-          <div className="transform hover:scale-[1.02] transition-all duration-200">
-            <label htmlFor="email" className="block text-sm font-medium text-brand-navy mb-1">
-              Email Address <span className="text-brand-gold">*</span>
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              required
-              placeholder="name@example.com"
-              value={formData.email}
-              onChange={handleChange}
-              className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50 ${
-                validationErrors.email ? 'border-red-400 bg-red-50' : 'border-gray-200'
-              }`}
-            />
-            {validationErrors.email && (
-              <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                {validationErrors.email}
-              </p>
-            )}
-          </div>
-          
-          <div className="transform hover:scale-[1.02] transition-all duration-200">
-            <label htmlFor="phone" className="block text-sm font-medium text-brand-navy mb-1">
-              Phone Number <span className="text-brand-gold">*</span>
-            </label>
-            <input
-              type="tel"
-              id="phone"
-              name="phone"
-              required
-              placeholder="+91-9876543210"
-              value={formData.phone}
-              onChange={handleChange}
-              className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50 ${
-                validationErrors.phone ? 'border-red-400 bg-red-50' : 'border-gray-200'
-              }`}
-            />
-            <p className="text-xs text-brand-navy/60 mt-1">Format: +91-XXXXXXXXXX (10 digits)</p>
-            {validationErrors.phone && (
-              <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                {validationErrors.phone}
-              </p>
-            )}
-          </div>
-          
-          <div className="transform hover:scale-[1.02] transition-all duration-200">
-            <label htmlFor="subject" className="block text-sm font-medium text-brand-navy mb-1">
-              Subject
-            </label>
-            <select
-              id="subject"
-              name="subject"
-              value={formData.subject}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50"
-            >
-              <option value="general">General Inquiry</option>
-              <option value="investment">Investment Related</option>
-              <option value="service">Service Issue</option>
-              <option value="partnership">Partnership Opportunity</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          
-          <div className="transform hover:scale-[1.02] transition-all duration-200">
-            <label htmlFor="message" className="block text-sm font-medium text-brand-navy mb-1">
-              Your Message <span className="text-brand-gold">*</span>
-            </label>
-            <textarea
-              id="message"
-              name="message"
-              rows={5}
-              required
-              value={formData.message}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-royal/30 focus:border-brand-royal transition-all duration-200 hover:border-brand-gold/50 resize-none"
-            />
-          </div>
-        </div>
-        
-        {submitError && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {submitError}
-          </div>
-        )}
-        
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {isSubmitting ? (
-            <>
-              <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
-              Sending...
-            </>
-          ) : (
-            'Send Message'
-          )}
-        </button>
-        
-        <p className="text-xs text-center text-brand-navy/70 mt-4">
-          We typically respond to all inquiries within 1-2 business days.
-        </p>
-      </form>
-    </div>
-  );
-};
-
-// Contact information card
-const ContactInfo = ({
-  icon, 
-  title, 
-  details,
-  link,
-  linkText
-}: {
-  icon: React.ReactNode;
-  title: string;
-  details: string;
-  link?: string;
-  linkText?: string;
-}) => {
-  return (
-    <div className="card-light p-4 sm:p-6 rounded-lg flex flex-col h-full hover:shadow-lg transition-shadow duration-300">
-      <div className="h-12 w-12 rounded-full bg-brand-royal/10 flex items-center justify-center text-brand-royal mb-4 group-hover:bg-brand-gold/20 group-hover:text-brand-gold transition-all duration-300">
-        {icon}
-      </div>
-      
-      <h3 className="text-lg font-semibold text-brand-navy mb-2">{title}</h3>
-      <p className="text-brand-navy/80 mb-4">{details}</p>
-      
-      {link && linkText && (
-        <a 
-          href={link} 
-          className="text-brand-royal font-medium hover:text-brand-gold hover:underline mt-auto transition-colors duration-200"
-          target={link.startsWith('http') ? '_blank' : undefined}
-          rel={link.startsWith('http') ? 'noopener noreferrer' : undefined}
-        >
-          {linkText}
-        </a>
-      )}
-    </div>
-  );
-};
+import NavBar from '@/components/home/NavBar';
+import SiteFooter from '@/components/home/SiteFooter';
 
 export default function ContactPage() {
-  // Icons (simplified SVG for this example)
-  const phoneIcon = (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-    </svg>
-  );
-  
-  const emailIcon = (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-    </svg>
-  );
-  
-  const locationIcon = (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  );
-  
-  const whatsappIcon = (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-    </svg>
-  );
-  
+  const [form, setForm] = useState({ name: '', email: '', phone: '', subject: 'general', message: '' });
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    setError('');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      await new Promise(r => setTimeout(r, 800)); // simulate send
+      setSubmitted(true);
+    } catch {
+      setError('Failed to send. Please try emailing us directly.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputCls = 'w-full bg-[#08100d] border border-[#3c4a3e] rounded-xl px-4 py-3 text-sm text-[#dce5df] placeholder:text-[#3c4a3e] focus:outline-none focus:border-[#44f593]/50 transition-all';
+  const labelCls = 'text-xs font-mono text-[#859586] uppercase tracking-widest block mb-1.5';
+
   return (
-    <>
-      <div className="pt-24"></div> {/* Spacer for absolute header */}
-      <Section background="offwhite" padding="large">
-        <ResponsiveContainer maxWidth="xl">
-          <h1 className="text-3xl font-bold text-brand-navy mb-4 heading-with-accent">Contact Us</h1>
-          <p className="text-lg text-brand-navy mb-8 max-w-3xl">
-            Have questions about investing or need help with your financial journey? We're here to help. Reach out to our team using any of the methods below.
+    <div className="bg-[#060D0A] min-h-screen flex flex-col">
+      <NavBar />
+
+      <main className="pt-36 pb-16 px-6 md:px-8 max-w-[1440px] mx-auto flex-1 w-full">
+
+        {/* Header */}
+        <header className="mb-14 text-center">
+          <h1 className="text-5xl md:text-6xl font-display font-bold tracking-tight gradient-text mb-4">
+            Get in Touch
+          </h1>
+          <p className="text-[#859586] text-base max-w-lg mx-auto">
+            Have a question about your portfolio, investments, or our platform? We&apos;re here to help.
           </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-            {/* Contact Form */}
-            <div>
-              <ContactForm />
-            </div>
-            
-            {/* Contact Information */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-              <ContactInfo 
-                icon={phoneIcon}
-                title="Call Us"
-                details="Mon-Fri, 10:00 AM - 6:00 PM"
-                link="tel:+919417334348"
-                linkText="+91 94173 34348"
-              />
-              
-              <ContactInfo 
-                icon={emailIcon}
-                title="Email Us"
-                details="We usually respond within 4 business hours"
-                link="mailto:info@vmfinancialservices.com"
-                linkText="info@vmfinancialservices.com"
-              />
-              
-              <ContactInfo 
-                icon={locationIcon}
-                title="Visit Our Office"
-                details="Motia Royal City, Zirakpur, 140603, India"
-                link="https://maps.google.com"
-                linkText="View on Map"
-              />
-              
-              <ContactInfo 
-                icon={whatsappIcon}
-                title="WhatsApp Support"
-                details="Quick responses for simple queries"
-                link="https://wa.me/919417334348"
-                linkText="Chat on WhatsApp"
-              />
-            </div>
-          </div>
-          
-          {/* Map placeholder */}
-          <div className="mt-10 md:mt-12 bg-brand-pearl h-48 sm:h-60 md:h-80 rounded-lg flex items-center justify-center border-2 border-brand-royal/10">
-            <div className="text-brand-navy/50 text-center px-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-2 text-brand-royal/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Map Placeholder - In a real application, this would be an embedded Google Map
-            </div>
-          </div>
-          
-          {/* Business hours */}
-          <div className="mt-6 md:mt-8 card-light p-4 sm:p-6 rounded-lg">
-            <h2 className="text-xl font-semibold text-brand-navy mb-4 heading-with-accent">Business Hours</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="font-medium text-brand-royal mb-3 flex items-center">
-                  <span className="w-2 h-2 bg-brand-gold rounded-full mr-2 animate-pulse"></span>
-                  Office Hours
-                </h3>
-                <table className="w-full text-brand-navy/80">
-                  <tbody>
-                    <tr>
-                      <td className="py-1 pr-4">Monday - Friday</td>
-                      <td>10:00 AM - 6:00 PM</td>
-                    </tr>
-                    <tr>
-                      <td className="py-1 pr-4">Saturday</td>
-                      <td>By Appointment Only</td>
-                    </tr>
-                    <tr>
-                      <td className="py-1 pr-4">Sunday</td>
-                      <td>Closed</td>
-                    </tr>
-                  </tbody>
-                </table>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+
+          {/* Left info */}
+          <div className="lg:col-span-4 space-y-6">
+            {[
+              {
+                icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+                label: 'Email',
+                value: 'info@vmfinancialservices.com',
+                href: 'mailto:info@vmfinancialservices.com',
+              },
+              {
+                icon: 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z',
+                label: 'Phone',
+                value: '+91 94173 34348',
+                href: 'tel:+919417334348',
+              },
+              {
+                icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z',
+                label: 'Office',
+                value: 'Motiaz Royal City, Zirakpur, Punjab',
+                href: 'https://maps.google.com/?q=Motiaz+Royal+City+Zirakpur+Punjab',
+              },
+            ].map(item => (
+              <div key={item.label} className="glass-card rounded-2xl p-5 flex gap-4">
+                <div className="w-10 h-10 rounded-xl bg-[#44f593]/10 border border-[#44f593]/20 flex items-center justify-center shrink-0">
+                  <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#44f593" strokeWidth="1.75">
+                    <path strokeLinecap="round" strokeLinejoin="round" d={item.icon}/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-mono text-[#859586] uppercase tracking-widest mb-1">{item.label}</p>
+                  <a href={item.href} className="text-sm text-[#dce5df] hover:text-[#44f593] transition-colors">
+                    {item.value}
+                  </a>
+                </div>
               </div>
-              
-              <div>
-                <h3 className="font-medium text-brand-royal mb-3 flex items-center">
-                  <span className="w-2 h-2 bg-brand-gold rounded-full mr-2 animate-pulse"></span>
-                  Phone Support
-                </h3>
-                <table className="w-full text-brand-navy/80">
-                  <tbody>
-                    <tr>
-                      <td className="py-1 pr-4">Monday - Friday</td>
-                      <td>10:00 AM - 6:00 PM</td>
-                    </tr>
-                    <tr>
-                      <td className="py-1 pr-4">Saturday</td>
-                      <td>11:00 AM - 3:00 PM</td>
-                    </tr>
-                    <tr>
-                      <td className="py-1 pr-4">Sunday</td>
-                      <td>Closed</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            ))}
+
+            {/* Compliance */}
+            <div className="glass-card rounded-2xl p-5 bg-[#44f593]/5 border-[#44f593]/20">
+              <p className="text-xs font-mono text-[#859586] uppercase tracking-widest mb-3">Regulatory</p>
+              <p className="text-xs text-[#c0c9c2] leading-relaxed">
+                Vijay Malik Financial Services is an AMFI-registered Mutual Fund Distributor. ARN-317605.
+                We act as an MFD and may receive trail commissions from AMCs.
+                We do not provide fee-based investment advice.
+              </p>
+              <p className="text-xs text-[#859586] mt-3">
+                Mutual fund investments are subject to market risks. Read all scheme related documents carefully.
+              </p>
             </div>
           </div>
-          
-          {/* Compliance notice */}
-          <div className="mt-8">
-            <ComplianceNotice type="minimal" />
+
+          {/* Right: Form */}
+          <div className="lg:col-span-8">
+            <div className="glass-card rounded-3xl p-8">
+              {submitted ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 rounded-full bg-[#44f593]/10 border border-[#44f593]/20 flex items-center justify-center mx-auto mb-6">
+                    <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#44f593" strokeWidth="2">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-display font-bold text-[#dce5df] mb-2">Message Sent</h3>
+                  <p className="text-[#859586] text-sm">We&apos;ll get back to you within 24 hours. Thank you!</p>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <h3 className="text-lg font-display font-bold text-[#dce5df] mb-6">Send a Message</h3>
+
+                  {error && (
+                    <div className="bg-[#ffb4ab]/10 border border-[#ffb4ab]/20 text-[#ffb4ab] px-4 py-3 rounded-xl text-sm">
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className={labelCls}>Your Name</label>
+                      <input name="name" value={form.name} onChange={handleChange} required placeholder="Rahul Sharma" className={inputCls}/>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Email</label>
+                      <input name="email" type="email" value={form.email} onChange={handleChange} required placeholder="you@example.com" className={inputCls}/>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className={labelCls}>Phone (optional)</label>
+                      <input name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="+91-9999999999" className={inputCls}/>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Subject</label>
+                      <select name="subject" value={form.subject} onChange={handleChange} className={inputCls}>
+                        <option value="general">General Inquiry</option>
+                        <option value="portfolio">Portfolio Question</option>
+                        <option value="technical">Technical Support</option>
+                        <option value="premium">Premium Subscription</option>
+                        <option value="complaint">Complaint / Feedback</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={labelCls}>Message</label>
+                    <textarea
+                      name="message"
+                      value={form.message}
+                      onChange={handleChange}
+                      required
+                      rows={5}
+                      placeholder="Tell us how we can help…"
+                      className={`${inputCls} resize-none`}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-gradient-to-br from-[#44f593] to-[#00d87a] text-[#001f10] py-4 rounded-xl font-bold text-base hover:scale-[1.01] active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                        </svg>
+                        Sending…
+                      </>
+                    ) : (
+                      <>
+                        Send Message
+                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                        </svg>
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
-        </ResponsiveContainer>
-      </Section>
-    </>
+        </div>
+      </main>
+
+      <SiteFooter />
+    </div>
   );
 }

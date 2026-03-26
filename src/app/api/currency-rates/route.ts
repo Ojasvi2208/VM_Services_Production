@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { pool } from '@/lib/postgres-db';
+import pool from '@/lib/postgres-db';
 
 interface CurrencyRate {
   pair: string;
