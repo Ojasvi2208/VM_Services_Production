@@ -272,14 +272,14 @@ function MarketsData() {
 
   // Top-4 row: NIFTY 50 | SENSEX | NIFTY MIDCAP 150 | NIFTY SMALLCAP 100
   const KEY_4 = [
-    (n: string) => /^(nifty\s*50|nifty50)$/i.test(n),
-    (n: string) => /^sensex$/i.test(n),
-    (n: string) => /nifty\s*(mid\s*cap|midcap)/i.test(n),
-    (n: string) => /nifty\s*(small\s*cap|smallcap)/i.test(n),
+    (i: MarketIndex) => /^(nifty\s*50|nifty50|nifty)$/i.test(i.name ?? '') || i.symbol === 'NIFTY',
+    (i: MarketIndex) => /^sensex$/i.test(i.name ?? '') || i.symbol === 'SENSEX',
+    (i: MarketIndex) => /nifty\s*(mid\s*cap|midcap)/i.test(i.name ?? '') || /MIDCAP150/i.test(i.symbol ?? ''),
+    (i: MarketIndex) => /nifty\s*(small\s*cap|smallcap)/i.test(i.name ?? '') || /SMALLCAP/i.test(i.symbol ?? ''),
   ];
 
   const keyIndices = KEY_4.map(match =>
-    indices.find(i => match(i.name ?? i.symbol ?? i.displayName ?? ''))
+    indices.find(i => match(i))
   ).filter(Boolean) as MarketIndex[];
 
   // Remaining indices (not in the key-4 strip)
