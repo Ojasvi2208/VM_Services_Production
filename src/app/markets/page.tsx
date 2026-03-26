@@ -322,7 +322,7 @@ function MarketsData() {
             </button>
             <span className="flex items-center gap-1.5 text-xs font-mono text-[#44f593]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#44f593] animate-pulse" />
-              CACHE · 15m
+              Updates every 15 minutes
             </span>
           </div>
         </div>

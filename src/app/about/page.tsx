@@ -29,7 +29,7 @@ const STATS = [
   { value: '200+', label: 'Families Served' },
   { value: '₹99/yr', label: 'Pro Plan' },
   { value: 'ARN-317605', label: 'AMFI Registered' },
-  { value: '15+', label: 'Cities Covered' },
+  { value: 'Pan India', label: 'Nationwide Coverage' },
 ];
 
 export default function AboutPage() {

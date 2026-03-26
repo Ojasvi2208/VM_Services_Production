@@ -68,7 +68,7 @@ export default function HeroSection() {
 
   return (
     <section
-      className="max-w-7xl mx-auto px-8 py-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center"
+      className="max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center"
       aria-labelledby="hero-headline"
     >
       {/* ── LEFT COLUMN ──────────────────────────────────────── */}
@@ -136,7 +136,7 @@ export default function HeroSection() {
 
         {/* Glass card */}
         <div
-          className="relative rounded-2xl p-10 overflow-hidden"
+          className="relative rounded-2xl p-5 md:p-10 overflow-hidden"
           style={{
             background: 'rgba(255,255,255,0.03)',
             backdropFilter: 'blur(16px)',

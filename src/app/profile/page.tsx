@@ -48,10 +48,10 @@ const NOTIF_LABELS: Record<keyof NotifPrefs, string> = {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="glass-card-vi rounded-2xl overflow-hidden">
-      <div className="px-6 py-4 bg-white/[0.02] border-b border-white/5">
+      <div className="px-4 md:px-6 py-4 bg-white/[0.02] border-b border-white/5">
         <h2 className="font-['Space_Grotesk'] font-bold text-base text-[#dce5df]">{title}</h2>
       </div>
-      <div className="p-6">{children}</div>
+      <div className="p-4 md:p-6">{children}</div>
     </section>
   );
 }

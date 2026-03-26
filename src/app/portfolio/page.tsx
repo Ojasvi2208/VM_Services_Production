@@ -58,7 +58,7 @@ function DonutChart({ invested, current }: { invested: number; current: number }
   const dashArr = `${ratio * 100} ${100 - ratio * 100}`;
 
   return (
-    <div className="relative w-44 h-44 mx-auto mb-6">
+    <div className="relative w-36 h-36 md:w-44 md:h-44 mx-auto mb-6">
       <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
         <circle cx="18" cy="18" fill="transparent" r={r} stroke="rgba(255,255,255,0.05)" strokeWidth="3"/>
         <circle cx="18" cy="18" fill="transparent" r={r} stroke="#44f593" strokeDasharray={dashArr} strokeDashoffset="0" strokeWidth="3"/>

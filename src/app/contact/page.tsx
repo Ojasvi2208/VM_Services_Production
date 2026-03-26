@@ -103,7 +103,7 @@ export default function ContactPage() {
 
           {/* Right: Form */}
           <div className="lg:col-span-8">
-            <div className="glass-card rounded-3xl p-8">
+            <div className="glass-card rounded-3xl p-5 md:p-8">
               {submitted ? (
                 <div className="text-center py-12">
                   <div className="w-16 h-16 rounded-full bg-[#44f593]/10 border border-[#44f593]/20 flex items-center justify-center mx-auto mb-6">

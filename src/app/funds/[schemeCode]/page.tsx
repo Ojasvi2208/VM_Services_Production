@@ -95,7 +95,7 @@ function MiniChart({ history }: { history: Array<{ date: string; nav: number }> 
   const line = `M${points.split(' ').join(' L')}`;
 
   return (
-    <div className="relative h-64 w-full overflow-hidden">
+    <div className="relative h-48 md:h-64 w-full overflow-hidden">
       <div className="absolute inset-0 nav-area-gradient" />
       <svg className="absolute inset-0 w-full h-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
         <defs>

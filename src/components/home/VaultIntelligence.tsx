@@ -52,7 +52,7 @@ export default function VaultIntelligence() {
                 Advanced risk analytics powered by institutional-grade models. Monte Carlo simulations — Coming Soon pending SEBI IA registration.
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {[
                 { label: 'VAR (95%)', value: '1.24%' },
                 { label: 'Beta',      value: '0.82'  },

@@ -134,8 +134,8 @@ function DashboardTicker() {
 
   return (
     <div
-      className="fixed left-0 right-0 z-40 overflow-hidden"
-      style={{ top: 64, height: 44, background: '#060D0A', borderBottom: '1px solid rgba(60,74,62,0.35)' }}
+      className="fixed left-0 right-0 z-40 overflow-hidden hidden md:block"
+      style={{ top: 80, height: 44, background: '#060D0A', borderBottom: '1px solid rgba(60,74,62,0.35)' }}
     >
       <style>{`
         @keyframes dash-ticker { 0% { transform: translateX(0) } 100% { transform: translateX(-50%) } }
@@ -427,8 +427,7 @@ export default function DashboardPage() {
 
       {/* ── Main Content ─────────────────────────────────────── */}
       <main
-        className="min-h-screen px-8 lg:px-12 pb-16"
-        style={{ marginLeft: 256, paddingTop: 144 }}
+        className="min-h-screen px-4 md:px-8 lg:px-12 pb-16 md:ml-64 pt-24 md:pt-36"
       >
 
         {/* ── Hero: Portfolio Value ─────────────────────────── */}
@@ -810,6 +809,21 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ── Mobile Bottom Nav (hidden on desktop — sidebar handles it) ── */}
+      <nav className="fixed bottom-0 left-0 right-0 md:hidden z-40 bg-[#0a120f]/95 backdrop-blur-xl border-t border-white/5 flex justify-around py-2 pb-[env(safe-area-inset-bottom,8px)]">
+        {[
+          { icon: 'dashboard', label: 'Dashboard', href: '/dashboard' },
+          { icon: 'account_balance', label: 'Portfolio', href: '/portfolio' },
+          { icon: 'track_changes', label: 'Goals', href: '/goals' },
+          { icon: 'storefront', label: 'Markets', href: '/markets' },
+        ].map(item => (
+          <Link key={item.label} href={item.href} className="flex flex-col items-center gap-0.5 text-[#859586] hover:text-[#44f593] transition-colors min-w-[60px]">
+            <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 0" }}>{item.icon}</span>
+            <span className="text-[10px] font-medium">{item.label}</span>
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 }
