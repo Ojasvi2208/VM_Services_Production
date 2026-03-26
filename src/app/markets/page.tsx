@@ -353,7 +353,7 @@ function MarketsData() {
         )}
       </section>
 
-      {/* ── Other Indices ────────────────────────────────── */}
+      {/* ── Sectors & Themes — all non-key indices as cards ── */}
       {!loadingIdx && mainIndices.length > 0 && (
         <section className="mb-12">
           <h2 className="text-lg font-display font-bold text-[#dce5df] mb-5 flex items-center gap-2">
@@ -361,57 +361,7 @@ function MarketsData() {
             Sectors &amp; Themes
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {mainIndices.map((idx, i) => <IndexCard key={i} idx={idx} />)}
-          </div>
-        </section>
-      )}
-
-      {/* ── All Indices Table ───────────────────────────── */}
-      {allIndices.length > 8 && (
-        <section className="mb-12">
-          <h2 className="text-lg font-display font-bold text-[#dce5df] mb-5 flex items-center gap-2">
-            <span className="w-1 h-5 bg-[#44f593] rounded-full" />
-            All Sectors &amp; Themes
-          </h2>
-          <div className="glass-card rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-[#161d1a] text-xs font-mono text-[#859586] uppercase tracking-widest">
-                  <tr>
-                    <th className="px-6 py-4">Index</th>
-                    <th className="px-6 py-4 text-right">Price</th>
-                    <th className="px-6 py-4 text-right">Change</th>
-                    <th className="px-6 py-4 text-right">% Change</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {allIndices.slice(8).map((idx, i) => {
-                    const price = idx.lastPrice ?? idx.price ?? 0;
-                    const pct = idx.pChange ?? idx.changePercent ?? 0;
-                    const chg = idx.change ?? 0;
-                    const pos = pct >= 0;
-                    return (
-                      <tr key={i} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="px-6 py-3">
-                          <span className="text-sm font-medium text-[#dce5df]">
-                            {idx.displayName ?? idx.name ?? idx.symbol}
-                          </span>
-                        </td>
-                        <td className="px-6 py-3 text-right font-mono text-sm text-[#dce5df]">{fmtNum(price, 2)}</td>
-                        <td className={`px-6 py-3 text-right font-mono text-sm ${pos ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
-                          {pos ? '+' : ''}{fmtNum(chg, 2)}
-                        </td>
-                        <td className="px-6 py-3 text-right">
-                          <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full ${pos ? 'bg-[#44f593]/10 text-[#44f593]' : 'bg-[#ffb4ab]/10 text-[#ffb4ab]'}`}>
-                            {fmtPct(pct)}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {indices.filter(i => !new Set(keyIndices).has(i)).map((idx, i) => <IndexCard key={i} idx={idx} />)}
           </div>
         </section>
       )}
