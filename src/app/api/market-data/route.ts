@@ -37,7 +37,7 @@ const SYMBOL_MAP: Record<string, { yahoo: string; name: string; exchange: string
   'NIFTYIT':          { yahoo: '^CNXIT',               name: 'NIFTY IT',            exchange: 'NSE' },
   'NIFTYNEXT50':      { yahoo: '^CNXNJR',              name: 'NIFTY NEXT 50',       exchange: 'NSE' },
   'NIFTYMIDCAP50':    { yahoo: '^NSMIDCP',             name: 'NIFTY MIDCAP 50',     exchange: 'NSE' },
-  'NIFTYMIDCAP150':   { yahoo: '^CNXMIDCAP',           name: 'NIFTY MIDCAP 150',    exchange: 'NSE' },
+  'NIFTYMIDCAP150':   { yahoo: 'NIFTYMIDCAP150.NS',     name: 'NIFTY MIDCAP 150',    exchange: 'NSE' },
   'NIFTYSMALLCAP100': { yahoo: '^CNXSC',               name: 'NIFTY SMALLCAP 100',  exchange: 'NSE' },
   'NIFTYPHARMA':      { yahoo: '^CNXPHARMA',           name: 'NIFTY PHARMA',        exchange: 'NSE' },
   'NIFTYAUTO':        { yahoo: '^CNXAUTO',             name: 'NIFTY AUTO',          exchange: 'NSE' },
