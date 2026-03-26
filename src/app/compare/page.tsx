@@ -1,10 +1,15 @@
+import type { Metadata } from 'next';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
 import FundComparison from '@/components/FundComparison';
 
-export const metadata = {
-  title: 'Fund Comparison — Vijay Malik Financial Services',
-  description: 'Compare mutual funds side by side with interactive charts and detailed performance metrics.',
+export const metadata: Metadata = {
+  title: 'Compare Mutual Funds Side by Side',
+  description: 'Compare mutual funds side by side with interactive charts, performance metrics, risk analysis, and holdings overlap. Free tool by Vijay Malik Financial Services.',
+  openGraph: {
+    title: 'Compare Mutual Funds Side by Side | Vijay Malik Financial Services',
+    description: 'Compare mutual funds side by side with interactive charts, performance metrics, risk analysis, and holdings overlap.',
+  },
 };
 
 export default function ComparePage() {

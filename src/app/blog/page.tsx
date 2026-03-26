@@ -1,6 +1,12 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
+
+export const metadata: Metadata = {
+  title: 'Blog — Mutual Fund Insights & Financial Education',
+  description: 'Expert articles on mutual funds, SIPs, tax-saving investments, and financial planning for Indian investors. By Vijay Malik Financial Services.',
+};
 
 type BlogPost = {
   id: string;

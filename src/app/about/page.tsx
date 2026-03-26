@@ -1,6 +1,12 @@
+import type { Metadata } from 'next';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'About Us — Our Mission & Values',
+  description: 'Vijay Malik Financial Services is an AMFI-registered Mutual Fund Distributor (ARN-317605) built as a tribute to Vijay Malik. Institutional-grade wealth tools for Indian families.',
+};
 
 const VALUES = [
   {

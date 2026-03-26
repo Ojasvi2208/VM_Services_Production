@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /auth/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /portfolio
+Disallow: /goals
+Disallow: /profile
+Disallow: /goal-planning
+
+Sitemap: https://www.vmfinancialservices.com/sitemap.xml

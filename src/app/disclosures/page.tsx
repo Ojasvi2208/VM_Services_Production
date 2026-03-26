@@ -1,5 +1,11 @@
+import type { Metadata } from 'next';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
+
+export const metadata: Metadata = {
+  title: 'Disclosures — Privacy Policy, Terms & Risk Disclosure',
+  description: 'Legal disclosures, privacy policy, terms of service, and risk disclosure for Vijay Malik Financial Services.',
+};
 
 const SECTIONS = [
   {
