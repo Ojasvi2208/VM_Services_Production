@@ -294,38 +294,34 @@ function MarketsData() {
 
       {/* ── Header ─────────────────────────────────────────── */}
       <header className="mb-10 pt-8">
-        <div className="flex items-end justify-between mb-6">
-          <div>
-            <h1 className="text-5xl md:text-6xl font-display font-bold tracking-tight gradient-text mb-3">
-              Markets Today
-            </h1>
-            <p className="text-[#859586] text-sm">
-              Live Indian market data — indices, commodities, and sector movers
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {lastUpdated && (
-              <span className="text-xs font-mono text-[#859586]">
-                Updated {lastUpdated}
-              </span>
-            )}
-            <button
-              onClick={refreshData}
-              disabled={loadingIdx}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-[#3c4a3e] text-[#dce5df] text-xs font-medium hover:bg-white/5 transition-colors disabled:opacity-50"
-            >
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
-                className={loadingIdx ? 'animate-spin' : ''}>
-                <polyline points="23 4 23 10 17 10"/>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
-              </svg>
-              Refresh
-            </button>
-            <span className="flex items-center gap-1.5 text-xs font-mono text-[#44f593]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#44f593] animate-pulse" />
-              Updates every 15 minutes
+        <h1 className="text-5xl md:text-6xl font-display font-bold tracking-tight gradient-text mb-3">
+          Markets Today
+        </h1>
+        <p className="text-[#859586] text-sm mb-4">
+          Live Indian market data — indices, commodities, and sector movers
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          {lastUpdated && (
+            <span className="text-xs font-mono text-[#859586]">
+              Updated {lastUpdated}
             </span>
-          </div>
+          )}
+          <button
+            onClick={refreshData}
+            disabled={loadingIdx}
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-[#3c4a3e] text-[#dce5df] text-xs font-medium hover:bg-white/5 transition-colors disabled:opacity-50"
+          >
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
+              className={loadingIdx ? 'animate-spin' : ''}>
+              <polyline points="23 4 23 10 17 10"/>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+            </svg>
+            Refresh
+          </button>
+          <span className="flex items-center gap-1.5 text-xs font-mono text-[#44f593]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#44f593] animate-pulse" />
+            Updates every 15 minutes
+          </span>
         </div>
       </header>
 
