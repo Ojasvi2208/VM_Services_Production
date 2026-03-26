@@ -65,6 +65,68 @@ function PriceChart({ candles, positive }: { candles: Candle[]; positive: boolea
   );
 }
 
+// ─── SVG Candlestick Chart ───────────────────────────────────
+function CandlestickChart({ candles }: { candles: Candle[] }) {
+  if (!candles.length) return <div className="h-full flex items-center justify-center text-[#859586] text-sm">No chart data available</div>;
+  const W = 1000, H = 400, PAD = 20;
+  const allH = candles.map(c => c.high), allL = candles.map(c => c.low);
+  const min = Math.min(...allL), max = Math.max(...allH);
+  const range = max - min || 1;
+  const candleW = Math.max(2, Math.min(12, (W - PAD * 2) / candles.length * 0.7));
+  const gap = (W - PAD * 2) / candles.length;
+
+  const toY = (v: number) => PAD + (1 - (v - min) / range) * (H - PAD * 2);
+
+  return (
+    <svg className="w-full h-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+      {/* Grid lines */}
+      {[0.25, 0.5, 0.75].map(pct => {
+        const y = PAD + pct * (H - PAD * 2);
+        return <line key={pct} x1={PAD} y1={y} x2={W - PAD} y2={y} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />;
+      })}
+      {/* Candles */}
+      {candles.map((c, i) => {
+        const x = PAD + i * gap + gap / 2;
+        const bullish = c.close >= c.open;
+        const color = bullish ? '#44f593' : '#ffb4ab';
+        const bodyTop = toY(Math.max(c.open, c.close));
+        const bodyBot = toY(Math.min(c.open, c.close));
+        const bodyH = Math.max(1, bodyBot - bodyTop);
+        return (
+          <g key={i}>
+            {/* Wick */}
+            <line x1={x} y1={toY(c.high)} x2={x} y2={toY(c.low)} stroke={color} strokeWidth="1" />
+            {/* Body */}
+            <rect
+              x={x - candleW / 2} y={bodyTop}
+              width={candleW} height={bodyH}
+              fill={bullish ? color : color} fillOpacity={bullish ? 0.9 : 0.9}
+              stroke={color} strokeWidth="0.5"
+              rx="0.5"
+            />
+          </g>
+        );
+      })}
+      {/* Volume bars at bottom */}
+      {(() => {
+        const maxVol = Math.max(...candles.map(c => c.volume || 0)) || 1;
+        return candles.map((c, i) => {
+          const x = PAD + i * gap + gap / 2;
+          const volH = ((c.volume || 0) / maxVol) * (H * 0.12);
+          const bullish = c.close >= c.open;
+          return (
+            <rect key={`v${i}`}
+              x={x - candleW / 2} y={H - volH}
+              width={candleW} height={volH}
+              fill={bullish ? '#44f593' : '#ffb4ab'} fillOpacity="0.2"
+            />
+          );
+        });
+      })()}
+    </svg>
+  );
+}
+
 // ─── Metric Tile ─────────────────────────────────────────────
 function Tile({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
@@ -135,6 +197,7 @@ export default function IndexDetailPage() {
   const [movers, setMovers] = useState<{ top_gainers: Mover[]; top_losers: Mover[] } | null>(null);
   const [sectorData, setSectorData] = useState<{ name: string; change: number }[]>([]);
   const [range, setRange] = useState<string>('1D');
+  const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [loading, setLoading] = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
 
@@ -230,13 +293,28 @@ export default function IndexDetailPage() {
           {/* ── Chart ── */}
           <div className="glass-card-vi rounded-2xl overflow-hidden p-4 md:p-6">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-              <div className="flex bg-[#08100d] p-1 rounded-xl">
-                {RANGES.map(r => (
-                  <button key={r} onClick={() => fetchChart(r)}
-                    className={`px-3 md:px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${range === r ? 'text-[#44f593] bg-[#44f593]/10' : 'text-[#859586] hover:text-[#dce5df]'}`}>
-                    {r}
+              <div className="flex items-center gap-2">
+                <div className="flex bg-[#08100d] p-1 rounded-xl">
+                  {RANGES.map(r => (
+                    <button key={r} onClick={() => fetchChart(r)}
+                      className={`px-3 md:px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${range === r ? 'text-[#44f593] bg-[#44f593]/10' : 'text-[#859586] hover:text-[#dce5df]'}`}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                {/* Chart type toggle */}
+                <div className="flex bg-[#08100d] p-1 rounded-xl">
+                  <button onClick={() => setChartType('line')}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${chartType === 'line' ? 'text-[#44f593] bg-[#44f593]/10' : 'text-[#859586] hover:text-[#dce5df]'}`}>
+                    <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 0" }}>show_chart</span>
+                    <span className="hidden sm:inline">Line</span>
                   </button>
-                ))}
+                  <button onClick={() => setChartType('candle')}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${chartType === 'candle' ? 'text-[#44f593] bg-[#44f593]/10' : 'text-[#859586] hover:text-[#dce5df]'}`}>
+                    <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 0" }}>candlestick_chart</span>
+                    <span className="hidden sm:inline">Candle</span>
+                  </button>
+                </div>
               </div>
               {chart?.technicals && (
                 <div className="flex items-center gap-4 flex-wrap">
@@ -268,7 +346,11 @@ export default function IndexDetailPage() {
                 </div>
               ) : chart?.candles ? (
                 <>
-                  <PriceChart candles={chart.candles} positive={pos} />
+                  {chartType === 'candle' ? (
+                    <CandlestickChart candles={chart.candles} />
+                  ) : (
+                    <PriceChart candles={chart.candles} positive={pos} />
+                  )}
                   {lastCandle && (
                     <div className="absolute top-3 left-3 flex flex-col gap-0.5 pointer-events-none">
                       <span className="text-[11px] font-['JetBrains_Mono'] text-[#859586]">O: {fmt(firstCandle?.open ?? lastCandle.open, 2)}</span>
