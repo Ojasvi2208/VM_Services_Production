@@ -172,18 +172,18 @@ function Step2({
         <div>
           <label className="text-xs uppercase tracking-widest text-[#859586] font-bold mb-2 block">Target Amount</label>
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#859586] font-['JetBrains_Mono']">₹</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#859586] font-mono">₹</span>
             <input
               type="number"
               value={targetAmount || ''}
               onChange={e => setTargetAmount(Number(e.target.value))}
               placeholder="5000000"
               min={1000}
-              className="w-full bg-[#161d1a] border border-white/10 rounded-xl px-4 pl-8 py-3 text-[#dce5df] placeholder:text-[#859586]/50 focus:outline-none focus:border-[#44f593]/40 font-['JetBrains_Mono']"
+              className="w-full bg-[#161d1a] border border-white/10 rounded-xl px-4 pl-8 py-3 text-[#dce5df] placeholder:text-[#859586]/50 focus:outline-none focus:border-[#44f593]/40 font-mono"
             />
           </div>
           {targetAmount > 0 && (
-            <p className="text-xs text-[#859586] mt-1.5 font-['JetBrains_Mono']">{formatINR(targetAmount)}</p>
+            <p className="text-xs text-[#859586] mt-1.5 font-mono">{formatINR(targetAmount)}</p>
           )}
         </div>
 
@@ -213,14 +213,14 @@ function Step2({
             )}
           </label>
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#859586] font-['JetBrains_Mono']">₹</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#859586] font-mono">₹</span>
             <input
               type="number"
               value={monthlySip || ''}
               onChange={e => setMonthlySip(Number(e.target.value))}
               placeholder={estimatedSip > 0 ? String(estimatedSip) : '10000'}
               min={0}
-              className="w-full bg-[#161d1a] border border-white/10 rounded-xl px-4 pl-8 py-3 text-[#dce5df] placeholder:text-[#859586]/50 focus:outline-none focus:border-[#44f593]/40 font-['JetBrains_Mono']"
+              className="w-full bg-[#161d1a] border border-white/10 rounded-xl px-4 pl-8 py-3 text-[#dce5df] placeholder:text-[#859586]/50 focus:outline-none focus:border-[#44f593]/40 font-mono"
             />
           </div>
         </div>
@@ -248,7 +248,7 @@ function Step3({ selected, onSelect }: { selected: string; onSelect: (id: string
           >
             <p className="font-['Space_Grotesk'] font-bold text-[#dce5df] mb-1">{rp.label}</p>
             <p className="text-xs text-[#859586] mb-3">{rp.sublabel}</p>
-            <p className="font-['JetBrains_Mono'] text-sm font-bold" style={{ color: rp.color }}>
+            <p className="font-mono text-sm font-bold" style={{ color: rp.color }}>
               ~{rp.expectedReturn}% p.a.
             </p>
           </button>
@@ -294,7 +294,7 @@ function Step4({
         ].map(row => (
           <div key={row.label} className="flex justify-between py-2 border-b border-white/5 last:border-0 text-sm">
             <span className="text-[#859586]">{row.label}</span>
-            <span className="font-['JetBrains_Mono'] text-[#dce5df]">{row.value}</span>
+            <span className="font-mono text-[#dce5df]">{row.value}</span>
           </div>
         ))}
 

@@ -132,7 +132,7 @@ function Tile({ label, value, color }: { label: string; value: string; color?: s
   return (
     <div className="bg-[#161d1a] p-4 md:p-5 rounded-2xl border border-white/5">
       <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-2 font-bold">{label}</p>
-      <p className={`text-base md:text-lg font-['JetBrains_Mono'] font-medium ${color || 'text-[#dce5df]'}`}>{value}</p>
+      <p className={`text-base md:text-lg font-mono font-medium ${color || 'text-[#dce5df]'}`}>{value}</p>
     </div>
   );
 }
@@ -155,7 +155,7 @@ function PulseGauge({ strength, overall }: { strength: number; overall: string }
       <div className="w-28 h-28 rounded-full border-[8px] border-[#2f3733] flex items-center justify-center relative">
         <div className="absolute inset-0 rounded-full border-[8px] border-t-transparent border-l-transparent" style={{ borderColor: `${color} transparent transparent ${color}`, transform: `rotate(${45 + (strength / 100) * 180}deg)` }} />
         <div className="text-center">
-          <p className="text-2xl font-['JetBrains_Mono'] font-bold" style={{ color }}>{strength}%</p>
+          <p className="text-2xl font-mono font-bold" style={{ color }}>{strength}%</p>
           <p className="text-[9px] text-[#859586] uppercase font-bold">{overall}</p>
         </div>
       </div>
@@ -176,7 +176,7 @@ function SectorHeatmap({ sectors }: { sectors: { name: string; change: number }[
         return (
           <div key={s.name} className={`${pos ? 'bg-[#44f593]/10 border-[#44f593]/20' : 'bg-[#ffb4ab]/10 border-[#ffb4ab]/20'} border rounded-xl p-3 md:p-4`}>
             <span className="text-xs font-bold text-[#dce5df]">{s.name}</span>
-            <p className={`text-lg md:text-xl font-['JetBrains_Mono'] font-bold mt-1 ${pos ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+            <p className={`text-lg md:text-xl font-mono font-bold mt-1 ${pos ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
               {pos ? '+' : ''}{s.change.toFixed(1)}%
             </p>
           </div>
@@ -268,17 +268,17 @@ export default function IndexDetailPage() {
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <span className="bg-[#2f3733] px-2 py-0.5 rounded text-[10px] font-['JetBrains_Mono'] tracking-widest text-[#44f593] uppercase">{exchange} Index</span>
+                <span className="bg-[#2f3733] px-2 py-0.5 rounded text-[10px] font-mono tracking-widest text-[#44f593] uppercase">{exchange} Index</span>
                 <span className="text-[#859586] text-sm font-medium">INDEX{exchange}: {symbol}</span>
               </div>
               <h1 className="text-3xl md:text-4xl font-bold font-['Space_Grotesk'] text-[#dce5df] tracking-tighter mb-2">{name}</h1>
               <div className="flex items-center gap-4 flex-wrap">
-                <span className="text-2xl md:text-3xl font-['JetBrains_Mono'] font-medium text-[#dce5df] tracking-tight">₹{fmt(price, 2)}</span>
+                <span className="text-2xl md:text-3xl font-mono font-medium text-[#dce5df] tracking-tight">₹{fmt(price, 2)}</span>
                 <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${pos ? 'bg-[#44f593]/10 border-[#44f593]/20' : 'bg-[#ffb4ab]/10 border-[#ffb4ab]/20'}`}>
                   <span className="material-symbols-outlined text-lg" style={{ color: pos ? '#44f593' : '#ffb4ab', fontVariationSettings: "'FILL' 1" }}>
                     {pos ? 'arrow_drop_up' : 'arrow_drop_down'}
                   </span>
-                  <span className={`font-['JetBrains_Mono'] font-bold text-sm ${pos ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+                  <span className={`font-mono font-bold text-sm ${pos ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
                     {pos ? '+' : ''}{fmt(change, 2)} ({fmtPct(changePct)})
                   </span>
                 </div>
@@ -319,19 +319,19 @@ export default function IndexDetailPage() {
               {chart?.technicals && (
                 <div className="flex items-center gap-4 flex-wrap">
                   {chart.technicals.rsi != null && (
-                    <div className="flex items-center gap-2 text-xs font-['JetBrains_Mono']">
+                    <div className="flex items-center gap-2 text-xs font-mono">
                       <span className="w-2.5 h-2.5 rounded-full bg-[#44f593]/40" />
                       <span className="text-[#859586]">RSI(14): {chart.technicals.rsi.toFixed(1)}</span>
                     </div>
                   )}
                   {chart.technicals.dma.dma50 != null && (
-                    <div className="flex items-center gap-2 text-xs font-['JetBrains_Mono']">
+                    <div className="flex items-center gap-2 text-xs font-mono">
                       <span className="w-2.5 h-2.5 rounded-full bg-blue-400/40" />
                       <span className="text-[#859586]">EMA(50): {fmt(chart.technicals.dma.dma50, 0)}</span>
                     </div>
                   )}
                   {chart.technicals.dma.dma200 != null && (
-                    <div className="flex items-center gap-2 text-xs font-['JetBrains_Mono']">
+                    <div className="flex items-center gap-2 text-xs font-mono">
                       <span className="w-2.5 h-2.5 rounded-full bg-purple-400/40" />
                       <span className="text-[#859586]">EMA(200): {fmt(chart.technicals.dma.dma200, 0)}</span>
                     </div>
@@ -353,10 +353,10 @@ export default function IndexDetailPage() {
                   )}
                   {lastCandle && (
                     <div className="absolute top-3 left-3 flex flex-col gap-0.5 pointer-events-none">
-                      <span className="text-[11px] font-['JetBrains_Mono'] text-[#859586]">O: {fmt(firstCandle?.open ?? lastCandle.open, 2)}</span>
-                      <span className="text-[11px] font-['JetBrains_Mono'] text-[#44f593]">H: {fmt(Math.max(...chart.candles.map(c => c.high)), 2)}</span>
-                      <span className="text-[11px] font-['JetBrains_Mono'] text-[#ffb4ab]">L: {fmt(Math.min(...chart.candles.map(c => c.low)), 2)}</span>
-                      <span className="text-[11px] font-['JetBrains_Mono'] text-[#859586]">C: {fmt(lastCandle.close, 2)}</span>
+                      <span className="text-[11px] font-mono text-[#859586]">O: {fmt(firstCandle?.open ?? lastCandle.open, 2)}</span>
+                      <span className="text-[11px] font-mono text-[#44f593]">H: {fmt(Math.max(...chart.candles.map(c => c.high)), 2)}</span>
+                      <span className="text-[11px] font-mono text-[#ffb4ab]">L: {fmt(Math.min(...chart.candles.map(c => c.low)), 2)}</span>
+                      <span className="text-[11px] font-mono text-[#859586]">C: {fmt(lastCandle.close, 2)}</span>
                     </div>
                   )}
                 </>
@@ -411,7 +411,7 @@ export default function IndexDetailPage() {
                         <p className="text-[10px] text-[#859586]">Weight: {m.weight?.toFixed(1)}%</p>
                       </div>
                     </div>
-                    <p className={`text-sm font-['JetBrains_Mono'] ${m.change_pct >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+                    <p className={`text-sm font-mono ${m.change_pct >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
                       {m.change_pct >= 0 ? '+' : ''}{m.change_pct?.toFixed(2)}%
                     </p>
                   </div>
@@ -437,7 +437,7 @@ export default function IndexDetailPage() {
                     <div key={i} className="flex justify-between items-center">
                       <span className="text-sm font-medium text-[#dce5df]">{s.indicator}</span>
                       <div className="flex items-center gap-3">
-                        <span className="text-xs font-['JetBrains_Mono'] text-[#859586]">{s.value}</span>
+                        <span className="text-xs font-mono text-[#859586]">{s.value}</span>
                         <Badge signal={s.signal} />
                       </div>
                     </div>
@@ -458,7 +458,7 @@ export default function IndexDetailPage() {
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs font-medium">
                         <span className="text-[#dce5df]">Foreign Institutional (FII)</span>
-                        <span className={`font-['JetBrains_Mono'] ${fiiDii.fii.net_value >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+                        <span className={`font-mono ${fiiDii.fii.net_value >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
                           {fiiDii.fii.net_value >= 0 ? '+' : ''}{fmt(fiiDii.fii.net_value, 2)}
                         </span>
                       </div>
@@ -470,7 +470,7 @@ export default function IndexDetailPage() {
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs font-medium">
                         <span className="text-[#dce5df]">Domestic Institutional (DII)</span>
-                        <span className={`font-['JetBrains_Mono'] ${fiiDii.dii.net_value >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+                        <span className={`font-mono ${fiiDii.dii.net_value >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
                           {fiiDii.dii.net_value >= 0 ? '+' : ''}{fmt(fiiDii.dii.net_value, 2)}
                         </span>
                       </div>

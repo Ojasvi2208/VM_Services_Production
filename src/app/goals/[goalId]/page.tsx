@@ -117,7 +117,7 @@ function targetDateLabel(dateStr: string): string {
 //           />
 //         </svg>
 //         <div className="absolute inset-0 flex flex-col items-center justify-center">
-//           <span className="font-['JetBrains_Mono'] text-3xl font-bold" style={{ color }}>
+//           <span className="font-mono text-3xl font-bold" style={{ color }}>
 //             {probability.toFixed(0)}%
 //           </span>
 //           <span className="text-xs uppercase tracking-widest text-[#859586]">Success</span>
@@ -141,7 +141,7 @@ function targetDateLabel(dateStr: string): string {
 //       ].map(s => (
 //         <div key={s.label} className="glass-card-vi rounded-xl p-4 text-center">
 //           <p className="text-xs uppercase tracking-widest mb-2" style={{ color: s.color }}>{s.label}</p>
-//           <p className="font-['JetBrains_Mono'] text-lg font-bold text-[#dce5df]">{formatINR(s.value)}</p>
+//           <p className="font-mono text-lg font-bold text-[#dce5df]">{formatINR(s.value)}</p>
 //           <p className="text-xs text-[#859586] mt-1">{s.sublabel}</p>
 //         </div>
 //       ))}
@@ -294,7 +294,7 @@ export default function GoalDetailPage() {
               <p className="text-xs uppercase tracking-widest text-[#859586] mb-4">Progress</p>
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-[#859586]">Saved</span>
-                <span className="font-['JetBrains_Mono'] text-[#dce5df]">{formatINR(goal.currentValue)}</span>
+                <span className="font-mono text-[#dce5df]">{formatINR(goal.currentValue)}</span>
               </div>
               <div className="h-3 bg-[#1a2420] rounded-full overflow-hidden mb-2">
                 <div
@@ -304,7 +304,7 @@ export default function GoalDetailPage() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-[#859586]">{goal.progressPercent.toFixed(1)}%</span>
-                <span className="font-['JetBrains_Mono'] text-[#859586]">{formatINR(goal.targetAmount)} target</span>
+                <span className="font-mono text-[#859586]">{formatINR(goal.targetAmount)} target</span>
               </div>
             </div>
 
@@ -313,11 +313,11 @@ export default function GoalDetailPage() {
               <p className="text-xs uppercase tracking-widest text-[#859586]">SIP Status</p>
               <div className="flex justify-between">
                 <span className="text-sm text-[#859586]">Current SIP</span>
-                <span className="font-['JetBrains_Mono'] text-sm text-[#dce5df]">{formatINR(goal.monthlySip)}/mo</span>
+                <span className="font-mono text-sm text-[#dce5df]">{formatINR(goal.monthlySip)}/mo</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-[#859586]">Recommended</span>
-                <span className="font-['JetBrains_Mono'] text-sm" style={{ color: goal.monthlySip >= goal.recommendedSip ? '#44f593' : '#f59e0b' }}>
+                <span className="font-mono text-sm" style={{ color: goal.monthlySip >= goal.recommendedSip ? '#44f593' : '#f59e0b' }}>
                   {formatINR(goal.recommendedSip)}/mo
                 </span>
               </div>
@@ -349,7 +349,7 @@ export default function GoalDetailPage() {
                         <p className="text-xs text-[#859586]">{h.units.toFixed(3)} units · NAV {formatINR(h.latestNav)}</p>
                       </div>
                       <div className="text-right ml-4 shrink-0">
-                        <p className="font-['JetBrains_Mono'] text-sm text-[#dce5df]">{formatINR(h.currentValue)}</p>
+                        <p className="font-mono text-sm text-[#dce5df]">{formatINR(h.currentValue)}</p>
                         <p className="text-xs text-[#859586]">{h.allocationPct}% allocated</p>
                       </div>
                     </div>

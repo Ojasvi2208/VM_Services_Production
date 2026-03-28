@@ -61,7 +61,7 @@ function FundCard({
         <div className="bg-[#44f593]/5 p-3 rounded-lg">
           <span className="material-symbols-outlined text-[#44f593]" style={{ fontVariationSettings: "'FILL' 0" }}>{icon}</span>
         </div>
-        <span className="text-xs font-['JetBrains_Mono'] bg-[#242c28] text-[#44f593] px-2 py-1 rounded">
+        <span className="text-xs font-mono bg-[#242c28] text-[#44f593] px-2 py-1 rounded">
           {tag}
         </span>
       </div>
@@ -70,7 +70,7 @@ function FundCard({
       <div className="flex justify-between items-end">
         <div>
           <span className="text-[#859586] text-xs uppercase block mb-1">{metricLabel}</span>
-          <span className="font-['JetBrains_Mono'] text-[#44f593] text-2xl font-bold">{metricValue}</span>
+          <span className="font-mono text-[#44f593] text-2xl font-bold">{metricValue}</span>
         </div>
         <span
           className="material-symbols-outlined text-[#859586] group-hover:text-[#44f593] transition-colors"
@@ -185,7 +185,7 @@ export default function TopFundsSection() {
 
                 return (
                   <div key={nfo.id ?? i} className="group cursor-pointer">
-                    <p className={`font-['JetBrains_Mono'] text-xs mb-1 ${urgencyColor}`}>{urgencyText}</p>
+                    <p className={`font-mono text-xs mb-1 ${urgencyColor}`}>{urgencyText}</p>
                     <h4 className="font-bold text-[#dce5df] group-hover:text-[#44f593] transition-colors line-clamp-2">
                       {nfo.schemeName}
                     </h4>
@@ -202,17 +202,17 @@ export default function TopFundsSection() {
               // Static fallback
               <>
                 <div className="group cursor-pointer">
-                  <p className="text-[#ffb4ab] font-['JetBrains_Mono'] text-xs mb-1">CLOSING IN 2 DAYS</p>
+                  <p className="text-[#ffb4ab] font-mono text-xs mb-1">CLOSING IN 2 DAYS</p>
                   <h4 className="font-bold text-[#dce5df] group-hover:text-[#44f593] transition-colors">VMFS ESG Leaders Fund</h4>
                   <p className="text-[#859586] text-xs mt-1">NFO Price: ₹10.00</p>
                 </div>
                 <div className="group cursor-pointer">
-                  <p className="text-[#859586] font-['JetBrains_Mono'] text-xs mb-1">OPENS MAR 15</p>
+                  <p className="text-[#859586] font-mono text-xs mb-1">OPENS MAR 15</p>
                   <h4 className="font-bold text-[#dce5df] group-hover:text-[#44f593] transition-colors">Global REITs Access Vault</h4>
                   <p className="text-[#859586] text-xs mt-1">Minimum: ₹5,00,000</p>
                 </div>
                 <div className="group cursor-pointer">
-                  <p className="text-[#859586] font-['JetBrains_Mono'] text-xs mb-1">PRE-IPO STAGE</p>
+                  <p className="text-[#859586] font-mono text-xs mb-1">PRE-IPO STAGE</p>
                   <h4 className="font-bold text-[#dce5df] group-hover:text-[#44f593] transition-colors">Next-Gen FinTech Fund II</h4>
                   <p className="text-[#859586] text-xs mt-1">Exclusive Invite Only</p>
                 </div>

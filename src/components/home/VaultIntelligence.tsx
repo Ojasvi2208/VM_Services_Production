@@ -63,7 +63,7 @@ export default function VaultIntelligence() {
                   className="bg-[#2f3733] border border-white/5 rounded-lg px-3 py-2"
                 >
                   <div className="text-xs uppercase text-[#859586] mb-1">{label}</div>
-                  <div className="font-['JetBrains_Mono'] text-[#44f593] text-base">{value}</div>
+                  <div className="font-mono text-[#44f593] text-base">{value}</div>
                 </div>
               ))}
             </div>
@@ -140,17 +140,17 @@ export default function VaultIntelligence() {
               <div className="flex justify-between items-center relative z-10 h-full">
                 <div className="text-center">
                   <div className="text-[#859586] text-xs uppercase">Drift Alert</div>
-                  <div className="text-[#ffb4ab] font-['JetBrains_Mono'] font-bold">+5.2%</div>
+                  <div className="text-[#ffb4ab] font-mono font-bold">+5.2%</div>
                 </div>
                 <div className="h-full w-[1px] bg-[#3c4a3e]/20" />
                 <div className="text-center">
                   <div className="text-[#859586] text-xs uppercase">Execution</div>
-                  <div className="text-[#44f593] font-['JetBrains_Mono'] font-bold">In Progress</div>
+                  <div className="text-[#44f593] font-mono font-bold">In Progress</div>
                 </div>
                 <div className="h-full w-[1px] bg-[#3c4a3e]/20" />
                 <div className="text-center">
                   <div className="text-[#859586] text-xs uppercase">Target Var</div>
-                  <div className="text-[#dce5df] font-['JetBrains_Mono'] font-bold">±0.5%</div>
+                  <div className="text-[#dce5df] font-mono font-bold">±0.5%</div>
                 </div>
               </div>
             </div>

@@ -259,7 +259,7 @@ export default function ProfilePage() {
                   <div className="p-4 bg-[#44f593]/5 border border-[#44f593]/20 rounded-xl flex items-center justify-between">
                     <div>
                       <p className="text-xs uppercase tracking-widest text-[#859586] mb-0.5">Estimated Tax Slab</p>
-                      <p className="font-['JetBrains_Mono'] font-bold text-[#44f593] text-lg">{taxProfile.estimatedSlab}</p>
+                      <p className="font-mono font-bold text-[#44f593] text-lg">{taxProfile.estimatedSlab}</p>
                     </div>
                     <p className="text-xs text-[#859586]">{taxProfile.currentFY}</p>
                   </div>

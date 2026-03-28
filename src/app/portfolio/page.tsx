@@ -426,7 +426,7 @@ function AnalyticsTab({ holdings, totalInvested, totalCurrent, totalReturns, tot
           {/* Overall returns KPI */}
           <div className="mb-6 p-4 bg-[#44f593]/5 border border-[#44f593]/20 rounded-xl">
             <p className="text-xs uppercase tracking-widest text-[#859586] mb-1">Overall Absolute Return</p>
-            <p className={`font-['JetBrains_Mono'] text-3xl font-bold ${pos ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+            <p className={`font-mono text-3xl font-bold ${pos ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
               {pos ? '+' : ''}{totalRetPct.toFixed(2)}%
             </p>
           </div>
@@ -449,7 +449,7 @@ function AnalyticsTab({ holdings, totalInvested, totalCurrent, totalReturns, tot
                 <div key={bar.label}>
                   <div className="flex justify-between text-xs mb-1.5">
                     <span className="text-[#859586]">{bar.label}</span>
-                    <span className={`font-['JetBrains_Mono'] font-bold ${isPos ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+                    <span className={`font-mono font-bold ${isPos ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
                       {isPos ? '+' : ''}{bar.value.toFixed(1)}%
                     </span>
                   </div>

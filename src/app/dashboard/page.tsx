@@ -149,9 +149,9 @@ function DashboardTicker() {
         {doubled.map((e, i) => (
           <div key={i} className="flex items-center gap-2.5 shrink-0 px-6">
             {i !== 0 && <span className="w-1 h-1 rounded-full bg-[#3c4a3e]" />}
-            <span className="font-['JetBrains_Mono'] text-[13px] text-[#859586] uppercase tracking-wide">{e.label}</span>
-            <span className="font-['JetBrains_Mono'] text-[14px] font-semibold text-[#dce5df]">{e.price}</span>
-            <span className="font-['JetBrains_Mono'] text-[13px] font-bold" style={{ color: e.pos ? '#44f593' : '#ff4757' }}>{e.change}</span>
+            <span className="font-mono text-[13px] text-[#859586] uppercase tracking-wide">{e.label}</span>
+            <span className="font-mono text-[14px] font-semibold text-[#dce5df]">{e.price}</span>
+            <span className="font-mono text-[13px] font-bold" style={{ color: e.pos ? '#44f593' : '#ff4757' }}>{e.change}</span>
           </div>
         ))}
       </div>
@@ -467,7 +467,7 @@ export default function DashboardPage() {
                   <>
                     <h1 className="font-['Space_Grotesk'] font-bold tracking-tighter flex items-baseline gap-2"
                       style={{ fontSize: 'clamp(2.5rem, 5vw, 4rem)', lineHeight: 1 }}>
-                      <span className="font-['JetBrains_Mono'] text-3xl font-light text-[#44f593]/50">₹</span>
+                      <span className="font-mono text-3xl font-light text-[#44f593]/50">₹</span>
                       <span className="text-[#44f593]">
                         {summary ? fmtINR(summary.currentValue).replace('₹', '') : '—'}
                       </span>
@@ -477,7 +477,7 @@ export default function DashboardPage() {
                         <span className="material-symbols-outlined text-xs mr-1">{isPositive ? 'trending_up' : 'trending_down'}</span>
                         {fmtPct(summary?.returnsPercentage ?? 0)}
                       </span>
-                      <span className="text-xs text-[#859586] font-medium font-['JetBrains_Mono']">
+                      <span className="text-xs text-[#859586] font-medium font-mono">
                         {isPositive ? '+' : ''}{summary ? fmtINR(summary.totalReturns) : '—'} total returns
                       </span>
                       <span className="text-[#3c4a3e] text-xs">·</span>
@@ -525,7 +525,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="text-right">
                     <span className="text-xs text-[#859586] uppercase font-bold tracking-wide">Sharpe Ratio</span>
-                    <div className="font-['JetBrains_Mono'] text-xl font-bold text-[#dce5df]">
+                    <div className="font-mono text-xl font-bold text-[#dce5df]">
                       {loadingPortfolio ? '…' : metrics?.sharpeRatio1y != null ? metrics.sharpeRatio1y.toFixed(2) : '—'}
                     </div>
                   </div>
@@ -583,7 +583,7 @@ export default function DashboardPage() {
                           }}
                         />
                       </div>
-                      <span className={`font-['JetBrains_Mono'] text-sm font-bold w-14 text-right ${(row.value ?? 0) >= 0 ? 'text-[#44f593]' : 'text-red-400'}`}>
+                      <span className={`font-mono text-sm font-bold w-14 text-right ${(row.value ?? 0) >= 0 ? 'text-[#44f593]' : 'text-red-400'}`}>
                         {loadingPortfolio ? '…' : fmtPct(row.value)}
                       </span>
                     </div>
@@ -626,11 +626,11 @@ export default function DashboardPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="font-medium text-sm text-[#dce5df] truncate max-w-[200px] group-hover:text-white">{h.schemeName}</div>
-                          <div className="text-[11px] text-[#859586] font-['JetBrains_Mono']">{fmtINR(h.currentValue)}</div>
+                          <div className="text-[11px] text-[#859586] font-mono">{fmtINR(h.currentValue)}</div>
                         </div>
                       </div>
                       <div className="text-right shrink-0 ml-4">
-                        <div className={`font-['JetBrains_Mono'] text-sm font-bold ${h.returnsPercentage >= 0 ? 'text-[#44f593]' : 'text-red-400'}`}>
+                        <div className={`font-mono text-sm font-bold ${h.returnsPercentage >= 0 ? 'text-[#44f593]' : 'text-red-400'}`}>
                           {fmtPct(h.returnsPercentage)}
                         </div>
                         {h.return1y != null && (
@@ -666,8 +666,8 @@ export default function DashboardPage() {
                 {indices.length > 0 ? indices.map((idx, i) => (
                   <div key={i} className="text-center px-2">
                     <div className="text-xs text-[#859586] font-bold uppercase tracking-wide mb-0.5">{idx.label}</div>
-                    <div className="font-['JetBrains_Mono'] text-sm font-bold text-[#dce5df]">{idx.price}</div>
-                    <div className={`text-xs font-['JetBrains_Mono'] font-bold ${idx.pos ? 'text-[#44f593]' : 'text-red-400'}`}>{idx.change}</div>
+                    <div className="font-mono text-sm font-bold text-[#dce5df]">{idx.price}</div>
+                    <div className={`text-xs font-mono font-bold ${idx.pos ? 'text-[#44f593]' : 'text-red-400'}`}>{idx.change}</div>
                   </div>
                 )) : (
                   [...Array(3)].map((_, i) => (
@@ -765,7 +765,7 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-between mt-auto">
                       <div>
                         <div className="text-xs text-[#859586] uppercase">Min Investment</div>
-                        <div className="font-['JetBrains_Mono'] text-sm font-bold text-[#dce5df]">
+                        <div className="font-mono text-sm font-bold text-[#dce5df]">
                           {fmtINR(nfo.minInvestment || 500)}
                         </div>
                       </div>

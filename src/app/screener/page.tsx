@@ -119,19 +119,19 @@ function FundCard({ fund, onClick }: { fund: Fund; onClick: () => void }) {
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="bg-[#0d1510] rounded-lg p-2">
           <p className="text-[11px] uppercase text-[#859586] tracking-widest mb-0.5">1Y</p>
-          <p className={`font-['JetBrains_Mono'] text-sm font-bold ${c1y != null ? (pos(c1y) ? 'text-[#44f593]' : 'text-[#ffb4ab]') : 'text-[#859586]'}`}>
+          <p className={`font-mono text-sm font-bold ${c1y != null ? (pos(c1y) ? 'text-[#44f593]' : 'text-[#ffb4ab]') : 'text-[#859586]'}`}>
             {c1y != null && !isNaN(c1y) ? `${pos(c1y) ? '+' : ''}${c1y.toFixed(1)}%` : '—'}
           </p>
         </div>
         <div className="bg-[#0d1510] rounded-lg p-2">
           <p className="text-[11px] uppercase text-[#859586] tracking-widest mb-0.5">3Y</p>
-          <p className={`font-['JetBrains_Mono'] text-sm font-bold ${c3y != null ? (pos(c3y) ? 'text-[#44f593]' : 'text-[#ffb4ab]') : 'text-[#859586]'}`}>
+          <p className={`font-mono text-sm font-bold ${c3y != null ? (pos(c3y) ? 'text-[#44f593]' : 'text-[#ffb4ab]') : 'text-[#859586]'}`}>
             {c3y != null && !isNaN(c3y) ? `${pos(c3y) ? '+' : ''}${c3y.toFixed(1)}%` : '—'}
           </p>
         </div>
         <div className="bg-[#0d1510] rounded-lg p-2">
           <p className="text-[11px] uppercase text-[#859586] tracking-widest mb-0.5">5Y</p>
-          <p className={`font-['JetBrains_Mono'] text-sm font-bold ${c5y != null ? (pos(c5y) ? 'text-[#44f593]' : 'text-[#ffb4ab]') : 'text-[#859586]'}`}>
+          <p className={`font-mono text-sm font-bold ${c5y != null ? (pos(c5y) ? 'text-[#44f593]' : 'text-[#ffb4ab]') : 'text-[#859586]'}`}>
             {c5y != null && !isNaN(c5y) ? `${pos(c5y) ? '+' : ''}${c5y.toFixed(1)}%` : '—'}
           </p>
         </div>
@@ -141,32 +141,32 @@ function FundCard({ fund, onClick }: { fund: Fund; onClick: () => void }) {
       <div className="grid grid-cols-4 gap-2 border-t border-white/5 pt-3">
         <div>
           <p className="text-[11px] uppercase text-[#859586] tracking-widest mb-0.5">Sharpe</p>
-          <p className="font-['JetBrains_Mono'] text-xs text-[#dce5df]">
+          <p className="font-mono text-xs text-[#dce5df]">
             {sharpe != null && !isNaN(sharpe) ? sharpe.toFixed(2) : '—'}
           </p>
         </div>
         <div>
           <p className="text-[11px] uppercase text-[#859586] tracking-widest mb-0.5">Vol</p>
-          <p className="font-['JetBrains_Mono'] text-xs text-[#dce5df]">
+          <p className="font-mono text-xs text-[#dce5df]">
             {vol != null && !isNaN(vol) ? `${vol.toFixed(1)}%` : '—'}
           </p>
         </div>
         <div>
           <p className="text-[11px] uppercase text-[#859586] tracking-widest mb-0.5">TER</p>
-          <p className="font-['JetBrains_Mono'] text-xs text-[#44f593]">
+          <p className="font-mono text-xs text-[#44f593]">
             {er != null && !isNaN(er) ? `${er.toFixed(2)}%` : '—'}
           </p>
         </div>
         <div>
           <p className="text-[11px] uppercase text-[#859586] tracking-widest mb-0.5">Age</p>
-          <p className="font-['JetBrains_Mono'] text-xs text-[#dce5df]">{age}</p>
+          <p className="font-mono text-xs text-[#dce5df]">{age}</p>
         </div>
       </div>
 
       {/* AUM + NAV */}
       <div className="flex items-center justify-between text-xs border-t border-white/5 pt-2">
-        <span className="text-[#859586]">AUM <span className="font-['JetBrains_Mono'] text-[#dce5df]">{aum != null ? fmtAUM(aum) : '—'}</span></span>
-        <span className="text-[#859586]">NAV <span className="font-['JetBrains_Mono'] text-[#dce5df]">{nav != null && !isNaN(nav) ? `₹${nav.toFixed(2)}` : '—'}</span></span>
+        <span className="text-[#859586]">AUM <span className="font-mono text-[#dce5df]">{aum != null ? fmtAUM(aum) : '—'}</span></span>
+        <span className="text-[#859586]">NAV <span className="font-mono text-[#dce5df]">{nav != null && !isNaN(nav) ? `₹${nav.toFixed(2)}` : '—'}</span></span>
       </div>
 
       {/* Sector DNA pills */}
@@ -209,7 +209,7 @@ function SliderFilter({
     <div>
       <div className="flex justify-between text-xs text-[#859586] mb-1">
         <span>{label}</span>
-        <span className="font-['JetBrains_Mono'] text-[#44f593]">{display}</span>
+        <span className="font-mono text-[#44f593]">{display}</span>
       </div>
       <input
         type="range" min={min} max={max} step={step} value={value}
@@ -537,7 +537,7 @@ export default function ScreenerPage() {
                         <div className="px-3 pt-2">
                           <div className="flex justify-between text-xs text-[#859586] mb-1">
                             <span>Min. exposure</span>
-                            <span className="font-['JetBrains_Mono'] text-[#44f593]">{weight}%</span>
+                            <span className="font-mono text-[#44f593]">{weight}%</span>
                           </div>
                           <input
                             type="range" min={0} max={Math.min(50, Math.round(sector.maxWeight))} value={weight}

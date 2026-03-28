@@ -77,7 +77,7 @@ export default function HeroSection() {
         {/* Status badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#242c28] border border-[#3c4a3e]/20">
           <span className="w-2 h-2 rounded-full bg-[#44f593] animate-pulse" aria-hidden="true" />
-          <span className="text-sm font-['JetBrains_Mono'] uppercase tracking-widest text-[#44f593]">
+          <span className="text-sm font-mono uppercase tracking-widest text-[#44f593]">
             Institutional Grade Engine Active
           </span>
         </div>
@@ -157,7 +157,7 @@ export default function HeroSection() {
               <div className="flex justify-between items-start mb-12">
                 <div>
                   <p className="text-[#859586] text-base font-['Inter'] uppercase tracking-widest mb-2">Total Net Worth</p>
-                  <h2 className="text-6xl font-['JetBrains_Mono'] font-medium text-[#dce5df] tracking-tighter">
+                  <h2 className="text-6xl font-mono font-medium text-[#dce5df] tracking-tighter">
                     {portfolio ? fmtINR(portfolio.currentValue) : '₹—'}
                   </h2>
                 </div>
@@ -166,7 +166,7 @@ export default function HeroSection() {
                     <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
                       {portfolio.returnsPercentage >= 0 ? 'trending_up' : 'trending_down'}
                     </span>
-                    <span className="font-['JetBrains_Mono'] text-base font-bold">
+                    <span className="font-mono text-base font-bold">
                       {portfolio.returnsPercentage >= 0 ? '+' : ''}{portfolio.returnsPercentage.toFixed(1)}%
                     </span>
                   </div>
@@ -178,17 +178,17 @@ export default function HeroSection() {
                 {breakdown.length > 0 ? breakdown.map((cat, i) => (
                   <div key={cat.label} className={`flex justify-between items-end ${i < breakdown.length - 1 ? 'border-b border-white/5 pb-4' : ''}`}>
                     <span className="text-[#859586] text-base">{cat.label}</span>
-                    <span className="font-['JetBrains_Mono'] text-[#dce5df]">{fmtINR(cat.value)}</span>
+                    <span className="font-mono text-[#dce5df]">{fmtINR(cat.value)}</span>
                   </div>
                 )) : (
                   <>
                     <div className="flex justify-between items-end border-b border-white/5 pb-4">
                       <span className="text-[#859586] text-base">Invested</span>
-                      <span className="font-['JetBrains_Mono'] text-[#dce5df]">{portfolio ? fmtINR(portfolio.totalInvested) : '₹—'}</span>
+                      <span className="font-mono text-[#dce5df]">{portfolio ? fmtINR(portfolio.totalInvested) : '₹—'}</span>
                     </div>
                     <div className="flex justify-between items-end">
                       <span className="text-[#859586] text-base">Returns</span>
-                      <span className={`font-['JetBrains_Mono'] ${portfolio && portfolio.totalReturns >= 0 ? 'text-[#44f593]' : 'text-red-400'}`}>
+                      <span className={`font-mono ${portfolio && portfolio.totalReturns >= 0 ? 'text-[#44f593]' : 'text-red-400'}`}>
                         {portfolio ? `${portfolio.totalReturns >= 0 ? '+' : ''}${fmtINR(portfolio.totalReturns)}` : '₹—'}
                       </span>
                     </div>

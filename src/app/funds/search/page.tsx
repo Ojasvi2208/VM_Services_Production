@@ -86,13 +86,13 @@ function FundCard({ fund }: { fund: FundResult }) {
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div>
           <p className="text-xs uppercase text-[#859586] tracking-widest mb-1">Current NAV</p>
-          <p className="font-['JetBrains_Mono'] text-lg text-[#dce5df]">{formatNav(fund.latestNav)}</p>
+          <p className="font-mono text-lg text-[#dce5df]">{formatNav(fund.latestNav)}</p>
         </div>
         {ret && (
           <div className="text-right">
             <p className="text-xs uppercase text-[#859586] tracking-widest mb-1">1Y Return</p>
             <span
-              className="inline-flex items-center px-2 py-1 rounded font-['JetBrains_Mono'] text-sm font-bold"
+              className="inline-flex items-center px-2 py-1 rounded font-mono text-sm font-bold"
               style={{
                 background: positive ? 'rgba(68,245,147,0.1)' : 'rgba(255,71,87,0.1)',
                 color: positive ? '#44f593' : '#ff4757',
@@ -254,14 +254,14 @@ function DefaultFundGrid() {
                     {f.cagr3y != null ? (
                       <>
                         <span className="text-[10px] text-[#859586] uppercase">3Y CAGR</span>
-                        <span className={`font-['JetBrains_Mono'] text-sm font-bold ${(f.cagr3y ?? 0) >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+                        <span className={`font-mono text-sm font-bold ${(f.cagr3y ?? 0) >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
                           {f.cagr3y >= 0 ? '+' : ''}{f.cagr3y?.toFixed(1)}%
                         </span>
                       </>
                     ) : f.return1y != null ? (
                       <>
                         <span className="text-[10px] text-[#859586] uppercase">1Y</span>
-                        <span className={`font-['JetBrains_Mono'] text-sm font-bold ${(f.return1y ?? 0) >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+                        <span className={`font-mono text-sm font-bold ${(f.return1y ?? 0) >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
                           {f.return1y >= 0 ? '+' : ''}{f.return1y?.toFixed(1)}%
                         </span>
                       </>
@@ -487,7 +487,7 @@ export default function FundDiscoveryPage() {
                     <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 0" }}>close</span>
                   </button>
                 )}
-                <kbd className="hidden md:block px-2 py-1 bg-[#242c28] rounded text-xs font-['JetBrains_Mono'] text-[#859586]">⌘K</kbd>
+                <kbd className="hidden md:block px-2 py-1 bg-[#242c28] rounded text-xs font-mono text-[#859586]">⌘K</kbd>
               </div>
 
               {/* Autocomplete dropdown */}
@@ -606,7 +606,7 @@ export default function FundDiscoveryPage() {
                       Load More Funds
                     </button>
                   ) : (
-                    <p className="text-[#859586] text-sm font-['JetBrains_Mono']">All {total.toLocaleString()} funds loaded</p>
+                    <p className="text-[#859586] text-sm font-mono">All {total.toLocaleString()} funds loaded</p>
                   )}
                 </div>
               )}

@@ -114,7 +114,7 @@ export default function PremiumPage() {
           <div className="rounded-2xl p-6 border border-white/5 bg-[#0d1512] flex flex-col">
             <p className="text-xs uppercase tracking-widest text-[#859586] font-bold mb-4">Free</p>
             <div className="flex items-baseline gap-1 mb-2">
-              <span className="font-['JetBrains_Mono'] text-4xl font-bold text-[#dce5df]">₹0</span>
+              <span className="font-mono text-4xl font-bold text-[#dce5df]">₹0</span>
               <span className="text-sm text-[#859586]">forever</span>
             </div>
             <p className="text-xs text-[#859586] mb-6">Essential tracking for every investor.</p>
@@ -138,7 +138,7 @@ export default function PremiumPage() {
             </span>
             <p className="text-xs uppercase tracking-widest text-[#44f593] font-bold mb-4 mt-1">Pro</p>
             <div className="flex items-baseline gap-1 mb-2">
-              <span className="font-['JetBrains_Mono'] text-4xl font-bold text-[#dce5df]">₹{PRO_PRICE}</span>
+              <span className="font-mono text-4xl font-bold text-[#dce5df]">₹{PRO_PRICE}</span>
               <span className="text-sm text-[#859586]">/year</span>
             </div>
             <p className="text-xs text-[#859586] mb-4">Full suite for serious wealth builders.</p>
@@ -199,7 +199,7 @@ export default function PremiumPage() {
                 Send exactly <span className="text-[#44f593] font-bold font-mono">₹{PRO_PRICE}</span> via UPI to:
               </p>
               <div className="flex items-center justify-between p-4 bg-[#161d1a] border border-[#3c4a3e] rounded-xl">
-                <span className="font-['JetBrains_Mono'] text-lg text-[#dce5df] font-bold">malikojasvi@ybl</span>
+                <span className="font-mono text-lg text-[#dce5df] font-bold">malikojasvi@ybl</span>
                 <button
                   onClick={() => navigator.clipboard?.writeText('malikojasvi@ybl')}
                   className="text-xs text-[#44f593] hover:underline font-bold uppercase tracking-widest"

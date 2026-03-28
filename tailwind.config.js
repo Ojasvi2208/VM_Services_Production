@@ -158,8 +158,8 @@ module.exports = {
         'display': ['"Space Grotesk"', 'Inter', 'system-ui', 'sans-serif'],
         // BODY — All body copy, labels, captions. High legibility.
         'body':    ['Inter', '"DM Sans"', 'system-ui', 'sans-serif'],
-        // MONO — Labels, timestamps, metadata. Readable Calibri-style sans-serif.
-        'mono':    ['Calibri', '"Gill Sans MT"', '"Gill Sans"', '"Trebuchet MS"', 'system-ui', 'sans-serif'],
+        // MONO — Numbers, prices, labels, metadata. Readable sans-serif (Inter).
+        'mono':    ['Inter', '"DM Sans"', 'system-ui', 'sans-serif'],
         // Legacy compatibility
         'inter':   ['Inter', 'system-ui', 'sans-serif'],
         'system':  ['system-ui', 'sans-serif'],

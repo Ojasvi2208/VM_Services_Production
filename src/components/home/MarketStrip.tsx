@@ -118,14 +118,14 @@ export default function MarketStrip() {
             {i !== 0 && (
               <span className="w-1 h-1 rounded-full bg-[#3c4a3e] shrink-0 mr-1" aria-hidden="true" />
             )}
-            <span className="font-['JetBrains_Mono'] text-[15px] font-medium text-[#859586] whitespace-nowrap uppercase tracking-wide">
+            <span className="font-mono text-[15px] font-medium text-[#859586] whitespace-nowrap uppercase tracking-wide">
               {entry.label}
             </span>
-            <span className="font-['JetBrains_Mono'] text-[16px] font-semibold text-[#dce5df] whitespace-nowrap">
+            <span className="font-mono text-[16px] font-semibold text-[#dce5df] whitespace-nowrap">
               {entry.price}
             </span>
             <span
-              className="font-['JetBrains_Mono'] text-[15px] font-bold whitespace-nowrap"
+              className="font-mono text-[15px] font-bold whitespace-nowrap"
               style={{ color: entry.isPositive ? '#44f593' : '#ff4757' }}
             >
               {entry.change}

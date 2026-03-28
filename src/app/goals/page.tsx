@@ -111,7 +111,7 @@ function GoalSidebarCard({ goal, isSelected, onClick }: { goal: Goal; isSelected
       <div className="w-full bg-[#08100d] h-1.5 rounded-full overflow-hidden">
         <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(100, goal.progressPercent)}%`, background: progressColor }} />
       </div>
-      <div className="flex justify-between mt-2 font-['JetBrains_Mono'] text-[10px]" style={{ color: progressColor }}>
+      <div className="flex justify-between mt-2 font-mono text-[10px]" style={{ color: progressColor }}>
         <span>{goal.progressPercent.toFixed(0)}% REACHED</span>
         <span>{formatINR(goal.currentValue)}</span>
       </div>
@@ -138,7 +138,7 @@ function GoalDetailPanel({ goal, onDelete }: { goal: Goal; onDelete: (id: string
             <div className="relative">
               <ProgressRing percent={goal.progressPercent} color={progressColor} size={180} />
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="font-['JetBrains_Mono'] text-3xl font-bold text-[#dce5df]">{goal.progressPercent.toFixed(0)}%</span>
+                <span className="font-mono text-3xl font-bold text-[#dce5df]">{goal.progressPercent.toFixed(0)}%</span>
                 <span className="text-[10px] font-bold uppercase mt-1" style={{ color: progressColor }}>
                   {goal.progressPercent >= 80 ? 'On Track' : goal.progressPercent >= 40 ? 'Building' : 'Early Stage'}
                 </span>
@@ -151,27 +151,27 @@ function GoalDetailPanel({ goal, onDelete }: { goal: Goal; onDelete: (id: string
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-[#08100d] rounded-xl border border-white/5">
               <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">Target Amount</p>
-              <p className="font-['JetBrains_Mono'] text-lg font-medium text-[#dce5df]">{formatINR(goal.targetAmount)}</p>
+              <p className="font-mono text-lg font-medium text-[#dce5df]">{formatINR(goal.targetAmount)}</p>
             </div>
             <div className="p-4 bg-[#08100d] rounded-xl border border-white/5">
               <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">Saved So Far</p>
-              <p className="font-['JetBrains_Mono'] text-lg font-medium text-[#44f593]">{formatINR(goal.currentValue)}</p>
+              <p className="font-mono text-lg font-medium text-[#44f593]">{formatINR(goal.currentValue)}</p>
             </div>
             <div className="p-4 bg-[#08100d] rounded-xl border border-white/5">
               <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">Remaining</p>
-              <p className="font-['JetBrains_Mono'] text-lg font-medium text-[#ffb4ab]">{formatINR(remaining)}</p>
+              <p className="font-mono text-lg font-medium text-[#ffb4ab]">{formatINR(remaining)}</p>
             </div>
             <div className="p-4 bg-[#08100d] rounded-xl border border-white/5">
               <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">Monthly SIP</p>
-              <p className="font-['JetBrains_Mono'] text-lg font-medium text-[#dce5df]">{formatINR(goal.monthlySip)}</p>
+              <p className="font-mono text-lg font-medium text-[#dce5df]">{formatINR(goal.monthlySip)}</p>
             </div>
             <div className="p-4 bg-[#08100d] rounded-xl border border-white/5">
               <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">Target Date</p>
-              <p className="font-['JetBrains_Mono'] text-lg font-medium text-[#dce5df]">{targetYear(goal.targetDate)}</p>
+              <p className="font-mono text-lg font-medium text-[#dce5df]">{targetYear(goal.targetDate)}</p>
             </div>
             <div className="p-4 bg-[#08100d] rounded-xl border border-white/5">
               <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">Months Left</p>
-              <p className="font-['JetBrains_Mono'] text-lg font-medium text-[#dce5df]">{monthsLeft}</p>
+              <p className="font-mono text-lg font-medium text-[#dce5df]">{monthsLeft}</p>
             </div>
           </div>
         </div>
@@ -344,23 +344,23 @@ export default function GoalsPage() {
               <div className="bg-[#161d1a] p-4 md:p-6 rounded-xl border border-white/5">
                 <p className="text-[10px] uppercase tracking-[0.15em] text-[#859586] font-bold mb-2">Total Target</p>
                 <div className="flex items-end justify-between">
-                  <h3 className="font-['JetBrains_Mono'] text-lg md:text-2xl font-medium text-[#dce5df]">{summary ? formatINR(summary.totalTargetValue) : '—'}</h3>
+                  <h3 className="font-mono text-lg md:text-2xl font-medium text-[#dce5df]">{summary ? formatINR(summary.totalTargetValue) : '—'}</h3>
                 </div>
               </div>
               <div className="bg-[#161d1a] p-4 md:p-6 rounded-xl border border-white/5">
                 <p className="text-[10px] uppercase tracking-[0.15em] text-[#859586] font-bold mb-2">Total Saved</p>
                 <div className="flex items-end justify-between">
-                  <h3 className="font-['JetBrains_Mono'] text-lg md:text-2xl font-medium text-[#44f593]">{summary ? formatINR(summary.totalCurrentValue) : '—'}</h3>
+                  <h3 className="font-mono text-lg md:text-2xl font-medium text-[#44f593]">{summary ? formatINR(summary.totalCurrentValue) : '—'}</h3>
                   <span className="text-[#44f593] text-xs font-bold">{summary ? `${summary.overallProgressPercent.toFixed(1)}%` : ''}</span>
                 </div>
               </div>
               <div className="bg-[#161d1a] p-4 md:p-6 rounded-xl border border-white/5">
                 <p className="text-[10px] uppercase tracking-[0.15em] text-[#859586] font-bold mb-2">Monthly SIP</p>
-                <h3 className="font-['JetBrains_Mono'] text-lg md:text-2xl font-medium text-[#dce5df]">{summary ? formatINR(summary.totalMonthlySip) : '—'}</h3>
+                <h3 className="font-mono text-lg md:text-2xl font-medium text-[#dce5df]">{summary ? formatINR(summary.totalMonthlySip) : '—'}</h3>
               </div>
               <div className="bg-[#161d1a] p-4 md:p-6 rounded-xl border border-white/5">
                 <p className="text-[10px] uppercase tracking-[0.15em] text-[#859586] font-bold mb-2">Time Horizon</p>
-                <h3 className="font-['JetBrains_Mono'] text-lg md:text-2xl font-medium text-[#dce5df]">
+                <h3 className="font-mono text-lg md:text-2xl font-medium text-[#dce5df]">
                   {goals.length > 0 ? targetDateLabel(goals.reduce((a, b) => new Date(a.targetDate) > new Date(b.targetDate) ? a : b).targetDate) : '—'}
                 </h3>
               </div>
