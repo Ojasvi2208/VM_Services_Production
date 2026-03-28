@@ -98,6 +98,7 @@ export default function SWPCalculatorPage() {
   const [withdrawal, setWithdrawal] = useState(25000);
   const [rate, setRate] = useState(8);
   const [tableOpen, setTableOpen] = useState(false);
+  const [visibleRows, setVisibleRows] = useState(10);
 
   const { totalWithdrawn, remainingBalance, months, sustainable, yearlyBreakdown } = useMemo(
     () => simulateSWP(investment, withdrawal, rate), [investment, withdrawal, rate]
@@ -204,7 +205,7 @@ export default function SWPCalculatorPage() {
                     </tr>
                   </thead>
                   <tbody className="text-[#c0c9c2]">
-                    {yearlyBreakdown.map(row => (
+                    {yearlyBreakdown.slice(0, visibleRows).map(row => (
                       <tr key={row.year} className="border-b border-white/5 hover:bg-white/[0.02]">
                         <td className="py-3 text-[#dce5df]">Year {row.year}</td>
                         <td className="py-3 text-right">{fmtINR(row.withdrawn)}</td>
@@ -213,6 +214,14 @@ export default function SWPCalculatorPage() {
                     ))}
                   </tbody>
                 </table>
+                {visibleRows < yearlyBreakdown.length && (
+                  <button
+                    onClick={() => setVisibleRows(v => Math.min(v + 10, yearlyBreakdown.length))}
+                    className="w-full py-3 mt-3 text-sm font-bold text-[#44f593] hover:bg-[#44f593]/5 rounded-xl transition-colors"
+                  >
+                    Load More ({yearlyBreakdown.length - visibleRows} remaining)
+                  </button>
+                )}
               </div>
             )}
           </div>

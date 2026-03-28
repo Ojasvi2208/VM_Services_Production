@@ -79,6 +79,7 @@ export default function SIPCalculatorPage() {
   const [rate, setRate] = useState(12.5);
   const [years, setYears] = useState(15);
   const [tableOpen, setTableOpen] = useState(false);
+  const [visibleRows, setVisibleRows] = useState(10);
 
   const maturity = useMemo(() => calcSIP(monthly, rate, years), [monthly, rate, years]);
   const totalInvested = monthly * years * 12;
@@ -184,7 +185,7 @@ export default function SIPCalculatorPage() {
                     </tr>
                   </thead>
                   <tbody className="text-[#c0c9c2]">
-                    {yearRows.map(row => (
+                    {yearRows.slice(0, visibleRows).map(row => (
                       <tr key={row.year} className="border-b border-white/5 hover:bg-white/[0.02]">
                         <td className="py-3 text-[#dce5df]">Year {row.year}</td>
                         <td className="py-3 text-right">{fmtINR(row.invested)}</td>
@@ -194,6 +195,14 @@ export default function SIPCalculatorPage() {
                     ))}
                   </tbody>
                 </table>
+                {visibleRows < yearRows.length && (
+                  <button
+                    onClick={() => setVisibleRows(v => Math.min(v + 10, yearRows.length))}
+                    className="w-full py-3 mt-3 text-sm font-bold text-[#44f593] hover:bg-[#44f593]/5 rounded-xl transition-colors"
+                  >
+                    Load More ({yearRows.length - visibleRows} remaining)
+                  </button>
+                )}
               </div>
             )}
           </div>
