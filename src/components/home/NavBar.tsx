@@ -63,6 +63,7 @@ const NAV_LINKS = [
   { label: 'Discover', href: '/funds/search',  disabled: false },
   { label: 'Portfolio',href: '/portfolio',     disabled: false },
   { label: 'Goals',    href: '/goals',         disabled: false },
+  { label: 'Planner',  href: '/calculators',   disabled: false },
   { label: 'News',     href: '/news',          disabled: false },
   { label: 'Screener', href: '/screener',      disabled: true  },
 ] satisfies { label: string; href: string; disabled: boolean }[];
