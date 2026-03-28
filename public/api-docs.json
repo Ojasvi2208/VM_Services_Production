@@ -1,0 +1,311 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Vijay Malik Financial Services — API",
+    "version": "1.0.0",
+    "description": "REST API for VMFS platform. AMFI-registered Mutual Fund Distributor (ARN-317605). All data is for informational purposes only — not investment advice.",
+    "contact": {
+      "name": "Vijay Malik Financial Services",
+      "email": "info@vmfinancialservices.com",
+      "url": "https://www.vmfinancialservices.com"
+    }
+  },
+  "servers": [
+    { "url": "https://www.vmfinancialservices.com", "description": "Production" },
+    { "url": "http://localhost:3000", "description": "Local Development" }
+  ],
+  "tags": [
+    { "name": "Market Data", "description": "Live indices, charts, commodities" },
+    { "name": "Funds", "description": "Mutual fund search, detail, autocomplete" },
+    { "name": "Portfolio", "description": "Portfolio tracking, holdings, metrics" },
+    { "name": "Goals", "description": "Goal planning and tracking" },
+    { "name": "Auth", "description": "Authentication and session management" },
+    { "name": "News", "description": "Aggregated financial news" },
+    { "name": "Premium", "description": "Pro subscription management" },
+    { "name": "Notifications", "description": "Push notification management" }
+  ],
+  "paths": {
+    "/api/market-data": {
+      "get": {
+        "tags": ["Market Data"],
+        "summary": "Live index prices",
+        "description": "Fetch live prices for Indian market indices (NSE/BSE). Data sourced via Cloudflare relay → Yahoo Finance. Cached 15 minutes.",
+        "parameters": [
+          { "name": "symbols", "in": "query", "schema": { "type": "string" }, "description": "Comma-separated index symbols (e.g., NIFTY,SENSEX,BANKNIFTY)", "example": "NIFTY,SENSEX" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Index data",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" }, "data": { "type": "array", "items": { "type": "object", "properties": { "symbol": { "type": "string" }, "name": { "type": "string" }, "price": { "type": "number" }, "change": { "type": "number" }, "changePercent": { "type": "number" }, "exchange": { "type": "string" } } } }, "isMarketOpen": { "type": "boolean" }, "source": { "type": "string" } } } } }
+          }
+        }
+      }
+    },
+    "/api/market-data/chart": {
+      "get": {
+        "tags": ["Market Data"],
+        "summary": "Historical chart data + technicals",
+        "description": "OHLCV candles, DMA (50/100/200), RSI(14), MACD, signals, and outlook for any index.",
+        "parameters": [
+          { "name": "symbol", "in": "query", "schema": { "type": "string", "default": "NIFTY" }, "description": "Index symbol" },
+          { "name": "range", "in": "query", "schema": { "type": "string", "enum": ["1D", "1W", "1M", "3M", "6M", "1Y"], "default": "1Y" }, "description": "Time range" }
+        ],
+        "responses": {
+          "200": { "description": "Chart data with candles, technicals, signals, and outlook" }
+        }
+      }
+    },
+    "/api/market-data/gift-nifty": {
+      "get": {
+        "tags": ["Market Data"],
+        "summary": "Gift Nifty / SGX Nifty pre-market indicator",
+        "responses": { "200": { "description": "Gift Nifty price and implied open" } }
+      }
+    },
+    "/api/commodities": {
+      "get": {
+        "tags": ["Market Data"],
+        "summary": "Commodity prices (11 commodities)",
+        "description": "WTI, Brent, Gold, Silver, Platinum, Natural Gas, Copper, Aluminum, Wheat, Cotton, Sugar. Prices in USD and INR.",
+        "responses": { "200": { "description": "Commodity data with USD/INR conversion" } }
+      }
+    },
+    "/api/currency-rates": {
+      "get": {
+        "tags": ["Market Data"],
+        "summary": "USD/INR exchange rate",
+        "responses": { "200": { "description": "Current exchange rate" } }
+      }
+    },
+    "/api/corporate-actions": {
+      "get": {
+        "tags": ["Market Data"],
+        "summary": "Upcoming dividends and earnings for top 30 NSE stocks",
+        "responses": { "200": { "description": "Corporate actions data" } }
+      }
+    },
+    "/api/stocks/gainers-losers": {
+      "get": {
+        "tags": ["Market Data"],
+        "summary": "Top stock gainers and losers from NSE",
+        "responses": { "200": { "description": "Gainers and losers arrays" } }
+      }
+    },
+    "/api/market-state": {
+      "get": {
+        "tags": ["Market Data"],
+        "summary": "FII/DII flow, index movers, Nifty constituents",
+        "parameters": [
+          { "name": "key", "in": "query", "schema": { "type": "string", "enum": ["all", "fii_dii", "index_movers_nifty", "nifty_constituents"] }, "description": "Data key to fetch" }
+        ],
+        "responses": { "200": { "description": "Market state data from scraper" } }
+      }
+    },
+    "/api/fuel-prices": {
+      "get": {
+        "tags": ["Market Data"],
+        "summary": "State-wise fuel prices (petrol, diesel, CNG)",
+        "parameters": [
+          { "name": "state", "in": "query", "schema": { "type": "string" }, "description": "State name" },
+          { "name": "city", "in": "query", "schema": { "type": "string" }, "description": "City name (optional)" }
+        ],
+        "responses": { "200": { "description": "Fuel price data" } }
+      }
+    },
+    "/api/funds/search": {
+      "get": {
+        "tags": ["Funds"],
+        "summary": "Search 50,000+ mutual fund schemes",
+        "description": "Full-text search on mv_unified_search materialized view. Sub-50ms response. Supports category, AMC, and text filters.",
+        "parameters": [
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Search query (fund name, AMC, category)" },
+          { "name": "amc", "in": "query", "schema": { "type": "string" }, "description": "Filter by AMC (e.g., HDFC, SBI, ICICI)" },
+          { "name": "category", "in": "query", "schema": { "type": "string" }, "description": "Filter by category (e.g., Equity, Debt, Hybrid)" },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "pageSize", "in": "query", "schema": { "type": "integer", "default": 10, "maximum": 50 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results with variants",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" }, "funds": { "type": "array" }, "total": { "type": "integer" }, "page": { "type": "integer" }, "totalPages": { "type": "integer" } } } } }
+          }
+        }
+      }
+    },
+    "/api/funds/{schemeCode}": {
+      "get": {
+        "tags": ["Funds"],
+        "summary": "Fund detail by scheme code",
+        "description": "Returns fund info, NAV, returns (1Y/3Y/5Y), Sharpe ratio, volatility, and variant list.",
+        "parameters": [
+          { "name": "schemeCode", "in": "path", "required": true, "schema": { "type": "string" }, "description": "AMFI scheme code" }
+        ],
+        "responses": { "200": { "description": "Fund detail with returns and variants" } }
+      }
+    },
+    "/api/funds/autocomplete": {
+      "get": {
+        "tags": ["Funds"],
+        "summary": "Fund name autocomplete",
+        "parameters": [
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Search prefix (min 2 chars)" }
+        ],
+        "responses": { "200": { "description": "Autocomplete suggestions" } }
+      }
+    },
+    "/api/nfo/live": {
+      "get": {
+        "tags": ["Funds"],
+        "summary": "Recently launched NFOs (New Fund Offers)",
+        "responses": { "200": { "description": "Active NFO list from AMFI" } }
+      }
+    },
+    "/api/portfolio/summary": {
+      "get": {
+        "tags": ["Portfolio"],
+        "summary": "Portfolio value summary",
+        "description": "Total invested, current value, returns, holdings count. Requires authentication.",
+        "security": [{ "sessionCookie": [] }],
+        "responses": {
+          "200": { "description": "Portfolio summary" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/api/portfolio/holdings": {
+      "get": {
+        "tags": ["Portfolio"],
+        "summary": "Portfolio holdings list",
+        "security": [{ "sessionCookie": [] }],
+        "responses": { "200": { "description": "Holdings with NAV, returns, allocation" } }
+      }
+    },
+    "/api/portfolio/metrics": {
+      "get": {
+        "tags": ["Portfolio"],
+        "summary": "Portfolio risk metrics (Sharpe, volatility, CAGR)",
+        "security": [{ "sessionCookie": [] }],
+        "responses": { "200": { "description": "Weighted average metrics across holdings" } }
+      }
+    },
+    "/api/portfolio/import-cas": {
+      "post": {
+        "tags": ["Portfolio"],
+        "summary": "Import CAS (Consolidated Account Statement)",
+        "description": "Upload CAMS/KFintech CAS PDF to import holdings. Two-step: upload → confirm.",
+        "security": [{ "sessionCookie": [] }],
+        "requestBody": { "content": { "multipart/form-data": { "schema": { "type": "object", "properties": { "file": { "type": "string", "format": "binary" }, "password": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "Import result with parsed holdings" } }
+      }
+    },
+    "/api/goals": {
+      "get": {
+        "tags": ["Goals"],
+        "summary": "List user goals with summary",
+        "security": [{ "sessionCookie": [] }],
+        "responses": { "200": { "description": "Goals array + summary KPIs" } }
+      },
+      "post": {
+        "tags": ["Goals"],
+        "summary": "Create a new goal",
+        "security": [{ "sessionCookie": [] }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "name": { "type": "string" }, "targetAmount": { "type": "number" }, "targetDate": { "type": "string" }, "monthlySip": { "type": "number" }, "criticality": { "type": "string", "enum": ["critical", "important", "normal"] } } } } } },
+        "responses": { "201": { "description": "Goal created" } }
+      }
+    },
+    "/api/goals/{goalId}": {
+      "get": {
+        "tags": ["Goals"],
+        "summary": "Goal detail with holdings and projections",
+        "security": [{ "sessionCookie": [] }],
+        "parameters": [{ "name": "goalId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Goal detail" } }
+      },
+      "delete": {
+        "tags": ["Goals"],
+        "summary": "Delete a goal",
+        "security": [{ "sessionCookie": [] }],
+        "parameters": [{ "name": "goalId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Goal deleted" } }
+      }
+    },
+    "/api/goals/evaluations": {
+      "get": {
+        "tags": ["Goals"],
+        "summary": "Goal evaluations (SEBI compliance hold — returns empty)",
+        "description": "Advisory evaluations disabled pending SEBI IA registration. Returns empty flags array.",
+        "security": [{ "sessionCookie": [] }],
+        "responses": { "200": { "description": "Empty evaluations (compliance hold)" } }
+      }
+    },
+    "/api/auth/signin": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Sign in with email and password",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "email": { "type": "string" }, "password": { "type": "string" } }, "required": ["email", "password"] } } } },
+        "responses": {
+          "200": { "description": "Login successful, session cookie set" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/api/auth/signup": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Create a new account",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "email": { "type": "string" }, "password": { "type": "string" }, "fullName": { "type": "string" }, "phone": { "type": "string" } }, "required": ["email", "password", "fullName"] } } } },
+        "responses": { "200": { "description": "Account created, session cookie set" } }
+      }
+    },
+    "/api/auth/session": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Check current session",
+        "description": "Returns authenticated user info if session cookie is valid.",
+        "responses": {
+          "200": { "description": "Session info with user profile" }
+        }
+      }
+    },
+    "/api/news/aggregated": {
+      "get": {
+        "tags": ["News"],
+        "summary": "Aggregated financial news from multiple sources",
+        "description": "Google News RSS + ET, Livemint, NDTV, CNBC feeds. Cached 2 hours.",
+        "parameters": [
+          { "name": "category", "in": "query", "schema": { "type": "string" }, "description": "News category filter" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": { "200": { "description": "News articles array" } }
+      }
+    },
+    "/api/premium/claim": {
+      "post": {
+        "tags": ["Premium"],
+        "summary": "Submit Pro subscription payment claim",
+        "description": "Submit UPI transaction ID for manual verification. Pro plan: ₹99/year.",
+        "security": [{ "sessionCookie": [] }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "transactionId": { "type": "string" }, "upiRef": { "type": "string" }, "amount": { "type": "number" }, "plan": { "type": "string" } }, "required": ["transactionId"] } } } },
+        "responses": { "200": { "description": "Claim submitted for review" } }
+      }
+    },
+    "/api/notifications/recent": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Recent notifications for authenticated user",
+        "security": [{ "sessionCookie": [] }],
+        "responses": { "200": { "description": "Notifications array with unread count" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "vmfs_session",
+        "description": "Session cookie set after successful signin/signup"
+      }
+    }
+  }
+}
