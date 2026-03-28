@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
@@ -9,9 +9,9 @@ import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
 // ─── Types ───────────────────────────────────────────────────
 interface YearRow {
   year: number;
-  invested: number;
-  interest: number;
-  maturity: number;
+  source: number;
+  target: number;
+  combined: number;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -25,23 +25,52 @@ function fmtINRFull(n: number): string {
   return `₹ ${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 }
 
-// SIP formula: FV = P * [((1+r)^n - 1) / r] * (1+r)
-function calcSIP(monthlyAmt: number, ratePA: number, years: number): number {
-  const n = years * 12;
-  const r = ratePA / 100 / 12;
-  if (r === 0) return monthlyAmt * n;
-  return monthlyAmt * (((Math.pow(1 + r, n) - 1) / r) * (1 + r));
-}
+// ─── STP Simulation ─────────────────────────────────────────
+function simulateSTP(
+  lumpSum: number,
+  monthlyTransfer: number,
+  sourceReturn: number,
+  targetReturn: number,
+): { months: number; finalTarget: number; finalSource: number; totalReturns: number; yearlyBreakdown: YearRow[] } {
+  let source = lumpSum;
+  let target = 0;
+  const srcRate = sourceReturn / 100 / 12;
+  const tgtRate = targetReturn / 100 / 12;
+  const yearlyBreakdown: YearRow[] = [];
+  let months = 0;
 
-function buildYearlyTable(monthlyAmt: number, ratePA: number, years: number): YearRow[] {
-  const rows: YearRow[] = [];
-  for (let y = 1; y <= years; y++) {
-    const invested = monthlyAmt * y * 12;
-    const maturity = calcSIP(monthlyAmt, ratePA, y);
-    const interest = maturity - invested;
-    rows.push({ year: y, invested, interest, maturity });
+  while (source > 1 && months < 480) {
+    // Source grows
+    source = source * (1 + srcRate);
+
+    // Transfer
+    const transfer = Math.min(monthlyTransfer, source);
+    source -= transfer;
+
+    // Target grows + receives transfer
+    target = (target + transfer) * (1 + tgtRate);
+    months++;
+
+    if (months % 12 === 0 || source <= 1) {
+      yearlyBreakdown.push({
+        year: Math.ceil(months / 12),
+        source: Math.max(0, source),
+        target,
+        combined: Math.max(0, source) + target,
+      });
+    }
   }
-  return rows;
+
+  // Clean up dust
+  if (source < 1) source = 0;
+
+  return {
+    months,
+    finalTarget: target,
+    finalSource: source,
+    totalReturns: (source + target) - lumpSum,
+    yearlyBreakdown,
+  };
 }
 
 // ─── Donut Chart ──────────────────────────────────────────────
@@ -66,7 +95,7 @@ function DonutChart({ invested, returns: ret }: { invested: number; returns: num
           strokeDashoffset="0"
         />
         <circle cx="50" cy="50" fill="transparent" r={R}
-          stroke="#3e4c44"
+          stroke="#06b6d4"
           strokeDasharray={`${invDash} ${circ - invDash}`}
           strokeLinecap="round"
           strokeWidth="8"
@@ -135,19 +164,20 @@ const CALC_NAV = [
 ];
 
 // ─── Page ─────────────────────────────────────────────────────
-export default function SIPCalculatorPage() {
-  const [monthly, setMonthly]   = useState(25000);
-  const [rate, setRate]         = useState(12.5);
-  const [years, setYears]       = useState(15);
-  const [tableOpen, setTableOpen] = useState(false);
+export default function STPCalculatorPage() {
+  const [lumpSum, setLumpSum]             = useState(1000000);
+  const [monthlyTransfer, setMonthly]     = useState(25000);
+  const [sourceReturn, setSourceReturn]   = useState(6);
+  const [targetReturn, setTargetReturn]   = useState(12);
+  const [tableOpen, setTableOpen]         = useState(false);
 
-  const maturity   = useMemo(() => calcSIP(monthly, rate, years), [monthly, rate, years]);
-  const totalInvested = monthly * years * 12;
-  const totalReturns  = maturity - totalInvested;
-  const multiplier    = totalInvested > 0 ? maturity / totalInvested : 1;
-  const yieldPct      = totalInvested > 0 ? (totalReturns / totalInvested) * 100 : 0;
+  const result = useMemo(
+    () => simulateSTP(lumpSum, monthlyTransfer, sourceReturn, targetReturn),
+    [lumpSum, monthlyTransfer, sourceReturn, targetReturn],
+  );
 
-  const yearRows = useMemo(() => buildYearlyTable(monthly, rate, years), [monthly, rate, years]);
+  const { months, finalTarget, finalSource, totalReturns, yearlyBreakdown } = result;
+  const finalValue = finalSource + finalTarget;
 
   return (
     <div className="bg-[#060D0A] min-h-screen flex flex-col">
@@ -171,7 +201,7 @@ export default function SIPCalculatorPage() {
                 href={item.href}
                 className={[
                   'flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium',
-                  item.href === '/calculators/sip'
+                  item.href === '/calculators/stp'
                     ? 'bg-[#44f593]/10 text-[#44f593] border border-[#44f593]/20'
                     : 'text-[#c0c9c2] hover:bg-white/5',
                 ].join(' ')}
@@ -201,46 +231,57 @@ export default function SIPCalculatorPage() {
           <section className="flex-[3] space-y-5">
             <header>
               <h1 className="font-display text-4xl font-bold tracking-tight text-glow mb-2 text-[#dce5df]">
-                Systematic Investment Plan
+                STP Planner
               </h1>
               <p className="text-[#c0c9c2] max-w-xl text-sm">
-                Project your future wealth by defining recurring investment parameters. Adjust variables to simulate long-term compounding effects.
+                Systematic Transfer Plan — simulate gradual transfer from debt to equity fund
               </p>
             </header>
 
             <div className="space-y-4">
               <SliderCard
-                label="Monthly Investment"
-                value={monthly}
-                displayValue={`₹ ${monthly.toLocaleString('en-IN')}`}
-                min={500}
-                max={100000}
-                step={500}
-                minLabel="₹ 500"
-                maxLabel="₹ 1,00,000"
+                label="Lump Sum Amount"
+                value={lumpSum}
+                displayValue={`₹ ${lumpSum.toLocaleString('en-IN')}`}
+                min={100000}
+                max={50000000}
+                step={50000}
+                minLabel="₹ 1,00,000"
+                maxLabel="₹ 5,00,00,000"
+                onChange={setLumpSum}
+              />
+              <SliderCard
+                label="Monthly Transfer"
+                value={monthlyTransfer}
+                displayValue={`₹ ${monthlyTransfer.toLocaleString('en-IN')}`}
+                min={5000}
+                max={500000}
+                step={1000}
+                minLabel="₹ 5,000"
+                maxLabel="₹ 5,00,000"
                 onChange={setMonthly}
               />
               <SliderCard
-                label="Expected Return Rate (p.a)"
-                value={rate}
-                displayValue={`${rate.toFixed(1)}%`}
-                min={1}
-                max={30}
+                label="Source Fund Return (Debt/Liquid)"
+                value={sourceReturn}
+                displayValue={`${sourceReturn.toFixed(1)}%`}
+                min={4}
+                max={10}
                 step={0.5}
-                minLabel="1 %"
-                maxLabel="30 %"
-                onChange={setRate}
+                minLabel="4 %"
+                maxLabel="10 %"
+                onChange={setSourceReturn}
               />
               <SliderCard
-                label="Time Period"
-                value={years}
-                displayValue={`${years} Years`}
-                min={1}
-                max={40}
-                step={1}
-                minLabel="1 Year"
-                maxLabel="40 Years"
-                onChange={setYears}
+                label="Target Fund Return (Equity)"
+                value={targetReturn}
+                displayValue={`${targetReturn.toFixed(1)}%`}
+                min={8}
+                max={13}
+                step={0.5}
+                minLabel="8 %"
+                maxLabel="13 %"
+                onChange={setTargetReturn}
               />
             </div>
 
@@ -250,7 +291,7 @@ export default function SIPCalculatorPage() {
                 onClick={() => setTableOpen(v => !v)}
                 className="w-full flex justify-between items-center p-5 text-left hover:bg-white/[0.02] transition-all"
               >
-                <span className="font-display font-bold text-[#dce5df]">Annual Maturity Projection</span>
+                <span className="font-display font-bold text-[#dce5df]">Annual Transfer Breakdown</span>
                 <svg
                   width="20" height="20" fill="none" viewBox="0 0 24 24"
                   stroke="#44f593" strokeWidth="2"
@@ -265,18 +306,18 @@ export default function SIPCalculatorPage() {
                     <thead>
                       <tr className="text-[#859586] border-b border-white/5">
                         <th className="py-3 font-medium uppercase tracking-tight text-xs">Year</th>
-                        <th className="py-3 font-medium uppercase tracking-tight text-xs text-right">Investment</th>
-                        <th className="py-3 font-medium uppercase tracking-tight text-xs text-right">Interest</th>
-                        <th className="py-3 font-medium uppercase tracking-tight text-xs text-right">Maturity</th>
+                        <th className="py-3 font-medium uppercase tracking-tight text-xs text-right">Source Balance</th>
+                        <th className="py-3 font-medium uppercase tracking-tight text-xs text-right">Target Balance</th>
+                        <th className="py-3 font-medium uppercase tracking-tight text-xs text-right">Combined Value</th>
                       </tr>
                     </thead>
                     <tbody className="text-[#c0c9c2]">
-                      {yearRows.map(row => (
+                      {yearlyBreakdown.map(row => (
                         <tr key={row.year} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                           <td className="py-3 text-[#dce5df]">Year {row.year}</td>
-                          <td className="py-3 text-right">{fmtINRFull(row.invested)}</td>
-                          <td className="py-3 text-right">{fmtINRFull(row.interest)}</td>
-                          <td className="py-3 text-right text-[#44f593]">{fmtINRFull(row.maturity)}</td>
+                          <td className="py-3 text-right text-[#06b6d4]">{fmtINRFull(row.source)}</td>
+                          <td className="py-3 text-right text-[#44f593]">{fmtINRFull(row.target)}</td>
+                          <td className="py-3 text-right">{fmtINRFull(row.combined)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -294,19 +335,19 @@ export default function SIPCalculatorPage() {
               <h3 className="font-display font-bold text-center mb-6 uppercase tracking-widest text-xs text-[#859586]">
                 Wealth Distribution
               </h3>
-              <DonutChart invested={totalInvested} returns={totalReturns} />
+              <DonutChart invested={lumpSum} returns={totalReturns} />
               <div className="w-full space-y-3">
                 <div className="flex justify-between items-center text-sm">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-[#3e4c44]" />
-                    <span className="text-[#c0c9c2]">Invested Amount</span>
+                    <div className="w-2 h-2 rounded-full bg-[#06b6d4]" />
+                    <span className="text-[#c0c9c2]">Invested (Lump Sum)</span>
                   </div>
-                  <span className="font-mono text-[#dce5df]">{fmtINRFull(totalInvested)}</span>
+                  <span className="font-mono text-[#dce5df]">{fmtINRFull(lumpSum)}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-[#44f593]" />
-                    <span className="text-[#c0c9c2]">Estimated Returns</span>
+                    <span className="text-[#c0c9c2]">Total Returns Earned</span>
                   </div>
                   <span className="font-mono text-[#44f593]">{fmtINRFull(totalReturns)}</span>
                 </div>
@@ -315,30 +356,29 @@ export default function SIPCalculatorPage() {
 
             {/* KPI Boxes */}
             <div className="space-y-3">
-              <div className="bg-[#161d1a] p-5 rounded-2xl border-l-4 border-[#44f593] shadow-lg">
+              <div className="bg-[#161d1a] p-5 rounded-2xl border-l-4 border-[#06b6d4] shadow-lg">
                 <span className="text-xs font-bold uppercase tracking-widest text-[#859586]">
-                  Projected Maturity Value
+                  Transfer Duration
                 </span>
                 <div className="flex items-baseline gap-2 mt-2">
-                  <span className="font-mono text-3xl font-bold text-white">{fmtINR(maturity)}</span>
+                  <span className="font-mono text-3xl font-bold text-white">{months}</span>
+                  <span className="font-display font-bold text-[#06b6d4]">months</span>
                 </div>
               </div>
-              <div className="bg-[#161d1a] p-5 rounded-2xl border-l-4 border-[#bacbbf] shadow-lg">
+              <div className="bg-[#161d1a] p-5 rounded-2xl border-l-4 border-[#44f593] shadow-lg">
                 <span className="text-xs font-bold uppercase tracking-widest text-[#859586]">
-                  Wealth Multiplier
+                  Final Value (Target Fund)
                 </span>
                 <div className="flex items-baseline gap-2 mt-2">
-                  <span className="font-mono text-3xl font-bold text-white">{multiplier.toFixed(2)}</span>
-                  <span className="font-display font-bold text-[#bacbbf]">X</span>
+                  <span className="font-mono text-3xl font-bold text-white">{fmtINR(finalTarget)}</span>
                 </div>
               </div>
               <div className="bg-[#161d1a] p-5 rounded-2xl border-l-4 border-[#3c4a3e] shadow-lg">
                 <span className="text-xs font-bold uppercase tracking-widest text-[#859586]">
-                  Realized Yield Rate
+                  Total Returns Earned
                 </span>
                 <div className="flex items-baseline gap-2 mt-2">
-                  <span className="font-mono text-3xl font-bold text-white">{yieldPct.toFixed(1)}</span>
-                  <span className="font-display font-bold text-[#3c4a3e] text-xl">%</span>
+                  <span className="font-mono text-3xl font-bold text-white">{fmtINR(totalReturns)}</span>
                 </div>
               </div>
             </div>
@@ -348,7 +388,7 @@ export default function SIPCalculatorPage() {
               href="/funds/search"
               className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#44f593]/80 to-[#00d87a] font-display font-black text-[#001f10] tracking-tight shadow-xl shadow-[#44f593]/10 hover:shadow-[#44f593]/20 transition-all flex items-center justify-center gap-2 group text-base"
             >
-              EXECUTE INVESTMENT STRATEGY
+              EXPLORE FUNDS FOR STP
               <svg
                 width="18" height="18" fill="none" viewBox="0 0 24 24"
                 stroke="currentColor" strokeWidth="2.5"
@@ -360,7 +400,7 @@ export default function SIPCalculatorPage() {
 
             {/* Disclaimer */}
             <p className="text-xs text-[#859586] leading-relaxed font-mono">
-              Projections are for illustrative purposes only. Actual returns may vary. Mutual fund investments are subject to market risks.
+              Projections are for illustrative purposes only. Actual returns may vary. STP involves market risk on the target fund. Source fund returns are assumed constant.
             </p>
           </section>
         </div>
