@@ -530,7 +530,7 @@ export default function FundDiscoveryPage() {
                 </button>
               </div>
               {planType === 'Regular' && (
-                <span className="text-[10px] text-amber-400 font-mono">Higher expense ratio · Includes distributor commission</span>
+                <span className="text-xs text-amber-400 font-['Inter']">Higher expense ratio · Includes distributor commission</span>
               )}
             </div>
 

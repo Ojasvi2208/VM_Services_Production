@@ -52,14 +52,19 @@ export const AMC_API_MAP: Record<string, string> = {
 };
 
 export const CATEGORY_API_MAP: Record<string, string> = {
-  'Large Cap':  'Large Cap',
-  'Flexi Cap':  'Flexi Cap',
-  'Debt':       'Debt',
-  'Hybrid':     'Hybrid',
-  'Small Cap':  'Small Cap',
-  'ELSS':       'ELSS',
-  'Index':      'Index',
-  'Mid Cap':    'Mid Cap',
+  'Large Cap':    'Large Cap',
+  'Flexi Cap':    'Flexi Cap',
+  'Debt':         'Debt',
+  'Hybrid':       'Hybrid',
+  'Small Cap':    'Small Cap',
+  'ELSS':         'ELSS',
+  'Index':        'Index',
+  'Mid Cap':      'Mid Cap',
+  'Equity Funds': 'Equity',
+  'Debt Funds':   'Debt',
+  'Hybrid Funds': 'Hybrid',
+  'Index Funds':  'Index',
+  'Thematic':     'Thematic',
 };
 
 export interface AutocompleteItem {
