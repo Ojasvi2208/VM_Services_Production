@@ -295,8 +295,20 @@ export default function FundDiscoveryPage() {
     goToPage, reset,
   } = useFundSearch();
 
-  const sorted = useMemo(() => applySort(results, sortBy), [results, sortBy]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [planType, setPlanType] = useState<'Direct' | 'Regular'>('Direct');
+  const sorted = useMemo(() => {
+    let filtered = results;
+    if (planType === 'Regular') {
+      filtered = results.map((fund: any) => {
+        if (!fund.variants?.length) return fund;
+        const variant = fund.variants.find((v: any) => v.planType === 'Regular' && (v.optionType === 'Growth' || v.optionType === 'Reinvestment'));
+        if (!variant) return fund;
+        return { ...fund, schemeCode: variant.schemeCode ?? fund.schemeCode, latestNav: variant.nav ?? fund.latestNav, cagr3y: variant.cagr3y ?? fund.cagr3y, cagr5y: variant.cagr5y ?? fund.cagr5y };
+      });
+    }
+    return applySort(filtered, sortBy);
+  }, [results, sortBy, planType]);
   const [sortOpen, setSortOpen] = useState(false);
   const [amcSearch, setAmcSearch] = useState('');
   const [selectedRisk, setSelectedRisk] = useState<string | null>(null);
@@ -312,7 +324,7 @@ export default function FundDiscoveryPage() {
   }, []);
 
   const filteredAmcs = AMC_OPTIONS.filter(a => a.toLowerCase().includes(amcSearch.toLowerCase()));
-  const hasFilters = activeAmc || activeCategory || selectedRisk;
+  const hasFilters = activeAmc || activeCategory || selectedRisk || planType !== 'Direct';
 
   return (
     <div className="bg-[#060D0A] min-h-screen flex flex-col">
@@ -409,7 +421,7 @@ export default function FundDiscoveryPage() {
               {/* Clear filters */}
               {hasFilters && (
                 <button
-                  onClick={() => { reset(); setSelectedRisk(null); }}
+                  onClick={() => { reset(); setSelectedRisk(null); setPlanType('Direct'); }}
                   className="mt-7 text-[#44f593] text-sm font-semibold hover:underline w-full text-left"
                 >
                   Clear All Filters
@@ -501,6 +513,24 @@ export default function FundDiscoveryPage() {
                     </button>
                   ))}
                 </div>
+              )}
+            </div>
+
+            {/* Direct / Regular toggle */}
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-xs text-[#859586] uppercase tracking-widest font-bold">Plan:</span>
+              <div className="flex bg-[#08100d] p-1 rounded-xl">
+                <button onClick={() => setPlanType('Direct')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${planType === 'Direct' ? 'text-[#44f593] bg-[#44f593]/10' : 'text-[#859586] hover:text-[#dce5df]'}`}>
+                  Direct
+                </button>
+                <button onClick={() => setPlanType('Regular')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${planType === 'Regular' ? 'text-[#44f593] bg-[#44f593]/10' : 'text-[#859586] hover:text-[#dce5df]'}`}>
+                  Regular
+                </button>
+              </div>
+              {planType === 'Regular' && (
+                <span className="text-[10px] text-amber-400 font-mono">Higher expense ratio · Includes distributor commission</span>
               )}
             </div>
 

@@ -17,8 +17,11 @@ export interface FundResult {
   return1y?: number;
   return3y?: number;
   return5y?: number;
+  cagr3y?: number;
+  cagr5y?: number;
   expenseRatio?: number;
   sharpeRatio?: number;
+  variants?: Array<{ schemeCode?: string; planType?: string; optionType?: string; nav?: number; cagr3y?: number; cagr5y?: number }>;
 }
 
 export type SortMode = 'name' | 'cagr' | 'sharpe' | 'expense';
