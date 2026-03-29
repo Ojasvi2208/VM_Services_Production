@@ -190,15 +190,18 @@ export default function NavBar() {
         <div className="max-w-7xl mx-auto px-8 h-20 flex items-center justify-between">
 
           {/* ── Logo ─────────────────────────────────────────── */}
-          <Link href="/markets" className="flex items-center gap-2.5 group shrink-0" aria-label="VMFS home">
+          <Link href="/markets" className="flex items-center gap-2 group shrink-0 mr-8" aria-label="VMFS home">
             <ShieldIcon />
-            <span className="font-['Space_Grotesk'] font-bold tracking-tighter text-[1.125rem] text-[#00d87a]">
+            <span className="font-['Space_Grotesk'] font-bold tracking-tighter text-[1.125rem] text-[#00d87a] hidden lg:inline">
               Vijay Malik Financial Services
+            </span>
+            <span className="font-['Space_Grotesk'] font-bold tracking-tighter text-[1.125rem] text-[#00d87a] lg:hidden">
+              VMFS
             </span>
           </Link>
 
           {/* ── Center Nav (Desktop) ─────────────────────────── */}
-          <nav className="hidden md:flex items-center gap-8 font-['Space_Grotesk'] font-bold tracking-tight" aria-label="Primary navigation">
+          <nav className="hidden md:flex items-center gap-6 font-['Space_Grotesk'] font-bold tracking-tight" aria-label="Primary navigation">
             {NAV_LINKS.map(({ label, href, disabled }) => {
               const active = !disabled && isActive(href);
               if (disabled) {

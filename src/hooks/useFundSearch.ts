@@ -102,7 +102,14 @@ export function useFundSearch() {
   const fetchResults = useCallback(async (
     q: string, amc: string, category: string, page: number
   ) => {
-    if (!q && !amc && !category) return;
+    // All filters cleared → reset to default state
+    if (!q && !amc && !category) {
+      setResults([]);
+      setSearched(false);
+      setTotal(0);
+      setTotalPages(0);
+      return;
+    }
 
     setLoading(true);
     setSearched(true);
