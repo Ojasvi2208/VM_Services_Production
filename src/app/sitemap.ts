@@ -31,7 +31,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE_URL}/compare`,           lastModified: now, changeFrequency: 'daily',   priority: 0.7 },
     { url: `${BASE_URL}/screener`,          lastModified: now, changeFrequency: 'daily',   priority: 0.7 },
     { url: `${BASE_URL}/blog`,              lastModified: now, changeFrequency: 'weekly',  priority: 0.6 },
+    { url: `${BASE_URL}/learn`,              lastModified: now, changeFrequency: 'weekly',  priority: 0.9 },
+    { url: `${BASE_URL}/calculators`,        lastModified: now, changeFrequency: 'monthly', priority: 0.8 },
+    { url: `${BASE_URL}/calculators/swp`,    lastModified: now, changeFrequency: 'monthly', priority: 0.8 },
+    { url: `${BASE_URL}/calculators/stp`,    lastModified: now, changeFrequency: 'monthly', priority: 0.8 },
   ];
+
+  // ── Learn article pages ────────────────────────────────────
+  const LEARN_SLUGS = [
+    'best-elss-tax-saving-funds',
+    'swp-calculator-guide',
+    'direct-vs-regular-mutual-funds',
+    'ltcg-tax-on-mutual-funds',
+    'what-is-stp-in-mutual-funds',
+  ];
+  const learnPages: MetadataRoute.Sitemap = LEARN_SLUGS.map(slug => ({
+    url: `${BASE_URL}/learn/${slug}`,
+    lastModified: now,
+    changeFrequency: 'weekly' as const,
+    priority: 0.85,
+  }));
 
   // ── Index detail pages ─────────────────────────────────────
   const indexPages: MetadataRoute.Sitemap = INDEX_SYMBOLS.map(symbol => ({
@@ -61,5 +80,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // DB unavailable during build — skip dynamic fund pages
   }
 
-  return [...staticPages, ...indexPages, ...fundPages];
+  return [...staticPages, ...learnPages, ...indexPages, ...fundPages];
 }

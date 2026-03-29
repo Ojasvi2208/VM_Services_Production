@@ -11,6 +11,7 @@ const PLATFORM_LINKS = [
   { label: 'Portfolio', href: '/portfolio',    disabled: false },
   { label: 'Goals',     href: '/goals',        disabled: false },
   { label: 'News',      href: '/news',         disabled: false },
+  { label: 'Learn',     href: '/learn',        disabled: false },
   { label: 'Screener',  href: '/screener',     disabled: true  },
 ];
 
