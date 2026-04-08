@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
+import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
 import PartnerRedirectModal from '@/components/PartnerRedirectModal';
 
 type Partner = {
@@ -149,6 +150,7 @@ export default function PartnersPage() {
           </p>
         </div>
 
+        <ComplianceDisclaimer variant="general" className="mt-8" />
       </main>
 
       <SiteFooter />

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
+import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
 
 const products = {
   'mutual-funds': {
@@ -222,6 +223,7 @@ export default function ProductsPage() {
           </p>
         </div>
 
+        <ComplianceDisclaimer variant="general" className="mt-8" />
       </main>
 
       <SiteFooter />

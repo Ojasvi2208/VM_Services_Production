@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
+import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
 import { useFundSearch, PAGE_SIZE } from '@/hooks/useFundSearch';
 import type { FundResult, SortMode } from '@/hooks/useFundSearch';
 
@@ -639,6 +640,7 @@ export default function FundDiscoveryPage() {
             <DefaultFundGrid />
           )}
         </section>
+        <ComplianceDisclaimer variant="fund" className="mt-8" />
       </main>
 
       <SiteFooter />

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
+import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
@@ -195,6 +196,7 @@ export default function AboutPage() {
           </div>
         </section>
 
+        <ComplianceDisclaimer variant="general" className="mt-8" />
       </main>
 
       <SiteFooter />

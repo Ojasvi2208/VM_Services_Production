@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
+import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', subject: 'general', message: '' });
@@ -192,6 +193,7 @@ export default function ContactPage() {
             </div>
           </div>
         </div>
+        <ComplianceDisclaimer variant="general" className="mt-8" />
       </main>
 
       <SiteFooter />
