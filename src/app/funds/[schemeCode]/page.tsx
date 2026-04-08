@@ -41,6 +41,14 @@ interface FundData {
     maxDrawdown?: number;
     sharpeRatio1y?: number;
     sortinoRatio1y?: number;
+    rollingReturn1yAvg?: number;
+    rollingReturn1yMin?: number;
+    rollingReturn1yMax?: number;
+    rollingReturn1yMedian?: number;
+    rollingReturn3yAvg?: number;
+    rollingReturn3yMin?: number;
+    rollingReturn3yMax?: number;
+    rollingReturn3yMedian?: number;
   } | null;
   navHistory: Array<{ date: string; nav: number }>;
   managers: Array<{ name: string; isCurrent: boolean; tenure?: number }>;
@@ -323,6 +331,57 @@ export default function FundDetailPage() {
                 </div>
               ))}
             </section>
+
+            {/* [3b] Rolling Returns + Risk Deep Dive */}
+            {ret && (ret.rollingReturn1yAvg != null || ret.maxDrawdown != null || ret.sortinoRatio1y != null) && (
+              <section className="glass-card p-5 rounded-2xl">
+                <h3 className="text-xs uppercase tracking-widest text-[#859586] font-bold mb-4">Risk & Rolling Returns</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {ret.rollingReturn1yAvg != null && (
+                    <div className="bg-[#08100d] p-3 rounded-xl">
+                      <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">1Y Rolling Avg</p>
+                      <p className="font-mono text-base font-medium text-[#dce5df]">{fmtPct(ret.rollingReturn1yAvg)}</p>
+                    </div>
+                  )}
+                  {ret.rollingReturn1yMin != null && (
+                    <div className="bg-[#08100d] p-3 rounded-xl">
+                      <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">1Y Rolling Min</p>
+                      <p className="font-mono text-base font-medium text-[#ffb4ab]">{fmtPct(ret.rollingReturn1yMin)}</p>
+                    </div>
+                  )}
+                  {ret.rollingReturn1yMax != null && (
+                    <div className="bg-[#08100d] p-3 rounded-xl">
+                      <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">1Y Rolling Max</p>
+                      <p className="font-mono text-base font-medium text-[#44f593]">{fmtPct(ret.rollingReturn1yMax)}</p>
+                    </div>
+                  )}
+                  {ret.maxDrawdown != null && (
+                    <div className="bg-[#08100d] p-3 rounded-xl">
+                      <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">Max Drawdown</p>
+                      <p className="font-mono text-base font-medium text-[#ffb4ab]">{fmtPct(ret.maxDrawdown)}</p>
+                    </div>
+                  )}
+                  {ret.sortinoRatio1y != null && (
+                    <div className="bg-[#08100d] p-3 rounded-xl">
+                      <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">Sortino Ratio</p>
+                      <p className="font-mono text-base font-medium text-[#dce5df]">{fmtNum(ret.sortinoRatio1y)}</p>
+                    </div>
+                  )}
+                  {ret.rollingReturn3yAvg != null && (
+                    <div className="bg-[#08100d] p-3 rounded-xl">
+                      <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">3Y Rolling Avg</p>
+                      <p className="font-mono text-base font-medium text-[#dce5df]">{fmtPct(ret.rollingReturn3yAvg)}</p>
+                    </div>
+                  )}
+                  {ret.rollingReturn1yMedian != null && (
+                    <div className="bg-[#08100d] p-3 rounded-xl">
+                      <p className="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">1Y Rolling Median</p>
+                      <p className="font-mono text-base font-medium text-[#dce5df]">{fmtPct(ret.rollingReturn1yMedian)}</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
             {/* [4] Top Holdings */}
             <section className="glass-card overflow-hidden rounded-2xl">

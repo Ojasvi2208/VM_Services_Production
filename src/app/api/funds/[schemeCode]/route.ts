@@ -76,6 +76,16 @@ export async function GET(
         cagr_since_inception as "cagrSinceInception",
         volatility_1y as "volatility1y",
         sharpe_ratio_1y as "sharpeRatio1y",
+        rolling_return_1y_avg as "rollingReturn1yAvg",
+        rolling_return_1y_min as "rollingReturn1yMin",
+        rolling_return_1y_max as "rollingReturn1yMax",
+        rolling_return_1y_median as "rollingReturn1yMedian",
+        rolling_return_3y_avg as "rollingReturn3yAvg",
+        rolling_return_3y_min as "rollingReturn3yMin",
+        rolling_return_3y_max as "rollingReturn3yMax",
+        rolling_return_3y_median as "rollingReturn3yMedian",
+        sortino_ratio_1y as "sortinoRatio1y",
+        max_drawdown as "maxDrawdown",
         updated_at as "updatedAt"
       FROM fund_returns
       WHERE scheme_code = $1`,
