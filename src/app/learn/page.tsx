@@ -59,13 +59,105 @@ const ARTICLES = [
     readTime: '6 min read',
     color: '#a855f7',
   },
+  {
+    slug: 'best-mutual-funds-to-invest',
+    title: 'Best Mutual Funds to Invest in 2026 — Top Picks Across Categories',
+    description: 'Data-driven analysis of the best mutual funds across large cap, mid cap, small cap, and flexi cap categories. Evaluate funds using CAGR, Sharpe ratio, and expense ratio.',
+    category: 'Fund Picks',
+    icon: 'workspace_premium',
+    readTime: '10 min read',
+    color: '#44f593',
+  },
+  {
+    slug: 'sip-calculator-guide',
+    title: 'SIP Calculator — How Much Will ₹5,000 Grow in 10/15/20 Years?',
+    description: 'See exactly how a ₹5,000 monthly SIP compounds at 10%, 12%, and 13% over 5 to 25 years. The power of compounding explained with Indian rupee projections.',
+    category: 'Calculators',
+    icon: 'calculate',
+    readTime: '7 min read',
+    color: '#f59e0b',
+  },
+  {
+    slug: 'best-large-cap-funds',
+    title: 'Best Large Cap Mutual Funds 2026 — Top 10 Ranked',
+    description: 'Top 10 large cap funds ranked by 1Y/3Y/5Y CAGR with Sharpe ratios and expense ratios. Active vs passive debate with Indian data.',
+    category: 'Fund Picks',
+    icon: 'diamond',
+    readTime: '8 min read',
+    color: '#44f593',
+  },
+  {
+    slug: 'best-mid-cap-funds',
+    title: 'Best Mid Cap Mutual Funds 2026 — High Growth Picks',
+    description: 'Top 8 mid cap funds ranked by risk-adjusted performance. Volatility comparison with large caps and optimal allocation framework.',
+    category: 'Fund Picks',
+    icon: 'trending_up',
+    readTime: '8 min read',
+    color: '#f59e0b',
+  },
+  {
+    slug: 'best-small-cap-funds',
+    title: 'Best Small Cap Mutual Funds 2026 — Maximum Growth Potential',
+    description: 'Top 8 small cap funds with drawdown risk analysis. When to invest, position sizing, and the volatility contract you are signing.',
+    category: 'Fund Picks',
+    icon: 'rocket_launch',
+    readTime: '8 min read',
+    color: '#ec4899',
+  },
+  {
+    slug: 'why-start-investing-early',
+    title: 'Why You Should Start Investing Early — The Power of Compounding',
+    description: 'How a ₹5,000 SIP started at 25 vs 35 creates a ₹1 Cr difference. Compounding math with Indian examples, Kautilya, and Warren Buffett.',
+    category: 'Basics',
+    icon: 'schedule',
+    readTime: '6 min read',
+    color: '#06b6d4',
+  },
+  {
+    slug: 'best-index-funds-india',
+    title: 'Best Index Funds in India 2026 — Nifty 50, Next 50 & More',
+    description: 'Top index funds ranked by tracking error and expense ratio. Active vs passive debate with Indian-specific data across categories.',
+    category: 'Fund Picks',
+    icon: 'bar_chart',
+    readTime: '8 min read',
+    color: '#a855f7',
+  },
+  {
+    slug: 'mutual-fund-vs-fixed-deposit',
+    title: 'Mutual Fund vs Fixed Deposit 2026 — Which is Better?',
+    description: 'Side-by-side comparison: returns, tax efficiency, inflation protection, liquidity, and risk. After-tax comparison table with real numbers.',
+    category: 'Basics',
+    icon: 'balance',
+    readTime: '7 min read',
+    color: '#06b6d4',
+  },
+  {
+    slug: 'best-sip-plans-5000-per-month',
+    title: 'Best SIP Plans for ₹5,000/Month in 2026',
+    description: 'Three model portfolios at ₹5,000/month: Conservative, Balanced, and Aggressive. Fund allocation tables with exact SIP splits.',
+    category: 'Fund Picks',
+    icon: 'account_balance_wallet',
+    readTime: '7 min read',
+    color: '#44f593',
+  },
+  {
+    slug: 'how-elections-impact-indian-markets',
+    title: 'How Indian Elections Impact the Stock Market — Historical Analysis',
+    description: 'Nifty returns around every general election since 2004. Pre/post election market behaviour and what investors should actually do.',
+    category: 'Market Analysis',
+    icon: 'how_to_vote',
+    readTime: '9 min read',
+    color: '#ec4899',
+  },
 ];
 
 const CATEGORIES = [
   { label: 'All Guides', count: ARTICLES.length },
-  { label: 'Tax Planning', count: ARTICLES.filter(a => a.category === 'Tax Planning').length },
+  { label: 'Fund Picks', count: ARTICLES.filter(a => a.category === 'Fund Picks').length },
   { label: 'Basics', count: ARTICLES.filter(a => a.category === 'Basics').length },
+  { label: 'Tax Planning', count: ARTICLES.filter(a => a.category === 'Tax Planning').length },
   { label: 'Calculators', count: ARTICLES.filter(a => a.category === 'Calculators').length },
+  { label: 'Market Analysis', count: ARTICLES.filter(a => a.category === 'Market Analysis').length },
 ];
 
 export default function LearnPage() {
@@ -134,15 +226,6 @@ export default function LearnPage() {
               </div>
             </Link>
           ))}
-        </div>
-
-        {/* Upcoming content teaser */}
-        <div className="glass-card-vi rounded-2xl p-8 text-center mb-8">
-          <span className="material-symbols-outlined text-4xl text-[#44f593]/30 mb-4 block" style={{ fontVariationSettings: "'FILL' 1" }}>auto_stories</span>
-          <h3 className="font-['Space_Grotesk'] font-bold text-xl text-[#dce5df] mb-2">More Guides Coming Soon</h3>
-          <p className="text-sm text-[#859586] max-w-md mx-auto">
-            Best Large Cap Funds, Mid Cap Funds, Index Funds, SIP for Beginners, and 15+ more educational guides launching weekly.
-          </p>
         </div>
 
         <ComplianceDisclaimer variant="general" className="mt-4" />

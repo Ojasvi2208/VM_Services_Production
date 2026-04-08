@@ -44,6 +44,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     'direct-vs-regular-mutual-funds',
     'ltcg-tax-on-mutual-funds',
     'what-is-stp-in-mutual-funds',
+    'best-mutual-funds-to-invest',
+    'sip-calculator-guide',
+    'best-large-cap-funds',
+    'best-mid-cap-funds',
+    'best-small-cap-funds',
+    'why-start-investing-early',
+    'best-index-funds-india',
+    'mutual-fund-vs-fixed-deposit',
+    'best-sip-plans-5000-per-month',
+    'how-elections-impact-indian-markets',
   ];
   const learnPages: MetadataRoute.Sitemap = LEARN_SLUGS.map(slug => ({
     url: `${BASE_URL}/learn/${slug}`,
