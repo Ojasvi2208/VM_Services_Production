@@ -639,8 +639,8 @@ export default function FundDiscoveryPage() {
           {!searched && !loading && (
             <DefaultFundGrid />
           )}
+          <ComplianceDisclaimer variant="fund" className="mt-8" />
         </section>
-        <ComplianceDisclaimer variant="fund" className="mt-8" />
       </main>
 
       <SiteFooter />
