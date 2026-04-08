@@ -24,6 +24,7 @@ export const metadata: Metadata = {
   creator: "Vijay Malik Financial Services",
   publisher: "Vijay Malik Financial Services",
   metadataBase: new URL("https://www.vmfinancialservices.com"),
+  alternates: { canonical: './' },
   openGraph: {
     type: "website",
     locale: "en_IN",

@@ -1093,7 +1093,30 @@ export default function MarketsPage() {
         {/* ⑦ Institutional Funds + NFO sidebar */}
         <TopFundsSection />
 
-        {/* ⑧ Strategic Insights bento */}
+        {/* ⑧ Investment Guides — internal links to /learn */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-12">
+          <h2 className="text-lg font-display font-bold text-[#dce5df] mb-5 flex items-center gap-2">
+            <span className="w-1 h-5 bg-[#44f593] rounded-full" />
+            Investment Guides
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              { title: 'Best ELSS Tax Saving Funds 2026-27', href: '/learn/best-elss-tax-saving-funds', tag: 'Tax Planning' },
+              { title: 'Direct vs Regular Mutual Funds — Why It Matters', href: '/learn/direct-vs-regular-mutual-funds', tag: 'Basics' },
+              { title: 'LTCG Tax on Mutual Funds 2026', href: '/learn/ltcg-tax-on-mutual-funds', tag: 'Tax Planning' },
+              { title: 'SWP Calculator — How Long Will Your Corpus Last?', href: '/learn/swp-calculator-guide', tag: 'Calculators' },
+              { title: 'What is STP in Mutual Funds?', href: '/learn/what-is-stp-in-mutual-funds', tag: 'Basics' },
+              { title: 'View All Guides →', href: '/learn', tag: 'Learn' },
+            ].map(g => (
+              <Link key={g.href} href={g.href} className="glass-card-vi rounded-xl p-4 hover:border-[#44f593]/30 transition-all group block">
+                <span className="text-[9px] uppercase tracking-widest font-bold text-[#44f593] mb-1 block">{g.tag}</span>
+                <span className="text-sm text-[#dce5df] font-medium group-hover:text-[#44f593] transition-colors line-clamp-2">{g.title}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        {/* ⑨ Strategic Insights bento */}
         <VaultIntelligence />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-4">

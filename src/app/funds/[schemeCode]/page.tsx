@@ -549,6 +549,25 @@ export default function FundDetailPage() {
           </aside>
         </div>
 
+        {/* Recommended Reads — internal links for SEO juice */}
+        <div className="mt-10 max-w-5xl">
+          <h3 className="font-['Space_Grotesk'] font-bold text-lg text-[#dce5df] mb-4 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[#44f593] text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>auto_stories</span>
+            Recommended Reads
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { title: 'Direct vs Regular Plans — Why It Matters', href: '/learn/direct-vs-regular-mutual-funds' },
+              { title: 'LTCG Tax on Mutual Funds 2026', href: '/learn/ltcg-tax-on-mutual-funds' },
+              { title: 'SIP Calculator — Plan Your Investment', href: '/calculators/sip' },
+            ].map(r => (
+              <Link key={r.href} href={r.href} className="p-3 rounded-xl bg-[#161d1a] border border-white/5 hover:border-[#44f593]/20 transition-colors text-sm text-[#859586] hover:text-[#44f593]">
+                {r.title} →
+              </Link>
+            ))}
+          </div>
+        </div>
+
         <ComplianceDisclaimer variant="fund" className="mt-10 max-w-5xl" />
       </main>
 
