@@ -1132,9 +1132,9 @@ export default async function LearnArticlePage({ params }: { params: Promise<{ s
               <img src="/images/VM_Logo.jpg" alt="Vijay Malik Financial Services" className="w-8 h-8 object-contain" />
             </div>
             <div>
-              <p className="text-xs font-bold text-[#dce5df]">Vijay Malik Financial Services</p>
+              <p className="text-xs font-bold text-[#dce5df]">By Ojasvi Malik</p>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-[#859586]">AMFI Registered · ARN-317605</span>
+                <span className="text-[10px] text-[#859586]">AMFI Registered MFD · ARN-317605</span>
                 <a href="https://www.instagram.com/vijaymalikfinancialservices/" target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#859586] hover:text-[#E1306C] transition-colors">
                   @vijaymalikfinancialservices
                 </a>

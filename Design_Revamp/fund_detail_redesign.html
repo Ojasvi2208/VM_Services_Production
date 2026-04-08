@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Fund Detail Redesign — VMFS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #060D0A; color: #dce5df; }
+  .font-headline { font-family: 'Space Grotesk', sans-serif; }
+  .font-mono { font-family: 'Inter', sans-serif; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400; }
+  .glass-card { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); backdrop-filter: blur(12px); }
+</style>
+</head>
+<body>
+
+<!-- Simulated NavBar -->
+<nav class="fixed top-0 w-full z-50 h-[80px] flex items-center justify-between px-8 border-b border-white/10" style="background:rgba(13,21,18,0.92);backdrop-filter:blur(20px);">
+  <div class="flex items-center gap-8">
+    <span class="font-headline font-bold text-[#00d87a] text-lg tracking-tighter">Vijay Malik Financial Services</span>
+    <div class="hidden md:flex gap-6 text-sm font-headline font-bold">
+      <a class="text-[#c4cfc9] hover:text-white transition-colors" href="#">Markets</a>
+      <a class="text-white border-b-2 border-white pb-1" href="#">Discover</a>
+      <a class="text-[#c4cfc9] hover:text-white transition-colors" href="#">Portfolio</a>
+      <a class="text-[#c4cfc9] hover:text-white transition-colors" href="#">Goals</a>
+      <a class="text-[#c4cfc9] hover:text-white transition-colors" href="#">Learn</a>
+    </div>
+  </div>
+  <button class="px-5 py-2 bg-[#44f593] text-[#001f10] rounded-lg font-bold text-sm">Sign In</button>
+</nav>
+
+<!-- Simulated Ticker -->
+<div class="fixed top-[80px] left-0 right-0 h-[44px] bg-[#060D0A] border-b border-white/5 z-40 flex items-center overflow-hidden">
+  <div class="flex gap-8 px-6 animate-pulse">
+    <span class="text-xs text-[#859586]">NIFTY 50 <span class="text-[#dce5df] font-medium">23,306</span> <span class="text-[#44f593]">+1.72%</span></span>
+    <span class="text-xs text-[#859586]">SENSEX <span class="text-[#dce5df] font-medium">75,273</span> <span class="text-[#44f593]">+1.63%</span></span>
+    <span class="text-xs text-[#859586]">BANK NIFTY <span class="text-[#dce5df] font-medium">53,708</span> <span class="text-[#44f593]">+2.10%</span></span>
+  </div>
+</div>
+
+<main class="pt-[140px] pb-20 px-4 md:px-8 max-w-[1440px] mx-auto">
+
+  <!-- Breadcrumb -->
+  <div class="flex items-center gap-2 text-sm text-[#859586] mb-6">
+    <a href="#" class="hover:text-white transition-colors">Markets</a>
+    <span>/</span>
+    <a href="#" class="hover:text-white transition-colors">Discover</a>
+    <span>/</span>
+    <span class="text-[#dce5df]">HDFC Focused Fund</span>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- MAIN GRID: Content (8 cols) + Sidebar (4 cols) -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- ═══ LEFT CONTENT (8 cols) ═══ -->
+    <div class="lg:col-span-8 space-y-6">
+
+      <!-- Fund Header -->
+      <div class="glass-card rounded-2xl p-6">
+        <p class="text-xs text-[#859586] uppercase tracking-widest mb-2">HDFC Mutual Fund</p>
+        <h1 class="font-headline text-2xl md:text-3xl font-bold text-[#dce5df] tracking-tight mb-3">
+          HDFC Focused Fund - Direct Plan - Growth
+        </h1>
+        <!-- NEUTRAL badges (not green) -->
+        <div class="flex gap-2 mb-5">
+          <span class="px-2.5 py-1 rounded-md text-xs font-medium bg-[#2f3733] text-[#c4cfc9]">Direct</span>
+          <span class="px-2.5 py-1 rounded-md text-xs font-medium bg-[#2f3733] text-[#c4cfc9]">Growth</span>
+          <span class="px-2.5 py-1 rounded-md text-xs font-medium bg-[#2f3733] text-[#c4cfc9]">Equity · Focused</span>
+        </div>
+        <!-- NAV — red because negative return -->
+        <div class="flex items-end gap-4">
+          <div>
+            <p class="text-xs text-[#859586] mb-1">Live NAV</p>
+            <span class="font-mono text-3xl font-bold text-[#dce5df]">₹215.35</span>
+          </div>
+          <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ff4757]/10 border border-[#ff4757]/20">
+            <span class="material-symbols-outlined text-[#ff4757] text-sm" style="font-variation-settings:'FILL' 1">arrow_drop_down</span>
+            <span class="font-mono text-sm font-bold text-[#ff4757]">-0.83%</span>
+          </div>
+          <span class="text-xs text-[#859586] mb-1">as of 07 Apr 2026</span>
+        </div>
+      </div>
+
+      <!-- NAV Chart -->
+      <div class="glass-card rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex bg-[#08100d] p-1 rounded-xl">
+            <button class="px-3 py-1.5 rounded-lg text-xs font-bold text-[#859586]">1D</button>
+            <button class="px-3 py-1.5 rounded-lg text-xs font-bold text-[#859586]">1M</button>
+            <button class="px-3 py-1.5 rounded-lg text-xs font-bold text-[#859586]">6M</button>
+            <button class="px-3 py-1.5 rounded-lg text-xs font-bold text-[#44f593] bg-[#44f593]/10">1Y</button>
+            <button class="px-3 py-1.5 rounded-lg text-xs font-bold text-[#859586]">3Y</button>
+            <button class="px-3 py-1.5 rounded-lg text-xs font-bold text-[#859586]">SI</button>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-[#859586]">
+            <span class="w-2 h-2 rounded-full bg-[#44f593]"></span> Fund NAV
+          </div>
+        </div>
+        <!-- Mock chart area -->
+        <div class="h-56 rounded-xl bg-[#08100d] relative overflow-hidden">
+          <svg class="w-full h-full" viewBox="0 0 800 200" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#44f593" stop-opacity="0.12"/>
+                <stop offset="100%" stop-color="#44f593" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polygon points="0,200 0,180 50,170 100,150 150,160 200,120 250,130 300,100 350,80 400,90 450,60 500,70 550,50 600,60 650,55 700,65 750,40 800,45 800,200" fill="url(#cg)"/>
+            <polyline points="0,180 50,170 100,150 150,160 200,120 250,130 300,100 350,80 400,90 450,60 500,70 550,50 600,60 650,55 700,65 750,40 800,45" fill="none" stroke="#44f593" stroke-width="2"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Returns Table (CLEAN TABLE, not tiles) -->
+      <div class="glass-card rounded-2xl p-5">
+        <h3 class="text-xs uppercase tracking-widest text-[#859586] font-bold mb-4">Historical Returns</h3>
+        <div class="flex justify-between items-center text-[10px] uppercase tracking-widest text-[#859586] font-bold pb-2 border-b border-white/5 mb-1">
+          <span>Period</span>
+          <div class="flex gap-8">
+            <span>Return</span>
+            <span class="w-16 text-right">Type</span>
+          </div>
+        </div>
+        <!-- Return rows — RED for negative, GREEN for positive -->
+        <div class="divide-y divide-white/5">
+          <div class="flex justify-between items-center py-3">
+            <span class="text-sm text-[#c4cfc9]">1 Month</span>
+            <div class="flex items-center gap-8">
+              <span class="font-mono text-sm font-bold text-[#ff4757]">-9.94%</span>
+              <span class="text-[10px] text-[#859586] w-16 text-right">Absolute</span>
+            </div>
+          </div>
+          <div class="flex justify-between items-center py-3">
+            <span class="text-sm text-[#c4cfc9]">6 Month</span>
+            <div class="flex items-center gap-8">
+              <span class="font-mono text-sm font-bold text-[#ff4757]">-9.30%</span>
+              <span class="text-[10px] text-[#859586] w-16 text-right">Absolute</span>
+            </div>
+          </div>
+          <div class="flex justify-between items-center py-3">
+            <span class="text-sm text-[#c4cfc9]">1 Year</span>
+            <div class="flex items-center gap-8">
+              <span class="font-mono text-sm font-bold text-[#ff4757]">-0.83%</span>
+              <span class="text-[10px] text-[#859586] w-16 text-right">Absolute</span>
+            </div>
+          </div>
+          <div class="flex justify-between items-center py-3">
+            <span class="text-sm text-[#c4cfc9]">3 Years</span>
+            <div class="flex items-center gap-8">
+              <span class="font-mono text-sm font-bold text-[#44f593]">+17.20%</span>
+              <span class="text-[10px] text-[#859586] w-16 text-right">CAGR</span>
+            </div>
+          </div>
+          <div class="flex justify-between items-center py-3">
+            <span class="text-sm text-[#c4cfc9]">5 Years</span>
+            <div class="flex items-center gap-8">
+              <span class="font-mono text-sm font-bold text-[#44f593]">+19.00%</span>
+              <span class="text-[10px] text-[#859586] w-16 text-right">CAGR</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Risk Metrics — ONLY shown if data exists (no "—" tiles) -->
+      <div class="glass-card rounded-2xl p-5">
+        <h3 class="text-xs uppercase tracking-widest text-[#859586] font-bold mb-4">Risk Metrics</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <!-- Sharpe — NEUTRAL color (not green, it's a negative number) -->
+          <div class="bg-[#08100d] p-4 rounded-xl">
+            <p class="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">Sharpe Ratio</p>
+            <p class="font-mono text-lg font-medium text-[#dce5df]">-0.60</p>
+          </div>
+          <!-- Volatility — NEUTRAL (it's a measurement, not good/bad) -->
+          <div class="bg-[#08100d] p-4 rounded-xl">
+            <p class="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">Volatility (1Y)</p>
+            <p class="font-mono text-lg font-medium text-[#dce5df]">12.30%</p>
+          </div>
+          <!-- Alpha — RED because negative -->
+          <div class="bg-[#08100d] p-4 rounded-xl">
+            <p class="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">Alpha (1Y)</p>
+            <p class="font-mono text-lg font-medium text-[#ff4757]">-0.83%</p>
+          </div>
+          <!-- Age — NEUTRAL -->
+          <div class="bg-[#08100d] p-4 rounded-xl">
+            <p class="text-[10px] text-[#859586] uppercase tracking-wider mb-1 font-bold">Fund Age</p>
+            <p class="font-mono text-lg font-medium text-[#dce5df]">20.0 Yrs</p>
+          </div>
+        </div>
+        <!-- Note: AUM, Expense Ratio, Exit Load, Min SIP tiles are NOT shown because data is null -->
+        <!-- They only appear when the fund has this data populated -->
+      </div>
+
+      <!-- Holdings — HIDDEN because this fund has 0 holdings data -->
+      <!-- This entire section only renders when holdings.length > 0 -->
+      <!--
+      <div class="glass-card rounded-2xl p-5">
+        <h3>Portfolio Holdings</h3>
+        ... only shows when data exists ...
+      </div>
+      -->
+
+      <!-- Recommended Reads -->
+      <div>
+        <h3 class="text-xs uppercase tracking-widest text-[#859586] font-bold mb-3 flex items-center gap-2">
+          <span class="material-symbols-outlined text-base" style="font-variation-settings:'FILL' 1">auto_stories</span>
+          Recommended Reads
+        </h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <a href="#" class="p-3 rounded-xl bg-[#161d1a] border border-white/5 hover:border-white/10 transition-colors text-sm text-[#859586] hover:text-white">
+            Direct vs Regular Plans →
+          </a>
+          <a href="#" class="p-3 rounded-xl bg-[#161d1a] border border-white/5 hover:border-white/10 transition-colors text-sm text-[#859586] hover:text-white">
+            LTCG Tax on Mutual Funds →
+          </a>
+          <a href="#" class="p-3 rounded-xl bg-[#161d1a] border border-white/5 hover:border-white/10 transition-colors text-sm text-[#859586] hover:text-white">
+            SIP Calculator →
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══ RIGHT SIDEBAR (4 cols) ═══ -->
+    <aside class="lg:col-span-4 space-y-5">
+
+      <!-- Invest Card -->
+      <div class="glass-card rounded-2xl p-5 sticky top-[140px]">
+        <h3 class="font-headline font-bold text-lg text-[#dce5df] mb-4">Invest Now</h3>
+
+        <!-- SIP / One-time toggle -->
+        <div class="flex bg-[#08100d] p-1 rounded-xl mb-5">
+          <button class="flex-1 py-2 rounded-lg text-sm font-bold bg-[#44f593] text-[#001f10]">Monthly SIP</button>
+          <button class="flex-1 py-2 rounded-lg text-sm font-bold text-[#859586]">One-time</button>
+        </div>
+
+        <!-- Amount input -->
+        <p class="text-xs text-[#859586] uppercase tracking-widest mb-2">Investment Amount</p>
+        <div class="flex items-center bg-[#08100d] border border-white/10 rounded-xl px-4 py-3 mb-3">
+          <span class="text-[#859586] mr-2">₹</span>
+          <span class="font-mono text-lg text-[#dce5df] font-bold">5,000</span>
+        </div>
+        <div class="flex gap-2 mb-5">
+          <span class="px-3 py-1.5 rounded-lg bg-[#161d1a] text-xs text-[#859586] border border-white/5">+₹1,000</span>
+          <span class="px-3 py-1.5 rounded-lg bg-[#161d1a] text-xs text-[#859586] border border-white/5">+₹2,500</span>
+          <span class="px-3 py-1.5 rounded-lg bg-[#161d1a] text-xs text-[#859586] border border-white/5">+₹5,000</span>
+        </div>
+
+        <!-- Invest button — THE ONLY prominent green element -->
+        <a href="https://eonboard.njindiaonline.com/partner-tiny-url?njBrcode=14688" target="_blank"
+           class="w-full block text-center py-3.5 rounded-xl bg-[#44f593] text-[#001f10] font-bold text-base hover:bg-[#25e283] transition-colors">
+          Start Systematic Investment
+        </a>
+        <p class="text-[10px] text-[#859586] text-center mt-2">
+          Partner: <span class="text-[#c4cfc9] font-medium">Ojasvi Malik</span> (Vijay Malik Financial Services)
+        </p>
+
+        <!-- Divider -->
+        <div class="border-t border-white/5 my-5"></div>
+
+        <!-- Quick Facts — always available from AMFI data -->
+        <h4 class="text-xs uppercase tracking-widest text-[#859586] font-bold mb-3">Quick Facts</h4>
+        <div class="space-y-3 text-sm">
+          <div class="flex justify-between">
+            <span class="text-[#859586]">Category</span>
+            <span class="text-[#dce5df] font-medium">Equity</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-[#859586]">Sub-category</span>
+            <span class="text-[#dce5df] font-medium">Focused Fund</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-[#859586]">Fund House</span>
+            <span class="text-[#dce5df] font-medium">HDFC</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-[#859586]">Plan</span>
+            <span class="text-[#dce5df] font-medium">Direct</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-[#859586]">Option</span>
+            <span class="text-[#dce5df] font-medium">Growth</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-[#859586]">Inception</span>
+            <span class="text-[#dce5df] font-medium">Jun 2006</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-[#859586]">Fund Age</span>
+            <span class="text-[#dce5df] font-medium">20 Years</span>
+          </div>
+        </div>
+
+        <!-- Divider -->
+        <div class="border-t border-white/5 my-5"></div>
+
+        <!-- Fund Governance -->
+        <h4 class="text-xs uppercase tracking-widest text-[#859586] font-bold mb-3">Fund Governance</h4>
+        <div class="flex items-center gap-3 opacity-50 cursor-not-allowed">
+          <div class="w-8 h-8 rounded-full bg-[#2f3733] flex items-center justify-center">
+            <span class="material-symbols-outlined text-sm text-[#859586]">description</span>
+          </div>
+          <div class="flex-1">
+            <p class="text-sm text-[#859586]">Key Information Memo</p>
+            <p class="text-[10px] text-[#859586]">SID / KIM Document</p>
+          </div>
+          <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#44f593]/10 text-[#44f593] border border-[#44f593]/20 uppercase">Soon</span>
+        </div>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- Compliance Disclaimer (full width, below everything) -->
+  <div class="mt-10 rounded-xl border border-[#3c4a3e]/60 bg-[#08100d] px-5 py-4">
+    <p class="text-xs text-[#44f593]/70 uppercase tracking-widest mb-3 flex items-center gap-1.5 font-mono">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      SEBI / AMFI Disclosure
+    </p>
+    <ul class="space-y-1.5 text-xs text-[#859586] leading-relaxed">
+      <li>Mutual fund investments are subject to market risks. Please read all scheme-related documents carefully before investing.</li>
+      <li>Past performance is not indicative of future returns. NAV of schemes may go up or down.</li>
+      <li>Vijay Malik Financial Services is an AMFI-registered Mutual Fund Distributor (ARN-317605). We are NOT a SEBI-registered Investment Adviser.</li>
+    </ul>
+  </div>
+
+</main>
+
+<!-- Footer stub -->
+<footer class="border-t border-white/5 bg-[#060D0A] py-8 text-center">
+  <p class="text-xs text-[#3c4a3e]">© 2026 Vijay Malik Financial Services. AMFI-registered · ARN-317605</p>
+</footer>
+
+</body>
+</html>

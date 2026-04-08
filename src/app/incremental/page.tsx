@@ -1,5 +1,5 @@
-import SimpleIncrementalDashboard from '@/components/SimpleIncrementalDashboard';
+import { redirect } from 'next/navigation';
 
-export default function IncrementalLoaderPage() {
-  return <SimpleIncrementalDashboard />;
+export default function IncrementalRedirect() {
+  redirect('/markets');
 }

@@ -91,10 +91,11 @@ export default function AboutPage() {
               </h2>
               <div className="space-y-4 text-[#c0c9c2] leading-relaxed">
                 <p>
-                  Vijay Malik Financial Services was built as a tribute to Vijay Malik — to carry forward his legacy
-                  of clarity, integrity, and trust in financial matters. The goal is simple:
-                  give every Indian retail investor access to tools previously reserved for
-                  institutional players.
+                  Vijay Malik Financial Services is founded and operated by <strong className="text-[#dce5df]">Ojasvi Malik</strong>,
+                  an AMFI-registered Mutual Fund Distributor (ARN-317605) and NISM-certified professional.
+                  Built as a tribute to Vijay Malik — to carry forward his legacy of clarity, integrity,
+                  and trust in financial matters. The goal is simple: give every Indian retail investor
+                  access to tools previously reserved for institutional players.
                 </p>
                 <p>
                   We partner with AMFI-registered platforms to offer direct mutual fund
