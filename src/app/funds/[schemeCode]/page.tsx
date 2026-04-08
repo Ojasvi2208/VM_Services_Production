@@ -128,6 +128,7 @@ export default function FundDetailPage() {
 
   const [data, setData] = useState<FundData | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [sectors, setSectors] = useState<{ sector: string; weight: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'1D' | '1M' | '6M' | '1Y' | '3Y' | 'SI'>('1Y');
@@ -143,9 +144,10 @@ export default function FundDetailPage() {
     if (!schemeCode) return;
     setLoading(true);
     try {
-      const [fundRes, holdingsRes] = await Promise.all([
+      const [fundRes, holdingsRes, sectorRes] = await Promise.all([
         fetch(`/api/funds/${schemeCode}`),
         fetch(`/api/funds/${schemeCode}/holdings`).catch(() => null),
+        fetch(`/api/funds/${schemeCode}/sector-allocation`).catch(() => null),
       ]);
       const fundJson = await fundRes.json();
       if (!fundJson.success) throw new Error(fundJson.error ?? 'Fund not found');
@@ -154,6 +156,10 @@ export default function FundDetailPage() {
       if (holdingsRes) {
         const hJson = await holdingsRes.json().catch(() => ({}));
         setHoldings(hJson.holdings ?? hJson.data ?? []);
+      }
+      if (sectorRes) {
+        const sJson = await sectorRes.json().catch(() => ({}));
+        setSectors(sJson.sectors ?? []);
       }
     } catch (e: any) {
       setError(e.message);
@@ -379,6 +385,29 @@ export default function FundDetailPage() {
                       <p className="font-mono text-base font-medium text-[#dce5df]">{fmtPct(ret.rollingReturn1yMedian)}</p>
                     </div>
                   )}
+                </div>
+              </section>
+            )}
+
+            {/* [3c] Sector Allocation */}
+            {sectors.length > 0 && (
+              <section className="glass-card p-5 rounded-2xl">
+                <h3 className="text-xs uppercase tracking-widest text-[#859586] font-bold mb-4">Sector Allocation</h3>
+                <div className="space-y-2">
+                  {sectors.slice(0, 10).map((s, i) => {
+                    const maxW = Math.max(...sectors.map(x => x.weight));
+                    return (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="text-xs text-[#c0c9c2] w-28 truncate shrink-0">{s.sector}</span>
+                        <div className="flex-1 h-5 bg-[#08100d] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-[#44f593]/30" style={{ width: `${(s.weight / maxW) * 100}%` }}>
+                            <div className="h-full rounded-full bg-[#44f593]" style={{ width: `${Math.min(100, s.weight * 3)}%`, opacity: 0.8 }} />
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono text-[#dce5df] w-12 text-right shrink-0">{s.weight.toFixed(1)}%</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             )}
