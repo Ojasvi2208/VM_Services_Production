@@ -424,7 +424,23 @@ export default async function LearnArticlePage({ params }: { params: Promise<{ s
           <h1 className="font-['Space_Grotesk'] font-bold text-3xl md:text-4xl text-[#dce5df] tracking-tight mb-4">
             {article.title}
           </h1>
-          <p className="text-[#859586] text-base leading-relaxed">{article.introduction}</p>
+          <p className="text-[#859586] text-base leading-relaxed mb-6">{article.introduction}</p>
+
+          {/* Author badge with company logo */}
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-[#161d1a] border border-white/5 w-fit">
+            <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shrink-0 overflow-hidden">
+              <img src="/images/VM_Logo.jpg" alt="Vijay Malik Financial Services" className="w-8 h-8 object-contain" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-[#dce5df]">Vijay Malik Financial Services</p>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-[#859586]">AMFI Registered · ARN-317605</span>
+                <a href="https://www.instagram.com/vijaymalikfinancialservices/" target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#859586] hover:text-[#E1306C] transition-colors">
+                  @vijaymalikfinancialservices
+                </a>
+              </div>
+            </div>
+          </div>
         </header>
 
         {/* Sections */}
