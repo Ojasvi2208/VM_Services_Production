@@ -236,16 +236,17 @@ export default function FundDetailPage() {
   const navChange = currentReturn;
   const navPos = (navChange ?? 0) >= 0;
 
+  // Only show metrics where data actually exists — no "—" tiles
   const METRICS = [
-    { label: 'AUM',           value: fmtCr(fund.fundSize) },
-    { label: 'Expense Ratio', value: fund.expenseRatio != null ? `${fund.expenseRatio.toFixed(2)}%` : '—' },
-    { label: 'Exit Load',     value: fund.exitLoad ?? '—' },
-    { label: 'Min SIP',       value: fund.minSip != null ? `₹${fund.minSip}` : '—' },
-    { label: 'Alpha',         value: fmtPct(ret?.cagr1y), accent: true },
-    { label: 'Sharpe Ratio',  value: fmtNum(ret?.sharpeRatio1y) },
-    { label: 'Volatility',    value: fmtPct(ret?.volatility1y) },
-    { label: 'Age',           value: fundAge(fund.inceptionDate) },
-  ];
+    fund.fundSize ? { label: 'AUM', value: fmtCr(fund.fundSize) } : null,
+    fund.expenseRatio != null ? { label: 'Expense Ratio', value: `${fund.expenseRatio.toFixed(2)}%` } : null,
+    fund.exitLoad ? { label: 'Exit Load', value: fund.exitLoad } : null,
+    fund.minSip != null ? { label: 'Min SIP', value: `₹${fund.minSip}` } : null,
+    ret?.cagr1y != null ? { label: 'Alpha (1Y)', value: fmtPct(ret.cagr1y), accent: (ret.cagr1y ?? 0) >= 0 } : null,
+    ret?.sharpeRatio1y != null ? { label: 'Sharpe Ratio', value: fmtNum(ret.sharpeRatio1y) } : null,
+    ret?.volatility1y != null ? { label: 'Volatility', value: fmtPct(ret.volatility1y) } : null,
+    fund.inceptionDate ? { label: 'Age', value: fundAge(fund.inceptionDate) } : null,
+  ].filter(Boolean) as { label: string; value: string; accent?: boolean }[];
 
   const QUICK_AMOUNTS = investMode === 'sip'
     ? ['1000', '2500', '5000', '10000']
@@ -265,7 +266,7 @@ export default function FundDetailPage() {
             <section className="glass-card p-6 md:p-8 rounded-2xl space-y-5">
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div className="space-y-2">
-                  <span className="text-[#44f593] font-mono text-xs tracking-widest uppercase">
+                  <span className="text-[#859586] font-mono text-xs tracking-widest uppercase">
                     {fund.amcCode ?? 'AMC'}
                   </span>
                   <h1 className="text-3xl md:text-4xl font-display font-bold tracking-tight text-[#dce5df] leading-tight">
@@ -332,17 +333,21 @@ export default function FundDetailPage() {
               <MiniChart history={filteredHistory.length > 0 ? filteredHistory : data.navHistory ?? []} />
             </section>
 
-            {/* [3] Metrics Grid 2×4 */}
+            {/* [3] Metrics Grid — only shows tiles with data */}
+            {METRICS.length > 0 && (
             <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {METRICS.map(m => (
                 <div key={m.label} className="glass-card p-4 rounded-2xl">
                   <p className="text-[#859586] text-xs uppercase tracking-widest mb-1">{m.label}</p>
-                  <p className={`text-lg font-mono font-bold ${m.accent ? 'text-[#44f593]' : 'text-[#dce5df]'}`}>
+                  <p className={`text-lg font-mono font-bold ${
+                    m.accent === true ? 'text-[#44f593]' : m.accent === false ? 'text-[#ffb4ab]' : 'text-[#dce5df]'
+                  }`}>
                     {m.value}
                   </p>
                 </div>
               ))}
             </section>
+            )}
 
             {/* [3b] Rolling Returns + Risk Deep Dive */}
             {ret && (ret.rollingReturn1yAvg != null || ret.maxDrawdown != null || ret.sortinoRatio1y != null) && (
@@ -589,9 +594,23 @@ export default function FundDetailPage() {
               </p>
             </div>
 
+            {/* Quick Facts — always available from AMFI */}
+            <div className="glass-card p-5 rounded-2xl">
+              <h4 className="text-xs font-display font-bold uppercase tracking-widest text-[#859586] mb-3">Quick Facts</h4>
+              <div className="space-y-2.5 text-sm">
+                {fund.category && <div className="flex justify-between"><span className="text-[#859586]">Category</span><span className="text-[#dce5df] font-medium">{fund.category}</span></div>}
+                {fund.schemeType && <div className="flex justify-between"><span className="text-[#859586]">Sub-category</span><span className="text-[#dce5df] font-medium">{fund.schemeType}</span></div>}
+                {fund.amcCode && <div className="flex justify-between"><span className="text-[#859586]">Fund House</span><span className="text-[#dce5df] font-medium">{fund.amcCode}</span></div>}
+                {fund.planType && <div className="flex justify-between"><span className="text-[#859586]">Plan</span><span className="text-[#dce5df] font-medium">{fund.planType}</span></div>}
+                {fund.optionType && <div className="flex justify-between"><span className="text-[#859586]">Option</span><span className="text-[#dce5df] font-medium">{fund.optionType}</span></div>}
+                {fund.inceptionDate && <div className="flex justify-between"><span className="text-[#859586]">Inception</span><span className="text-[#dce5df] font-medium">{new Date(fund.inceptionDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}</span></div>}
+                {fund.inceptionDate && <div className="flex justify-between"><span className="text-[#859586]">Fund Age</span><span className="text-[#dce5df] font-medium">{fundAge(fund.inceptionDate)}</span></div>}
+              </div>
+            </div>
+
             {/* Fund Governance */}
             <div className="glass-card p-5 rounded-2xl space-y-4">
-              <h4 className="text-xs font-display font-bold uppercase tracking-widest text-[#44f593]">Fund Governance</h4>
+              <h4 className="text-xs font-display font-bold uppercase tracking-widest text-[#859586]">Fund Governance</h4>
 
               {data.managers?.filter(m => m.isCurrent).slice(0, 2).map((mgr, i) => (
                 <div key={i} className="flex items-center gap-3 group cursor-pointer">
