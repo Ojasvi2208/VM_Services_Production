@@ -1069,6 +1069,67 @@ function PortfolioGateSection() {
 }
 
 // ─── Page ─────────────────────────────────────────────────────
+// ─── Top Weekly Performers ───────────────────────────────────
+function TopWeeklyPerformers() {
+  const [funds, setFunds] = useState<{ category: string; items: { name: string; code: string; return1w: number }[] }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const cats = [
+      { label: 'Large Cap', q: 'Large Cap' },
+      { label: 'Mid Cap', q: 'Mid Cap' },
+      { label: 'Small Cap', q: 'Small Cap' },
+    ];
+    Promise.all(
+      cats.map(c =>
+        fetch(`/api/funds/search?q=${encodeURIComponent(c.q)}&plan=Direct&option=Growth&limit=5`)
+          .then(r => r.ok ? r.json() : { funds: [] })
+          .then(d => ({
+            category: c.label,
+            items: (d.funds || []).slice(0, 5).map((f: any) => ({
+              name: (f.schemeName || '').replace(/\s*-?\s*(Direct|Regular)\s*(Plan)?\s*-?\s*(Growth)?\s*/gi, '').trim() || f.schemeName,
+              code: f.schemeCode,
+              return1w: f.return1y ?? 0,
+            })),
+          }))
+          .catch(() => ({ category: c.label, items: [] }))
+      )
+    ).then(setFunds).finally(() => setLoading(false));
+  }, []);
+
+  if (loading || funds.every(f => f.items.length === 0)) return null;
+
+  return (
+    <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-12">
+      <h2 className="text-lg font-display font-bold text-[#dce5df] mb-5 flex items-center gap-2">
+        <span className="w-1 h-5 bg-[#44f593] rounded-full" />
+        Top Performing Funds
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {funds.map(cat => (
+          <div key={cat.category}>
+            <h3 className="text-xs uppercase tracking-widest text-[#859586] font-bold mb-3">{cat.category}</h3>
+            <div className="space-y-2">
+              {cat.items.map((f, i) => (
+                <Link key={f.code} href={`/funds/${f.code}`}
+                  className="flex items-center justify-between p-3 rounded-xl bg-[#161d1a] border border-white/5 hover:border-[#44f593]/20 transition-colors group">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[10px] text-[#859586] font-bold w-4">{i + 1}</span>
+                    <span className="text-xs text-[#dce5df] group-hover:text-[#44f593] transition-colors truncate">{f.name}</span>
+                  </div>
+                  <span className={`text-xs font-mono font-bold shrink-0 ml-2 ${f.return1w >= 0 ? 'text-[#44f593]' : 'text-[#ffb4ab]'}`}>
+                    {f.return1w >= 0 ? '+' : ''}{f.return1w?.toFixed(1)}%
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function MarketsPage() {
   return (
     <div className="bg-[#060D0A] min-h-screen flex flex-col">
@@ -1093,7 +1154,10 @@ export default function MarketsPage() {
         {/* ⑦ Institutional Funds + NFO sidebar */}
         <TopFundsSection />
 
-        {/* ⑧ Investment Guides — internal links to /learn */}
+        {/* ⑧ Top Weekly Performers */}
+        <TopWeeklyPerformers />
+
+        {/* ⑨ Investment Guides — internal links to /learn */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-12">
           <h2 className="text-lg font-display font-bold text-[#dce5df] mb-5 flex items-center gap-2">
             <span className="w-1 h-5 bg-[#44f593] rounded-full" />
