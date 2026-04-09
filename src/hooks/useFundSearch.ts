@@ -81,6 +81,7 @@ export function useFundSearch() {
   const [activeAmc, setActiveAmc] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
   const [sortBy, setSortBy] = useState<SortMode>('name');
+  const [activePlan, setActivePlan] = useState<'Direct' | 'Regular'>('Direct');
 
   // Results state
   const [results, setResults] = useState<FundResult[]>([]);
@@ -100,7 +101,7 @@ export function useFundSearch() {
 
   // ── Core fetch ────────────────────────────────────────────────
   const fetchResults = useCallback(async (
-    q: string, amc: string, category: string, page: number
+    q: string, amc: string, category: string, page: number, plan = 'Direct'
   ) => {
     // All filters cleared → reset to default state
     if (!q && !amc && !category) {
@@ -120,6 +121,7 @@ export function useFundSearch() {
       if (q)        params.set('q', q);
       if (amc)      params.set('amc', AMC_API_MAP[amc] ?? amc);
       if (category) params.set('category', CATEGORY_API_MAP[category] ?? category);
+      if (plan)     params.set('plan', plan);
       params.set('page', String(page));
       params.set('pageSize', String(PAGE_SIZE));
 
@@ -168,24 +170,33 @@ export function useFundSearch() {
 
   // ── Explicit search (Enter / button) ─────────────────────────
   const handleSearch = useCallback((page = 1) => {
-    fetchResults(query, activeAmc, activeCategory, page);
-  }, [query, activeAmc, activeCategory, fetchResults]);
+    fetchResults(query, activeAmc, activeCategory, page, activePlan);
+  }, [query, activeAmc, activeCategory, activePlan, fetchResults]);
 
   // ── AMC pill toggle ───────────────────────────────────────────
   const handleAmcToggle = useCallback((amc: string) => {
     const next = activeAmc === amc ? '' : amc;
     setActiveAmc(next);
     setCurrentPage(1);
-    fetchResults(query, next, activeCategory, 1);
-  }, [activeAmc, activeCategory, query, fetchResults]);
+    fetchResults(query, next, activeCategory, 1, activePlan);
+  }, [activeAmc, activeCategory, query, activePlan, fetchResults]);
 
   // ── Category pill toggle ──────────────────────────────────────
   const handleCategoryToggle = useCallback((cat: string) => {
     const next = activeCategory === cat ? '' : cat;
     setActiveCategory(next);
     setCurrentPage(1);
-    fetchResults(query, activeAmc, next, 1);
-  }, [activeCategory, activeAmc, query, fetchResults]);
+    fetchResults(query, activeAmc, next, 1, activePlan);
+  }, [activeCategory, activeAmc, query, activePlan, fetchResults]);
+
+  // ── Plan toggle (Direct / Regular) ────────────────────────────
+  const handlePlanToggle = useCallback((plan: 'Direct' | 'Regular') => {
+    setActivePlan(plan);
+    setCurrentPage(1);
+    if (query || activeAmc || activeCategory) {
+      fetchResults(query, activeAmc, activeCategory, 1, plan);
+    }
+  }, [query, activeAmc, activeCategory, fetchResults]);
 
   // ── Autocomplete click → navigate to fund detail ──────────────
   const handleSuggestionClick = useCallback((s: AutocompleteItem) => {
@@ -196,15 +207,16 @@ export function useFundSearch() {
   // ── Pagination ────────────────────────────────────────────────
   const goToPage = useCallback((page: number) => {
     if (page < 1 || page > totalPages) return;
-    fetchResults(query, activeAmc, activeCategory, page);
+    fetchResults(query, activeAmc, activeCategory, page, activePlan);
     window.scrollTo({ top: 520, behavior: 'smooth' });
-  }, [query, activeAmc, activeCategory, totalPages, fetchResults]);
+  }, [query, activeAmc, activeCategory, activePlan, totalPages, fetchResults]);
 
   // ── Reset ─────────────────────────────────────────────────────
   const reset = useCallback(() => {
     setQueryState('');
     setActiveAmc('');
     setActiveCategory('');
+    setActivePlan('Direct');
     setResults([]);
     setSearched(false);
     setTotal(0);
@@ -228,6 +240,7 @@ export function useFundSearch() {
     query, handleQueryChange,
     activeAmc, handleAmcToggle,
     activeCategory, handleCategoryToggle,
+    activePlan, handlePlanToggle,
     sortBy, setSortBy,
     results, total, currentPage, totalPages, loading, searched, engine,
     suggestions, showSuggestions, setShowSuggestions,

@@ -159,6 +159,7 @@ export async function GET(request: NextRequest) {
     const amc         = sp.get('amc') || '';
     const category    = sp.get('category') || '';
     const subCategory = sp.get('subCategory') || '';
+    const plan        = sp.get('plan') || '';
     const page        = Math.max(1, parseInt(sp.get('page') || '1'));
     const pageSize    = Math.min(50, parseInt(sp.get('pageSize') || '10'));
 
@@ -167,7 +168,7 @@ export async function GET(request: NextRequest) {
     // Empty query → smart defaults: top performers by 3Y CAGR
     if (!query && !amc && !category && !subCategory) {
       if (useMV) {
-        return await searchUnified('', '', '', '', 1, pageSize, true);
+        return await searchUnified('', '', '', '', 1, pageSize, true, false, plan);
       }
       const stats = await pool.query('SELECT COUNT(*) FROM funds');
       return NextResponse.json({
@@ -177,7 +178,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (useMV) {
-      return await searchUnified(query, amc, category, subCategory, page, pageSize);
+      return await searchUnified(query, amc, category, subCategory, page, pageSize, false, false, plan);
     } else {
       return await searchLegacy(query, amc, category, page, pageSize);
     }
@@ -197,12 +198,18 @@ export async function GET(request: NextRequest) {
 
 async function searchUnified(
   query: string, amc: string, category: string, subCategory: string,
-  page: number, pageSize: number, topPerformers = false, randomize = false
+  page: number, pageSize: number, topPerformers = false, randomize = false, plan = ''
 ) {
   // ── Build WHERE clause ──
   let where = 'WHERE 1=1';
   const params: any[] = [];
   let p = 1;
+
+  // Plan type filter (Direct / Regular)
+  if (plan && (plan === 'Direct' || plan === 'Regular')) {
+    where += ` AND plan_type = $${p++}`;
+    params.push(plan);
+  }
 
   if (query) {
     const { words } = normalizeQuery(query);
@@ -551,7 +558,7 @@ export async function POST(request: NextRequest) {
     const discoveryLimit = isDiscoveryMode ? 6 : Math.min(limit, 200);
 
     if (useMV) {
-      return await searchUnified(query, amc, category, subCategory, 1, discoveryLimit, false, isDiscoveryMode);
+      return await searchUnified(query, amc, category, subCategory, 1, discoveryLimit, false, isDiscoveryMode, plan);
     }
 
     // Legacy fallback
