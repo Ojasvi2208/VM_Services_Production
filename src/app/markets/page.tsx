@@ -779,7 +779,8 @@ function FuelSection() {
       {/* Error */}
       {fuelError && !fuelData && (
         <div className="glass-card rounded-2xl p-6 text-center">
-          <p className="text-[#859586] text-sm">{fuelError}</p>
+          <span className="material-symbols-outlined text-2xl text-[#859586]/40 mb-2 block" style={{ fontVariationSettings: "'FILL' 0" }}>local_gas_station</span>
+          <p className="text-[#859586] text-sm">Fuel price data temporarily unavailable. We are updating our data source.</p>
         </div>
       )}
 
