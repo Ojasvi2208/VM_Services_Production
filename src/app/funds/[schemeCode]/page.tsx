@@ -129,6 +129,7 @@ export default function FundDetailPage() {
   const [data, setData] = useState<FundData | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [sectors, setSectors] = useState<{ sector: string; weight: number }[]>([]);
+  const [fundManagers, setFundManagers] = useState<{ name: string; tenure: number; isCurrent: boolean }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'1D' | '1M' | '6M' | '1Y' | '3Y' | 'SI'>('1Y');
@@ -144,10 +145,11 @@ export default function FundDetailPage() {
     if (!schemeCode) return;
     setLoading(true);
     try {
-      const [fundRes, holdingsRes, sectorRes] = await Promise.all([
+      const [fundRes, holdingsRes, sectorRes, managerRes] = await Promise.all([
         fetch(`/api/funds/${schemeCode}`),
         fetch(`/api/funds/${schemeCode}/holdings`).catch(() => null),
         fetch(`/api/funds/${schemeCode}/sector-allocation`).catch(() => null),
+        fetch(`/api/funds/${schemeCode}/managers`).catch(() => null),
       ]);
       const fundJson = await fundRes.json();
       if (!fundJson.success) throw new Error(fundJson.error ?? 'Fund not found');
@@ -160,6 +162,10 @@ export default function FundDetailPage() {
       if (sectorRes) {
         const sJson = await sectorRes.json().catch(() => ({}));
         setSectors(sJson.sectors ?? []);
+      }
+      if (managerRes) {
+        const mJson = await managerRes.json().catch(() => ({}));
+        setFundManagers(mJson.managers ?? []);
       }
     } catch (e: any) {
       setError(e.message);
@@ -408,6 +414,26 @@ export default function FundDetailPage() {
                       </div>
                     );
                   })}
+                </div>
+              </section>
+            )}
+
+            {/* [3d] Fund Manager */}
+            {fundManagers.length > 0 && (
+              <section className="glass-card p-5 rounded-2xl">
+                <h3 className="text-xs uppercase tracking-widest text-[#859586] font-bold mb-4">Fund Manager</h3>
+                <div className="space-y-3">
+                  {fundManagers.filter(m => m.isCurrent).map((m, i) => (
+                    <div key={i} className="flex items-center gap-4 p-3 bg-[#08100d] rounded-xl">
+                      <div className="w-10 h-10 rounded-full bg-[#2f3733] flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-[#dce5df] text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>person</span>
+                      </div>
+                      <div>
+                        <p className="font-['Space_Grotesk'] font-bold text-[#dce5df] text-sm">{m.name}</p>
+                        <p className="text-[10px] text-[#859586]">Managing since {m.tenure.toFixed(1)} years</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </section>
             )}
