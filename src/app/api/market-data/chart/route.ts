@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cachedJson, CACHE_TTL as API_CACHE_TTL } from '@/lib/api-cache-headers';
 
 // Historical OHLCV + Technical Analysis for any index
 // Fetches via CF relay → Yahoo Finance chart API
@@ -495,7 +496,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(responseData);
+    return cachedJson(responseData, API_CACHE_TTL.MARKET_CHART);
   } catch (error: any) {
     console.error('Chart API error:', error?.message);
     return NextResponse.json({ success: false, error: 'Failed to fetch chart data' }, { status: 500 });

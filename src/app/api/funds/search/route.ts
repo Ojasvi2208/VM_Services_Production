@@ -17,6 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { cachedJson, CACHE_TTL } from '@/lib/api-cache-headers';
 import pool from '@/lib/postgres-db';
 
 // ── Check if mv_unified_search exists (cached per cold start) ──
@@ -362,13 +363,24 @@ async function searchUnified(
   const totalPages = Math.ceil(total / pageSize);
   const offset = (page - 1) * pageSize;
 
-  // ── Relevance-weighted ORDER BY when query is present ──
-  // Priority: exact phrase → starts with → contains → fallback, then shorter name, then CAGR
+  // ── Sort parameter (TBD-7) ──
+  const sortParam = searchParams.get('sort') ?? '';
+  const SORT_MAP: Record<string, string> = {
+    'return_1y': 'cagr_1y DESC NULLS LAST',
+    'return_3y': 'cagr_3y DESC NULLS LAST',
+    'return_5y': 'cagr_5y DESC NULLS LAST',
+    'sharpe': 'sharpe_ratio_1y DESC NULLS LAST',
+    'expense': 'expense_ratio ASC NULLS LAST',
+    'aum': 'aum DESC NULLS LAST',
+    'name': 'scheme_name ASC',
+  };
+
   let orderBy: string;
   const dataParams = [...params];
   if (randomize) {
-    // "Fresh Discovery" mode: random selection for zero-state engagement
     orderBy = 'ORDER BY RANDOM()';
+  } else if (sortParam && SORT_MAP[sortParam]) {
+    orderBy = `ORDER BY ${SORT_MAP[sortParam]}`;
   } else if (query && !topPerformers) {
     orderBy = 'ORDER BY cagr_3y DESC NULLS LAST';
   } else {
@@ -405,7 +417,7 @@ async function searchUnified(
     dataParams
   );
 
-  return NextResponse.json({
+  return cachedJson({
     success: true,
     funds: result.rows.map(formatRow),
     total,
@@ -415,7 +427,7 @@ async function searchUnified(
     query: query || amc || category || subCategory,
     engine: 'unified',
     ...(randomize ? { hint: 'random_discovery' } : {}),
-  });
+  }, CACHE_TTL.FUND_LIST);
 }
 
 // ── Format a matview row for the API response ──

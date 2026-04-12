@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cachedJson, CACHE_TTL as API_CACHE_TTL } from '@/lib/api-cache-headers';
 import pool from '@/lib/postgres-db';
 
 interface CurrencyRate {
@@ -180,12 +181,12 @@ export async function GET() {
 
     ratesCache = { rates, timestamp: Date.now() };
 
-    return NextResponse.json({
+    return cachedJson({
       success: true,
       rates,
       source: 'live',
       timestamp: new Date().toISOString(),
-    });
+    }, API_CACHE_TTL.CURRENCY);
   } catch (error) {
     console.error('Currency rates API error:', error);
     return NextResponse.json({

@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { cachedJson, CACHE_TTL } from '@/lib/api-cache-headers';
 import pool from '@/lib/postgres-db';
 
 export async function GET(
@@ -287,7 +288,7 @@ export async function GET(
       )
     ) : null;
 
-    return NextResponse.json({
+    return cachedJson({
       success: true,
       data: {
         fund: {
@@ -300,7 +301,7 @@ export async function GET(
         navHistory,
         variants,
       }
-    });
+    }, CACHE_TTL.FUND_DETAIL);
 
   } catch (error: any) {
     console.error('Error fetching fund details:', error);

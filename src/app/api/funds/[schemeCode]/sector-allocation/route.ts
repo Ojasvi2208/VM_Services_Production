@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { cachedJson, CACHE_TTL } from '@/lib/api-cache-headers';
 import pool from '@/lib/postgres-db';
 
 export async function GET(
@@ -30,7 +31,7 @@ export async function GET(
       asOfDate: r.as_of_date,
     }));
 
-    return NextResponse.json({ success: true, sectors, asOfDate: sectors[0]?.asOfDate });
+    return cachedJson({ success: true, sectors, asOfDate: sectors[0]?.asOfDate }, CACHE_TTL.FUND_HOLDINGS);
   } catch (error: any) {
     console.error('Sector allocation error:', error.message);
     return NextResponse.json({ success: false, sectors: [], error: error.message }, { status: 500 });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
+import { cachedJson, CACHE_TTL } from '@/lib/api-cache-headers';
 
 /**
  * Market Data API — DB-backed, zero Yahoo Finance calls from user requests.
@@ -152,13 +153,13 @@ export async function GET(request: NextRequest) {
       const symbolSet = new Set(symbols);
       const data = cached.items.filter(item => symbolSet.has(item.symbol));
 
-      return NextResponse.json({
+      return cachedJson({
         success: true,
         data,
         timestamp: cached.fetchedAt,
         isMarketOpen: isMarketCurrentlyOpen(),
         source: 'db_cache',
-      });
+      }, CACHE_TTL.MARKET_DATA);
     }
 
     // ── Emergency fallback: live fetch (cold-start or missed cron) ───────────

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cachedJson, CACHE_TTL as API_CACHE_TTL } from '@/lib/api-cache-headers';
 
 // Multi-source financial news aggregator:
 // 1. Direct RSS feeds (ET, Livemint, NDTV) — include real article images
@@ -458,14 +459,14 @@ export async function GET(request: NextRequest) {
 
     const isCached = newsCache ? (Date.now() - newsCache.timestamp < CACHE_TTL) : false;
 
-    return NextResponse.json({
+    return cachedJson({
       success: true,
       articles: filtered.slice(0, limit),
       total: filtered.length,
       source: isCached ? 'cache' : 'live',
       categories: ['Markets', 'Mutual Funds', 'Stocks', 'Economy', 'Forex', 'Commodities', 'Crypto', 'Global', 'FII/DII', 'Tax', 'NFO', 'Sports'],
       timestamp: newsCache ? new Date(newsCache.timestamp).toISOString() : new Date().toISOString(),
-    });
+    }, API_CACHE_TTL.NEWS);
 
   } catch (error) {
     console.error('News aggregation error:', error);

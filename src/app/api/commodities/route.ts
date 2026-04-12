@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cachedJson, CACHE_TTL as API_CACHE_TTL } from '@/lib/api-cache-headers';
 
 // Real-time commodity prices via CF relay → Yahoo Finance chart API
 // Fetches international + MCX India prices in both USD and INR
@@ -145,13 +146,13 @@ export async function GET() {
       commodityCache = { commodities, usdInr, timestamp: Date.now() };
     }
 
-    return NextResponse.json({
+    return cachedJson({
       success: true,
       commodities,
       usdInr,
       source: 'live',
       timestamp: new Date().toISOString(),
-    });
+    }, API_CACHE_TTL.COMMODITIES);
   } catch (error) {
     console.error('Commodities API error:', error);
 

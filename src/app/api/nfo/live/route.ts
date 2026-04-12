@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cachedJson, CACHE_TTL } from '@/lib/api-cache-headers';
 import { getNFOCache, setNFOCache, type NFOCacheData, type NFOCacheItem } from '@/lib/nfo-cache';
 
 // Cache-first NFO endpoint — cron populates cache, this only reads.
@@ -132,7 +133,7 @@ export async function GET(request: NextRequest) {
     if (category) nfos = nfos.filter(n => n.category.toLowerCase() === category.toLowerCase());
     if (amc) nfos = nfos.filter(n => n.amcName.toLowerCase().includes(amc.toLowerCase()));
 
-    return NextResponse.json({
+    return cachedJson({
       success: true,
       nfos,
       total: nfos.length,
@@ -143,7 +144,7 @@ export async function GET(request: NextRequest) {
       source: cache.source,
       cachedAt: cache.fetchedAt,
       timestamp: new Date().toISOString(),
-    });
+    }, CACHE_TTL.NFO);
 
   } catch (error) {
     console.error('NFO Live API error:', error);

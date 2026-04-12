@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { cachedJson, CACHE_TTL } from '@/lib/api-cache-headers';
 import pool from '@/lib/postgres-db';
 
 export async function GET(
@@ -36,7 +37,7 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({ success: true, managers });
+    return cachedJson({ success: true, managers }, CACHE_TTL.FUND_MANAGERS);
   } catch (error: any) {
     console.error('Fund managers error:', error.message);
     return NextResponse.json({ success: false, managers: [], error: error.message }, { status: 500 });

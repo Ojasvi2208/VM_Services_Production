@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { cachedJson, CACHE_TTL } from '@/lib/api-cache-headers';
 import pool from '@/lib/postgres-db';
 
 export async function GET(
@@ -31,12 +32,12 @@ export async function GET(
       LIMIT 10
     `, [schemeCode]);
 
-    return NextResponse.json({
+    return cachedJson({
       success: true,
       schemeCode,
       holdings: result.rows,
       count: result.rows.length,
-    });
+    }, CACHE_TTL.FUND_HOLDINGS);
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: err.message },

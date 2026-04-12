@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cachedJson, CACHE_TTL as API_CACHE_TTL } from '@/lib/api-cache-headers';
 
 // Cache for stock data (5 minute TTL)
 let cachedData: {
@@ -212,14 +213,14 @@ export async function GET() {
   try {
     const { gainers, losers } = await fetchFromNSE();
     cachedData = { gainers, losers, timestamp: Date.now() };
-    return NextResponse.json({
+    return cachedJson({
       success: true,
       gainers,
       losers,
       isLive: true,
       source: 'nse',
       timestamp: new Date().toISOString(),
-    });
+    }, API_CACHE_TTL.GAINERS_LOSERS);
   } catch {
     // NSE unavailable — serve representative data with explicit flag so
     // the UI can show a "Market data delayed" disclaimer rather than
