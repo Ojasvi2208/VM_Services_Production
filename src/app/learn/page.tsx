@@ -1,19 +1,18 @@
-import type { Metadata } from 'next';
+'use client';
+
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
 import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
 
-export const metadata: Metadata = {
-  title: 'Learn — Mutual Fund Guides & Investment Education',
-  description: 'Free educational guides on mutual funds, SIP, SWP, STP, ELSS tax saving, LTCG tax, and more. Institutional-grade insights from AMFI-registered distributor ARN-317605.',
-  openGraph: {
-    title: 'Learn — Mutual Fund Guides & Investment Education',
-    description: 'Free educational guides on mutual funds for Indian investors.',
-  },
-};
+// ─── Article Data ───────────────────────────────────────────
+interface ArticleItem {
+  slug: string; title: string; description: string;
+  category: string; icon: string; readTime: string; color: string;
+}
 
-const ARTICLES = [
+const ARTICLES: ArticleItem[] = [
   {
     slug: 'best-elss-tax-saving-funds',
     title: 'Best ELSS Tax Saving Funds 2026-27',
@@ -251,18 +250,39 @@ const ARTICLES = [
   },
 ];
 
-const CATEGORIES = [
-  { label: 'All Guides', count: ARTICLES.length },
-  { label: 'Fund Picks', count: ARTICLES.filter(a => a.category === 'Fund Picks').length },
-  { label: 'Getting Started', count: ARTICLES.filter(a => a.category === 'Getting Started' || a.category === 'Basics' || a.category === 'Fund Basics').length },
-  { label: 'Tax Planning', count: ARTICLES.filter(a => a.category === 'Tax Planning').length },
-  { label: 'Retirement', count: ARTICLES.filter(a => a.category === 'Retirement').length },
-  { label: 'Investment Strategy', count: ARTICLES.filter(a => a.category === 'Investment Strategy' || a.category === 'Index Investing' || a.category === 'Gold Investment').length },
-  { label: 'Calculators', count: ARTICLES.filter(a => a.category === 'Calculators').length },
-  { label: 'Market Analysis', count: ARTICLES.filter(a => a.category === 'Market Analysis').length },
-];
+// ─── Category mapping (groups similar categories under one filter label) ──
+const CATEGORY_GROUPS: Record<string, string[]> = {
+  'All Guides':          [],
+  'Fund Picks':          ['Fund Picks'],
+  'Getting Started':     ['Getting Started', 'Basics', 'Fund Basics'],
+  'Tax Planning':        ['Tax Planning'],
+  'Retirement':          ['Retirement'],
+  'Investment Strategy': ['Investment Strategy', 'Index Investing', 'Gold Investment', 'Fixed Income'],
+  'Calculators':         ['Calculators'],
+  'Market Analysis':     ['Market Analysis'],
+};
 
+const PER_PAGE = 9;
+
+// ─── Page ───────────────────────────────────────────────────
 export default function LearnPage() {
+  const [activeCategory, setActiveCategory] = useState('All Guides');
+  const [page, setPage] = useState(1);
+
+  const filtered = useMemo(() => {
+    if (activeCategory === 'All Guides') return ARTICLES;
+    const cats = CATEGORY_GROUPS[activeCategory] ?? [];
+    return ARTICLES.filter(a => cats.includes(a.category));
+  }, [activeCategory]);
+
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  const handleCategory = (label: string) => {
+    setActiveCategory(label);
+    setPage(1);
+  };
+
   return (
     <div className="bg-[#060D0A] min-h-screen flex flex-col">
       <NavBar />
@@ -283,18 +303,34 @@ export default function LearnPage() {
           </p>
         </div>
 
-        {/* Category pills */}
+        {/* Category pills — clickable */}
         <div className="flex flex-wrap gap-2 mb-10">
-          {CATEGORIES.map(cat => (
-            <span key={cat.label} className="px-4 py-2 rounded-full bg-[#161d1a] border border-white/5 text-sm text-[#859586] font-medium">
-              {cat.label} <span className="text-[#44f593] ml-1">{cat.count}</span>
-            </span>
-          ))}
+          {Object.entries(CATEGORY_GROUPS).map(([label, cats]) => {
+            const count = label === 'All Guides'
+              ? ARTICLES.length
+              : ARTICLES.filter(a => cats.includes(a.category)).length;
+            if (count === 0) return null;
+            const isActive = activeCategory === label;
+            return (
+              <button
+                key={label}
+                onClick={() => handleCategory(label)}
+                className={[
+                  'px-4 py-2 rounded-full text-sm font-medium transition-all duration-200',
+                  isActive
+                    ? 'bg-[#44f593]/15 border border-[#44f593]/40 text-[#44f593]'
+                    : 'bg-[#161d1a] border border-white/5 text-[#859586] hover:border-[#44f593]/20 hover:text-[#c4cfc9]',
+                ].join(' ')}
+              >
+                {label} <span className={isActive ? 'text-[#44f593] ml-1' : 'text-[#44f593]/60 ml-1'}>{count}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Articles Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-14">
-          {ARTICLES.map(article => (
+        {/* Articles Grid — paginated */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+          {paginated.map(article => (
             <Link
               key={article.slug}
               href={`/learn/${article.slug}`}
@@ -329,6 +365,47 @@ export default function LearnPage() {
             </Link>
           ))}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mb-14">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-2 rounded-lg border border-white/10 text-sm text-[#859586] hover:text-[#dce5df] hover:border-[#44f593]/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-base align-middle">chevron_left</span>
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              <button
+                key={p}
+                onClick={() => setPage(p)}
+                className={[
+                  'w-10 h-10 rounded-lg text-sm font-bold transition-all duration-200',
+                  p === page
+                    ? 'bg-[#44f593] text-[#001f10]'
+                    : 'border border-white/10 text-[#859586] hover:text-[#dce5df] hover:border-[#44f593]/30',
+                ].join(' ')}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-2 rounded-lg border border-white/10 text-sm text-[#859586] hover:text-[#dce5df] hover:border-[#44f593]/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-base align-middle">chevron_right</span>
+            </button>
+          </div>
+        )}
+
+        {/* Page info */}
+        {totalPages > 1 && (
+          <p className="text-center text-xs text-[#3c4a3e] font-mono mb-10">
+            Page {page} of {totalPages} — showing {paginated.length} of {filtered.length} guides
+          </p>
+        )}
 
         <ComplianceDisclaimer variant="general" className="mt-4" />
       </main>

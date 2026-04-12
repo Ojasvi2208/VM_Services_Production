@@ -1855,14 +1855,14 @@ export default async function LearnArticlePage({ params }: { params: Promise<{ s
         </div>
 
         {/* Pro CTA */}
-        <div className="my-8 p-6 rounded-2xl border border-[#44f593]/20 bg-[#44f593]/5 flex flex-col sm:flex-row items-center gap-4">
+        <div className="my-8 p-6 rounded-2xl border border-amber-500/20 bg-amber-500/5 flex flex-col sm:flex-row items-center gap-4">
           <div className="flex-1">
-            <p className="font-['Space_Grotesk'] font-bold text-lg text-[#dce5df] mb-1">Go deeper with VMFS Pro</p>
-            <p className="text-sm text-[#859586]">Portfolio overlap detection, LTCG tax calculator, fund scoring, and advanced analytics — ₹99/year.</p>
+            <p className="font-['Space_Grotesk'] font-bold text-lg text-[#dce5df] mb-1">VMFS Pro — Coming Soon</p>
+            <p className="text-sm text-[#859586]">Portfolio overlap detection, LTCG tax calculator, fund scoring, and advanced analytics.</p>
           </div>
-          <Link href="/premium" className="px-6 py-2.5 bg-[#44f593] text-[#001f10] font-bold rounded-xl text-sm hover:bg-[#25e283] transition-colors shrink-0">
-            Upgrade to Pro →
-          </Link>
+          <span className="px-6 py-2.5 border border-amber-500/30 text-amber-400 font-bold rounded-xl text-sm cursor-not-allowed opacity-70 shrink-0">
+            Coming Soon
+          </span>
         </div>
 
         {/* FAQs */}

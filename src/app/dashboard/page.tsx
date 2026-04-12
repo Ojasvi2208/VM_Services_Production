@@ -391,14 +391,10 @@ export default function DashboardPage() {
         {/* Bottom: Premium CTA + support + sign out */}
         <div className="px-4 pb-5 space-y-3 border-t border-white/5 pt-4">
           {!isPremium && (
-            <Link
-              href="/premium"
-              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-bold text-sm text-[#00391c] transition-all active:scale-[0.98]"
-              style={{ background: 'linear-gradient(to right, #44f593, #00d87a)', boxShadow: '0 0 20px rgba(0,216,122,0.2)' }}
-            >
-              <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>workspace_premium</span>
-              Upgrade to Pro
-            </Link>
+            <span className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-bold text-sm text-amber-400 border border-amber-500/20 bg-amber-500/5 cursor-not-allowed opacity-70">
+              <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 0" }}>workspace_premium</span>
+              Pro — Coming Soon
+            </span>
           )}
           {!hasCAS && (
             <button

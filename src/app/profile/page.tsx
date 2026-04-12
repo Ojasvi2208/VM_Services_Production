@@ -234,14 +234,11 @@ export default function ProfilePage() {
                 <div className="flex-1">
                   <p className="font-bold text-[#dce5df]">Free Plan</p>
                   <p className="text-xs text-[#859586] mt-0.5 mb-3">
-                    Upgrade to Pro for portfolio overlap detection, fund scoring, LTCG tax calculator, advanced analytics, capital gains PDF export, and many more.
+                    Pro is coming soon — portfolio overlap detection, fund scoring, LTCG tax calculator, advanced analytics, and more.
                   </p>
-                  <Link
-                    href="/premium"
-                    className="inline-block bg-[#44f593] text-[#001f10] px-5 py-2 rounded-xl font-bold text-sm hover:bg-[#25e283] transition-colors"
-                  >
-                    Upgrade for ₹99/year →
-                  </Link>
+                  <span className="inline-block border border-amber-500/30 text-amber-400 px-5 py-2 rounded-xl font-bold text-sm cursor-not-allowed opacity-70">
+                    Pro — Coming Soon
+                  </span>
                 </div>
               </div>
             )}
