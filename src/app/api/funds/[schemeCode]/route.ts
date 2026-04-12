@@ -288,20 +288,31 @@ export async function GET(
       )
     ) : null;
 
-    return cachedJson({
+    // ETag based on latest NAV date + scheme code (changes only when NAV updates)
+    const etagSource = `${schemeCode}-${parsedFund?.latestNavDate || 'none'}-${navHistory?.length || 0}`;
+    const etag = `"${Buffer.from(etagSource).toString('base64url')}"`;
+
+    // If client sends If-None-Match and it matches, return 304
+    const ifNoneMatch = request.headers.get('if-none-match');
+    if (ifNoneMatch === etag) {
+      return new NextResponse(null, { status: 304, headers: { ETag: etag } });
+    }
+
+    const res = cachedJson({
       success: true,
       data: {
         fund: {
           ...parsedFund,
           fundHouse: parsedFund?.amcCode || null,
           category: parsedFund?.category || null,
-          // schemeType is now derived from category in the SQL SELECT above
         },
         returns: parsedReturns,
         navHistory,
         variants,
       }
     }, CACHE_TTL.FUND_DETAIL);
+    res.headers.set('ETag', etag);
+    return res;
 
   } catch (error: any) {
     console.error('Error fetching fund details:', error);
