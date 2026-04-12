@@ -275,7 +275,7 @@ export default function NavBar() {
               </button>
 
               {bellOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 bg-[#0d1512]/97 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                <div className="absolute right-0 top-full mt-2 w-80 bg-[#0d1512] border border-[#1a2a22] rounded-2xl shadow-2xl z-50 overflow-hidden">
                   {/* Header */}
                   <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
                     <span className="text-sm font-bold text-[#dce5df]">Notifications</span>
@@ -338,7 +338,7 @@ export default function NavBar() {
 
                   {/* Footer */}
                   {!isAuthenticated && (
-                    <div className="px-4 py-3 border-t border-white/10 bg-white/3">
+                    <div className="px-4 py-3 border-t border-[#1a2a22] bg-[#0a110e]">
                       <p className="text-xs text-[#859586] text-center">
                         <Link href="/auth/signin" className="text-[#44f593] hover:underline" onClick={() => setBellOpen(false)}>Sign in</Link> to see personalised notifications
                       </p>
@@ -363,7 +363,7 @@ export default function NavBar() {
                   <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 0" }}>expand_more</span>
                 </button>
                 {avatarOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-[#0d1512]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl py-1 z-50">
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-[#0d1512] border border-[#1a2a22] rounded-xl shadow-2xl py-1 z-50">
                     <Link href="/dashboard" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#c4cfc9] hover:text-white hover:bg-white/5 transition-colors" onClick={() => setAvatarOpen(false)}>
                       <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 0" }}>dashboard</span>
                       Dashboard

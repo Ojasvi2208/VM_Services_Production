@@ -54,6 +54,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     'mutual-fund-vs-fixed-deposit',
     'best-sip-plans-5000-per-month',
     'how-elections-impact-indian-markets',
+    // Batch 2 — high-volume trending (April 2026)
+    'new-tax-regime-vs-old-tax-regime',
+    'how-to-invest-in-mutual-funds-beginners',
+    'nps-vs-ppf-which-is-better',
+    'gold-etf-vs-sovereign-gold-bond',
+    'best-flexi-cap-funds-india',
+    'step-up-sip-calculator-benefits',
+    'best-debt-mutual-funds-india',
+    'what-is-expense-ratio-mutual-fund',
+    'best-hybrid-mutual-funds-india',
+    'how-to-read-mutual-fund-factsheet',
+    'nifty-50-vs-nifty-next-50-vs-nifty-500',
   ];
   const learnPages: MetadataRoute.Sitemap = LEARN_SLUGS.map(slug => ({
     url: `${BASE_URL}/learn/${slug}`,
