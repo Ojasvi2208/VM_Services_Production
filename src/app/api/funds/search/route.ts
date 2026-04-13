@@ -161,6 +161,7 @@ export async function GET(request: NextRequest) {
     const category    = sp.get('category') || '';
     const subCategory = sp.get('subCategory') || '';
     const plan        = sp.get('plan') || '';
+    const sort        = sp.get('sort') || '';
     const page        = Math.max(1, parseInt(sp.get('page') || '1'));
     const pageSize    = Math.min(50, parseInt(sp.get('pageSize') || '10'));
 
@@ -169,7 +170,7 @@ export async function GET(request: NextRequest) {
     // Empty query → smart defaults: top performers by 3Y CAGR
     if (!query && !amc && !category && !subCategory) {
       if (useMV) {
-        return await searchUnified('', '', '', '', 1, pageSize, true, false, plan);
+        return await searchUnified('', '', '', '', 1, pageSize, true, false, plan, sort);
       }
       const stats = await pool.query('SELECT COUNT(*) FROM funds');
       return NextResponse.json({
@@ -179,7 +180,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (useMV) {
-      return await searchUnified(query, amc, category, subCategory, page, pageSize, false, false, plan);
+      return await searchUnified(query, amc, category, subCategory, page, pageSize, false, false, plan, sort);
     } else {
       return await searchLegacy(query, amc, category, page, pageSize);
     }
@@ -199,7 +200,7 @@ export async function GET(request: NextRequest) {
 
 async function searchUnified(
   query: string, amc: string, category: string, subCategory: string,
-  page: number, pageSize: number, topPerformers = false, randomize = false, plan = ''
+  page: number, pageSize: number, topPerformers = false, randomize = false, plan = '', sort = ''
 ) {
   // ── Build WHERE clause ──
   let where = 'WHERE 1=1';
@@ -364,7 +365,7 @@ async function searchUnified(
   const offset = (page - 1) * pageSize;
 
   // ── Sort parameter (TBD-7) ──
-  const sortParam = searchParams.get('sort') ?? '';
+  const sortParam = sort;
   const SORT_MAP: Record<string, string> = {
     'return_1y': 'cagr_1y DESC NULLS LAST',
     'return_3y': 'cagr_3y DESC NULLS LAST',
