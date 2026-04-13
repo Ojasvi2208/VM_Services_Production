@@ -207,11 +207,9 @@ async function searchUnified(
   const params: any[] = [];
   let p = 1;
 
-  // Plan type filter (Direct / Regular)
-  if (plan && (plan === 'Direct' || plan === 'Regular')) {
-    where += ` AND plan_type = $${p++}`;
-    params.push(plan);
-  }
+  // Note: mv_unified_search groups by master_fund_id (strategy family).
+  // plan_type column does not exist in the MV. Plan filtering is done client-side
+  // by the web app's variant toggle. Mobile app receives all plans and filters locally.
 
   if (query) {
     const { words } = normalizeQuery(query);
