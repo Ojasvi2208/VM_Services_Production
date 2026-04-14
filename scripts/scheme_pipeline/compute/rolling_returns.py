@@ -28,11 +28,12 @@ JOB = "rolling_returns"
 # get growth-equivalent returns (acceptable; dividend reinvestment assumption).
 _COMPUTE_SQL = """
 WITH latest AS (
-  SELECT DISTINCT ON (scheme_code)
-         scheme_code, nav_date AS as_of, COALESCE(tr_nav, nav_value) AS nav
-  FROM nav_history
-  WHERE nav_value > 0
-  ORDER BY scheme_code, nav_date DESC
+  SELECT DISTINCT ON (nh.scheme_code)
+         nh.scheme_code, nh.nav_date AS as_of, COALESCE(nh.tr_nav, nh.nav_value) AS nav
+  FROM nav_history nh
+  JOIN funds f ON f.scheme_code = nh.scheme_code
+  WHERE nh.nav_value > 0
+  ORDER BY nh.scheme_code, nh.nav_date DESC
 ),
 lookback AS (
   SELECT
