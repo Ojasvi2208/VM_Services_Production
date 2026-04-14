@@ -1,0 +1,66 @@
+name: Scheme Pipeline Nightly
+
+on:
+  schedule:
+    # 6:15 AM IST = 00:45 UTC, Tue–Sat (after daily-nav-update at 5 AM IST).
+    # Cron day list: Mon–Fri UTC → Tue–Sat IST (skip weekends, no fresh NAVs).
+    - cron: '45 0 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Comma-separated step names to run (default = all)'
+        type: string
+        required: false
+        default: ''
+      skip:
+        description: 'Comma-separated step names to skip'
+        type: string
+        required: false
+        default: ''
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: scripts/scheme_pipeline/requirements.txt
+
+      - name: Install pipeline dependencies
+        run: pip install -r scripts/scheme_pipeline/requirements.txt
+
+      - name: Run scheme pipeline
+        env:
+          DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+          PIPELINE_LOG_LEVEL: INFO
+          ONLY: ${{ github.event.inputs.only }}
+          SKIP: ${{ github.event.inputs.skip }}
+        working-directory: scripts
+        run: |
+          set -e
+          ARGS=()
+          if [ -n "$ONLY" ]; then ARGS+=(--only "$ONLY"); fi
+          if [ -n "$SKIP" ]; then ARGS+=(--skip "$SKIP"); fi
+          python -m scheme_pipeline.jobs.daily_etl "${ARGS[@]}"
+
+      - name: Report ingestion_run summary
+        if: always()
+        env:
+          PGCONN: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          sudo apt-get install -y postgresql-client -qq >/dev/null
+          psql "$PGCONN" -c "
+            SELECT source, job_name, status, row_count,
+                   started_at AT TIME ZONE 'Asia/Kolkata' AS started_ist,
+                   ROUND(EXTRACT(EPOCH FROM (ended_at - started_at))::numeric, 1) AS seconds
+            FROM ingestion_run
+            WHERE started_at > NOW() - INTERVAL '1 hour'
+            ORDER BY started_at;
+          " || true

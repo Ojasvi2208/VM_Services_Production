@@ -20,27 +20,33 @@ log = logging.getLogger(__name__)
 SOURCE = "compute"
 JOB = "percentile"
 
-# Maps scheme_percentile.metric → column on fund_returns
+# Maps scheme_percentile.metric → column on fund_returns.
+# Column names match fund_returns schema (migration 001 + 023).
 METRICS: dict[str, str] = {
-    "return_1y": "returns_1y",
-    "return_3y": "returns_3y",
-    "return_5y": "returns_5y",
+    "return_1y": "return_1y",
+    "return_3y": "return_3y",
+    "return_5y": "return_5y",
     "sharpe_1y": "sharpe_1y",
     "alpha_3y": "alpha_3y",
 }
 
 _RANK_SQL = """
+    WITH latest AS (
+        SELECT DISTINCT ON (scheme_code) *
+        FROM fund_returns
+        ORDER BY scheme_code, calculated_date DESC
+    )
     SELECT
-        fr.scheme_code,
+        l.scheme_code,
         f.sub_category AS peer_category,
         ROUND((percent_rank() OVER (
             PARTITION BY f.sub_category
-            ORDER BY fr.{col} NULLS LAST
+            ORDER BY l.{col} NULLS LAST
         ) * 100)::numeric, 2) AS pct_rank,
         COUNT(*) OVER (PARTITION BY f.sub_category) AS peer_count
-    FROM fund_returns fr
+    FROM latest l
     JOIN funds f USING (scheme_code)
-    WHERE fr.{col} IS NOT NULL
+    WHERE l.{col} IS NOT NULL
       AND f.sub_category IS NOT NULL;
 """
 
