@@ -71,7 +71,6 @@ lookback AS (
 )
 SELECT
   scheme_code,
-  as_of AS calculated_date,
   CASE WHEN nav_1y  IS NOT NULL AND nav_1y  > 0
        THEN ((nav_now / nav_1y)  - 1) * 100 END AS return_1y,
   CASE WHEN nav_3y  IS NOT NULL AND nav_3y  > 0
@@ -87,9 +86,9 @@ WHERE nav_1y IS NOT NULL OR nav_3y IS NOT NULL
 
 _UPSERT_SQL = """
 INSERT INTO fund_returns
-    (scheme_code, calculated_date, return_1y, return_3y, return_5y, return_10y)
+    (scheme_code, return_1y, return_3y, return_5y, return_10y, updated_at)
 VALUES %s
-ON CONFLICT (scheme_code, calculated_date)
+ON CONFLICT (scheme_code)
 DO UPDATE SET
     return_1y  = EXCLUDED.return_1y,
     return_3y  = EXCLUDED.return_3y,
@@ -101,10 +100,12 @@ DO UPDATE SET
 
 def run() -> int:
     with IngestionLogger(source=SOURCE, job_name=JOB) as logger:
+        from datetime import datetime
         rows = fetch_all(_COMPUTE_SQL)
+        now = datetime.utcnow()
         payload = [
-            (r["scheme_code"], r["calculated_date"], r["return_1y"],
-             r["return_3y"], r["return_5y"], r["return_10y"])
+            (r["scheme_code"], r["return_1y"], r["return_3y"],
+             r["return_5y"], r["return_10y"], now)
             for r in rows
         ]
         written = execute_batch(_UPSERT_SQL, payload)
