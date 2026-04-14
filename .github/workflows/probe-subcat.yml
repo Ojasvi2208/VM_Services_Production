@@ -1,0 +1,11 @@
+name: Probe funds.sub_category
+on: {workflow_dispatch: {}}
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PGCONN: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          sudo apt-get install -y postgresql-client -qq >/dev/null
+          psql "$PGCONN" -c "SELECT sub_category, COUNT(*) FROM funds GROUP BY 1 ORDER BY 2 DESC LIMIT 30;"
