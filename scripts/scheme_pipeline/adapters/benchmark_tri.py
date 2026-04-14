@@ -24,10 +24,10 @@ SOURCE = "nse_tri"
 JOB = "tri_daily"
 
 _UPSERT_SQL = """
-    INSERT INTO benchmark_data (benchmark_name, as_of_date, tri_value)
+    INSERT INTO benchmark_data (benchmark_name, date, value)
     VALUES %s
-    ON CONFLICT (benchmark_name, as_of_date)
-    DO UPDATE SET tri_value = EXCLUDED.tri_value;
+    ON CONFLICT (benchmark_name, date)
+    DO UPDATE SET value = EXCLUDED.value;
 """
 
 
@@ -37,13 +37,19 @@ def distinct_benchmarks() -> list[str]:
 
 
 def fetch_rows() -> list[tuple]:
-    """TODO(DATA-004): pull TRI CSV per benchmark, normalise to (name, date, value).
+    """Daily benchmark ingestion.
 
-    Returning empty list for the scaffold so pipeline reports 'partial'
-    rather than 'failed', which is the correct health-endpoint signal.
+    Current reality: benchmark_data is populated by the existing
+    /api/cron/market-update route (NIFTY50, NIFTYBANK daily price close
+    via Cloudflare Yahoo relay). This adapter is a NOOP until we swap
+    in the NSE TRI CSV source (DATA-004 extension — pending).
+
+    Returning empty list + marking partial is the right signal: pipeline
+    reports 'no new rows' without masking the fact that real TRI data is
+    not yet ingested here.
     """
     benchmarks = distinct_benchmarks()
-    log.warning("benchmark_tri.fetch_rows stubbed — %d benchmarks registered", len(benchmarks))
+    log.info("benchmark_tri NOOP — market-update cron owns ingestion for %d mapped benchmarks", len(benchmarks))
     return []
 
 
