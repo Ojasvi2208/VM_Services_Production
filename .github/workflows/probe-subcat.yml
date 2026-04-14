@@ -1,4 +1,4 @@
-name: Probe funds.sub_category
+name: Probe benchmark_data + scheme_benchmark_map
 on: {workflow_dispatch: {}}
 jobs:
   probe:
@@ -8,4 +8,5 @@ jobs:
           PGCONN: ${{ secrets.RAILWAY_DATABASE_URL }}
         run: |
           sudo apt-get install -y postgresql-client -qq >/dev/null
-          psql "$PGCONN" -c "SELECT sub_category, COUNT(*) FROM funds GROUP BY 1 ORDER BY 2 DESC LIMIT 30;"
+          psql "$PGCONN" -c "SELECT benchmark_name, COUNT(*), MIN(date), MAX(date) FROM benchmark_data GROUP BY 1 ORDER BY 2 DESC LIMIT 20;"
+          psql "$PGCONN" -c "SELECT COUNT(*) FROM scheme_benchmark_map;"
