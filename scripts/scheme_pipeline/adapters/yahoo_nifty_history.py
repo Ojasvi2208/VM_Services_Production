@@ -15,8 +15,12 @@ is stamped into ingestion_run.metadata so downstream (DATA-005) can
 badge ratios as "proxy".
 
 Watermark logic:
-  - If max(date) for a benchmark is < today - 30d  → range=5y (backfill)
-  - Else                                           → range=1mo (gap-fill)
+  - If row_count for benchmark < BACKFILL_ROW_FLOOR  → range=5y (first-time backfill)
+  - Else if max(date) < today - 30d                  → range=5y (gap recovery)
+  - Else                                             → range=1mo (incremental)
+
+Without the row-count floor we'd treat the 54 existing rows from
+/api/cron/market-update as "fresh" and never actually backfill 5y.
 
 Reuses existing benchmark_name tokens (NIFTY50, NIFTYBANK) that the
 /api/cron/market-update route already writes, so UPSERT merges cleanly.
@@ -51,7 +55,8 @@ SYMBOLS: list[tuple[str, str]] = [
     ("^NSEBANK", "NIFTYBANK"),
 ]
 
-BACKFILL_TRIGGER_DAYS = 30   # if latest row older than this → full backfill
+BACKFILL_TRIGGER_DAYS = 30   # gap recovery: if latest row older than this → full backfill
+BACKFILL_ROW_FLOOR = 500     # first-time backfill: if existing rows < this → full backfill
 BACKFILL_RANGE = "5y"
 INCREMENTAL_RANGE = "1mo"
 REQUEST_TIMEOUT = 30         # seconds
@@ -64,18 +69,22 @@ _UPSERT_SQL = """
 """
 
 
-def _latest_date(benchmark_name: str) -> Optional[date]:
+def _state(benchmark_name: str) -> tuple[Optional[date], int]:
     row = fetch_one(
-        "SELECT MAX(date) AS d FROM benchmark_data WHERE benchmark_name = %s;",
+        "SELECT MAX(date) AS d, COUNT(*) AS n FROM benchmark_data WHERE benchmark_name = %s;",
         (benchmark_name,),
     )
-    return row["d"] if row and row.get("d") else None
+    if not row:
+        return None, 0
+    return row.get("d"), int(row.get("n") or 0)
 
 
-def _choose_range(latest: Optional[date]) -> str:
-    if latest is None:
+def _choose_range(latest: Optional[date], row_count: int) -> str:
+    # First-time backfill: existing series too thin for risk ratios.
+    if row_count < BACKFILL_ROW_FLOOR:
         return BACKFILL_RANGE
-    if (date.today() - latest).days > BACKFILL_TRIGGER_DAYS:
+    # Gap recovery: latest row stale.
+    if latest is None or (date.today() - latest).days > BACKFILL_TRIGGER_DAYS:
         return BACKFILL_RANGE
     return INCREMENTAL_RANGE
 
@@ -115,8 +124,8 @@ def _parse_chart(payload: dict) -> list[tuple[date, float]]:
 
 
 def _ingest_one(symbol: str, benchmark_name: str) -> tuple[int, dict]:
-    latest = _latest_date(benchmark_name)
-    rng = _choose_range(latest)
+    latest, existing_rows = _state(benchmark_name)
+    rng = _choose_range(latest, existing_rows)
     payload = _fetch_chart(symbol, rng)
     points = _parse_chart(payload)
     if not points:
@@ -124,6 +133,7 @@ def _ingest_one(symbol: str, benchmark_name: str) -> tuple[int, dict]:
             "symbol": symbol,
             "range": rng,
             "latest_existing": latest.isoformat() if latest else None,
+            "existing_rows": existing_rows,
             "fetched_rows": 0,
             "note": "yahoo returned empty series",
         }
@@ -133,6 +143,7 @@ def _ingest_one(symbol: str, benchmark_name: str) -> tuple[int, dict]:
         "symbol": symbol,
         "range": rng,
         "latest_existing": latest.isoformat() if latest else None,
+        "existing_rows": existing_rows,
         "fetched_rows": len(rows),
         "written_rows": written,
         "first_date": rows[0][1].isoformat(),
