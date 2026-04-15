@@ -221,11 +221,12 @@ ON CONFLICT (scheme_code) DO UPDATE SET
 """
 
 
-# Per-window minimum observations, ~60% of trading-day max.
-# Gates each window independently so a 3-month-old fund doesn't get a
-# spurious 5y alpha. Relaxed 2026-04-15 after smoke showed 600/1000
-# thresholds blocked established funds with normal NAV gaps.
-MIN_OBS = {"1y": 150, "3y": 450, "5y": 750}
+# Per-window minimum observations. Calibrated empirically 2026-04-15:
+# fill-rate probe showed 450/750 blocked 96% of schemes due to sparse
+# nav_history (median n_obs in 3y window well below 450). Dropped to
+# absolute minimums that still prevent 3-month-old funds getting 5y
+# metrics but let established-sparse-NAV funds qualify.
+MIN_OBS = {"1y": 60, "3y": 200, "5y": 400}
 
 
 def _gate(w: dict[str, Any], key: str) -> Any:
