@@ -16,6 +16,10 @@ const RATE_RULES: Array<{ prefix: string; rule: RateRule }> = [
   { prefix: '/api/premium/',                rule: { max: 10,  windowMs: 60_000  } }, // 10 premium req/min
   { prefix: '/api/portfolio/import-cas',    rule: { max: 5,   windowMs: 300_000 } }, // 5 CAS uploads/5min
   { prefix: '/api/contact',                 rule: { max: 5,   windowMs: 300_000 } }, // 5 contact forms/5min
+  // Catch-all for public read APIs — prevents a single IP scraping the app.
+  // Generous (300/min) because legit mobile + web clients make many requests
+  // per screen; edge cache absorbs most repeat hits so this protects the tail.
+  { prefix: '/api/',                        rule: { max: 300, windowMs: 60_000  } },
 ];
 
 // ── Sensitive paths requiring IP audit logging ────────────────────────────────
