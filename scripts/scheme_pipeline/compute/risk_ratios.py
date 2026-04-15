@@ -167,9 +167,11 @@ SELECT
          THEN ROUND((a.sd_fund * SQRT(%(td)s) * 100)::numeric, 4) END AS std_dev,
     CASE WHEN a.dd_daily IS NOT NULL
          THEN ROUND((a.dd_daily * SQRT(%(td)s) * 100)::numeric, 4) END AS dd,
+    -- Fix A: convert log-annualised mean to arithmetic-annualised % before
+    -- comparing with arithmetic risk-free rate. (EXP(log_mean * 252) - 1) * 100.
     CASE WHEN a.dd_daily > 0
          THEN ROUND((
-            (a.mean_fr * %(td)s * 100 - %(rf)s)
+            ((EXP(a.mean_fr * %(td)s) - 1) * 100 - %(rf)s)
             / (a.dd_daily * SQRT(%(td)s) * 100)
          )::numeric, 4)
     END AS sortino,
@@ -180,7 +182,8 @@ SELECT
              4
          )
     END AS alpha,
-    ROUND((a.mean_fr * %(td)s * 100)::numeric, 4) AS rolling_mean,
+    -- rolling_mean as arithmetic-annualised % for consistency with sortino.
+    ROUND(((EXP(a.mean_fr * %(td)s) - 1) * 100)::numeric, 4) AS rolling_mean,
     a.n_obs
 FROM agg a JOIN cagrs c USING (win);
 """
@@ -218,7 +221,19 @@ ON CONFLICT (scheme_code) DO UPDATE SET
 """
 
 
-def _compute_one(scheme: str, bench: str, as_of) -> tuple | None:
+# Per-window minimum observations. Gates each window independently so a
+# 3-month-old fund doesn't get a spurious 5y alpha. See TODOS.md item C.
+MIN_OBS = {"1y": 200, "3y": 600, "5y": 1000}
+
+
+def _gate(w: dict[str, Any], key: str) -> Any:
+    """Return the metric only if the window has enough observations."""
+    if (w.get("n_obs") or 0) < MIN_OBS.get(key, 0):
+        return None
+    return w.get
+
+
+def _compute_one(scheme: str, bench: str, as_of, now_ts) -> tuple | None:
     """One SQL round-trip returning 3 rows (one per window). None = skip."""
     from datetime import timedelta
 
@@ -238,20 +253,26 @@ def _compute_one(scheme: str, bench: str, as_of) -> tuple | None:
     by_win: dict[str, dict[str, Any]] = {r["win"]: r for r in rows}
     w1, w3, w5 = by_win.get("1y", {}), by_win.get("3y", {}), by_win.get("5y", {})
 
-    # Skip junk (too few observations in 1y window).
-    if (w1.get("n_obs") or 0) < 60:
+    # At least 1y window must qualify; shorter series = skip scheme entirely.
+    if (w1.get("n_obs") or 0) < MIN_OBS["1y"]:
         return None
+
+    # Per-window fetchers: None when that window is too short.
+    g1, g3, g5 = _gate(w1, "1y"), _gate(w3, "3y"), _gate(w5, "5y")
+    G1 = (lambda k: (g1(k) if g1 else None))
+    G3 = (lambda k: (g3(k) if g3 else None))
+    G5 = (lambda k: (g5(k) if g5 else None))
 
     return (
         scheme,
-        w1.get("alpha"),       w3.get("alpha"),       w5.get("alpha"),
-        w1.get("beta"),        w3.get("beta"),        w5.get("beta"),
-        w1.get("sortino"),     w3.get("sortino"),     w5.get("sortino"),
-        w1.get("std_dev"),     w1.get("dd"),
-        w3.get("ir"),          w3.get("te"),          w3.get("r_sq"),
-        w3.get("rolling_mean"),
-        w5.get("rolling_mean"),
-        datetime.utcnow(),
+        G1("alpha"),       G3("alpha"),       G5("alpha"),
+        G1("beta"),        G3("beta"),        G5("beta"),
+        G1("sortino"),     G3("sortino"),     G5("sortino"),
+        G1("std_dev"),     G1("dd"),
+        G3("ir"),          G3("te"),          G3("r_sq"),
+        G3("rolling_mean"),
+        G5("rolling_mean"),
+        now_ts,
     )
 
 
@@ -286,26 +307,44 @@ def run() -> int:
         written = 0
         skipped_no_data = 0
         skipped_no_asof = 0
+        errored = 0
         FLUSH_EVERY = 500  # stream UPSERT so SIGKILL loses <= this many schemes
+        # Fix L: single timestamp per run so downstream can group by updated_at.
+        now_ts = datetime.utcnow()
 
         for i, r in enumerate(candidates, start=1):
             scheme, bench, as_of = r["scheme_code"], r["benchmark_name"], r["as_of"]
             if as_of is None:
                 skipped_no_asof += 1
                 continue
-            row = _compute_one(scheme, bench, as_of)
+            # Fix H: per-scheme try/except so one reset doesn't nuke the run.
+            try:
+                row = _compute_one(scheme, bench, as_of, now_ts)
+            except Exception:
+                log.exception("risk_ratios: scheme=%s failed; continuing", scheme)
+                errored += 1
+                continue
             if row is None:
                 skipped_no_data += 1
                 continue
             buffer.append(row)
             if len(buffer) >= FLUSH_EVERY:
-                written += execute_batch(_UPSERT_SQL, buffer, page_size=10_000)
+                try:
+                    written += execute_batch(_UPSERT_SQL, buffer, page_size=10_000)
+                except Exception:
+                    log.exception("risk_ratios: flush crashed; buffered rows lost")
+                    errored += len(buffer)
                 log.info("risk_ratios: flushed %d/%d (total written=%d)",
                          i, len(candidates), written)
                 buffer = []
 
+        # Final flush always attempted, even if prior flush errored.
         if buffer:
-            written += execute_batch(_UPSERT_SQL, buffer, page_size=10_000)
+            try:
+                written += execute_batch(_UPSERT_SQL, buffer, page_size=10_000)
+            except Exception:
+                log.exception("risk_ratios: final flush crashed")
+                errored += len(buffer)
             log.info("risk_ratios: final flush (total written=%d)", written)
 
         logger.set_row_count(written)
@@ -314,10 +353,11 @@ def run() -> int:
             "written":         written,
             "skipped_no_data": skipped_no_data,
             "skipped_no_asof": skipped_no_asof,
+            "errored":         errored,
             "benchmarks":      list(SUPPORTED_BENCHMARKS),
             "risk_free_pct":   RISK_FREE_PCT,
-            "proxy_warning":   "benchmark_data is Yahoo price-close, NOT TRI. "
-                               "Alpha/IR skewed. Replace once real TRI lands.",
+            "min_obs":         MIN_OBS,
+            "convention":      "log-returns throughout; rf converted via ln(1+rf/100)",
         })
         if written == 0 and len(candidates) > 0:
             logger.mark_partial()

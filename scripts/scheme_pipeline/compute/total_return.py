@@ -98,12 +98,17 @@ def _run_update(sql: str) -> int:
         return cur.rowcount
 
 
+def _audit() -> tuple[int, int, int]:
+    """Fix F: own-scope audit; conn released before heavy UPDATEs begin."""
+    with get_conn(commit=False) as conn, conn.cursor() as cur:
+        cur.execute(_AUDIT_SQL)
+        row = cur.fetchone()
+    return (int(row[0]), int(row[1]), int(row[2])) if row else (0, 0, 0)
+
+
 def run() -> int:
     with IngestionLogger(source=SOURCE, job_name=JOB) as logger:
-        with get_conn(commit=False) as conn, conn.cursor() as cur:
-            cur.execute(_AUDIT_SQL)
-            audit = cur.fetchone()
-            idcw_total, idcw_with_sibling, idcw_orphans = audit
+        idcw_total, idcw_with_sibling, idcw_orphans = _audit()
         log.info("total_return: phase 1 (growth pass-through)…")
         p1 = _run_update(_PHASE1_SQL)
         log.info("total_return: phase 1 updated %d nav rows", p1)
