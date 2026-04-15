@@ -1,11 +1,14 @@
 """percentile — peer-rank every scheme within its SEBI category.
 
-For each metric in (return_1y, return_3y, return_5y, sharpe_1y, alpha_3y):
+For each metric in METRICS:
   1. Group schemes by funds.sub_category (SEBI category).
   2. Compute percent_rank() within the group.
   3. Upsert into scheme_percentile with today's as_of_date.
 
 Unique constraint (scheme_code, metric, as_of_date) handles re-runs.
+
+Extended 2026-04-15 post-DATA-005: sortino_3y, beta_1y rank columns
+activated now that risk_ratios compute populates them.
 """
 from __future__ import annotations
 
@@ -23,11 +26,13 @@ JOB = "percentile"
 # Maps scheme_percentile.metric → column on fund_returns.
 # Column names verified against prod schema 2026-04-14.
 METRICS: dict[str, str] = {
-    "return_1y": "return_1y",
-    "return_3y": "return_3y",
-    "return_5y": "return_5y",
-    "sharpe_1y": "sharpe_ratio_1y",
-    "alpha_3y": "alpha_3y",
+    "return_1y":  "return_1y",
+    "return_3y":  "return_3y",
+    "return_5y":  "return_5y",
+    "sharpe_1y":  "sharpe_ratio_1y",
+    "alpha_3y":   "alpha_3y",
+    "sortino_3y": "sortino_3y",
+    "beta_1y":    "beta_1y",
 }
 
 _RANK_SQL = """
@@ -67,7 +72,9 @@ def run(as_of: date | None = None) -> int:
                 (r["scheme_code"], metric, r["pct_rank"], r["peer_count"], r["peer_category"], as_of)
                 for r in rows
             ]
-            total += execute_batch(_UPSERT_SQL, payload)
+            # Oversized page_size avoids multi-page rowcount under-report
+            # (latent bug in core/db.execute_batch).
+            total += execute_batch(_UPSERT_SQL, payload, page_size=10_000)
         logger.set_row_count(total)
         logger.meta({"as_of": as_of.isoformat(), "metrics": list(METRICS)})
         return total
