@@ -167,7 +167,7 @@ SELECT
          THEN ROUND((a.sd_fund * SQRT(%(td)s) * 100)::numeric, 4) END AS std_dev,
     CASE WHEN a.dd_daily IS NOT NULL
          THEN ROUND((a.dd_daily * SQRT(%(td)s) * 100)::numeric, 4) END AS dd,
-    -- Fix A: convert log-annualised mean to arithmetic-annualised % before
+    -- Fix A: convert log-annualised mean to arithmetic-annualised pct before
     -- comparing with arithmetic risk-free rate. (EXP(log_mean * 252) - 1) * 100.
     CASE WHEN a.dd_daily > 0
          THEN ROUND((
@@ -182,7 +182,7 @@ SELECT
              4
          )
     END AS alpha,
-    -- rolling_mean as arithmetic-annualised % for consistency with sortino.
+    -- rolling_mean as arithmetic-annualised pct for consistency with sortino.
     ROUND(((EXP(a.mean_fr * %(td)s) - 1) * 100)::numeric, 4) AS rolling_mean,
     a.n_obs
 FROM agg a JOIN cagrs c USING (win);
