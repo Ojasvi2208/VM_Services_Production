@@ -1723,6 +1723,199 @@ const ARTICLES: Record<string, Article> = {
       { label: 'Expense Ratio Guide', href: '/learn/what-is-expense-ratio-mutual-fund' },
     ],
   },
+
+  // ═══════════════════════════════════════════════════════════════
+  // BATCH 3 — Top-ranked Indian search queries (2026-04-16)
+  // 1. how to buy mutual funds online — 95K monthly
+  // 2. mutual fund vs stock market — 75K monthly
+  // 3. how much to invest for 1 crore — 60K monthly
+  // ═══════════════════════════════════════════════════════════════
+
+  'how-to-buy-mutual-funds-online': {
+    slug: 'how-to-buy-mutual-funds-online',
+    title: 'How to Buy Mutual Funds Online in India — Step-by-Step (2026)',
+    description: 'Complete walkthrough: KYC, choosing AMC direct vs platforms, first purchase, SIP setup, and avoiding common first-time mistakes.',
+    category: 'Getting Started', readTime: '10 min read',
+    publishedDate: '2026-04-16', updatedDate: '2026-04-16',
+    heroIcon: 'shopping_cart_checkout', heroColor: '#44f593',
+    introduction: 'Buying mutual funds online in India used to require three-day waits for physical KYC, faxed forms, and agent visits. Today a first-time investor can complete KYC, pick a fund, and start a SIP — all from a phone — in under 20 minutes. But the flood of options creates new traps: Regular plans hidden behind friendly banking-app UIs, aggregators charging exit-load equivalents through fine-print commissions, and apps that push sectoral funds to retail beginners. This guide walks through the exact steps: eKYC in 10 minutes, choosing between Direct plans via AMC websites vs Direct-only platforms, making your first lump-sum or SIP purchase, and six mistakes that quietly eat your returns in the first year.',
+    sections: [
+      {
+        heading: 'Step 1 — Complete eKYC in 10 Minutes',
+        content: 'KYC (Know Your Customer) is a one-time process. Once done at any KRA (KYC Registration Agency), it is valid across all mutual funds in India. Visit any KRA portal — CAMS (camskra.com), KFintech (kfintech.com/karisma), or CDSL Ventures — and complete eKYC using your Aadhaar-linked mobile number. You will need: PAN card image, Aadhaar (linked to mobile), bank account details (account number + IFSC), a selfie, and electronic signature. The entire process takes 10-15 minutes and approval is usually instant. If you invest through an AMC website or platform, KYC is bundled into the signup flow automatically.',
+      },
+      {
+        heading: 'Step 2 — Decide Where to Buy (This Choice Costs You Lakhs)',
+        content: 'You have three options. Each comes with a long-term cost difference.',
+        table: {
+          headers: ['Platform Type', 'Example', 'Plan Offered', '20-Year Cost on ₹10K SIP'],
+          rows: [
+            { 'Platform Type': 'AMC Website (Direct)', 'Example': 'mf.nipponindiamf.com, hdfcfund.com', 'Plan Offered': 'Direct only', '20-Year Cost on ₹10K SIP': 'Baseline (best)' },
+            { 'Platform Type': 'Direct-only Aggregator', 'Example': 'MFU, Kuvera, Paytm Money', 'Plan Offered': 'Direct only', '20-Year Cost on ₹10K SIP': 'Same as AMC (no extra cost)' },
+            { 'Platform Type': 'Bank / Distributor App', 'Example': 'HDFC Bank MF, ICICI Direct', 'Plan Offered': 'Regular (commission ~1%)', '20-Year Cost on ₹10K SIP': '₹18 lakh lost to commissions' },
+          ],
+        },
+      },
+      {
+        heading: 'Step 3 — Make Your First Purchase (Lump Sum or SIP)',
+        content: 'Once KYC is approved and you have chosen a platform, log in, search for the fund by scheme name, and choose between Lump Sum (one-time) or SIP (monthly). For a SIP: set the monthly amount (minimum usually ₹500), pick a SIP date (1st, 5th, 10th, 15th, 25th — pick anything, the date does not affect returns), set up a bank mandate (one-time eNACH digital authorization), and submit. First SIP instalment gets deducted on the next scheduled SIP date. For lump sum: enter amount, choose UPI or net banking, approve the debit, and units are allotted at the next day\'s NAV.',
+      },
+      {
+        heading: '6 First-Year Mistakes That Kill Returns',
+        content: 'Mistake 1: Buying Regular plans through your bank app — costs 1-1.5% annually forever. Mistake 2: Chasing 1-year top performers — these typically mean-revert. Mistake 3: Starting with sectoral or thematic funds (pharma, IT, infra) — concentrated risk beginners cannot handle. Mistake 4: Multiple overlapping large-cap funds thinking you are diversified — you are paying three expense ratios for the same 50 stocks. Mistake 5: Stopping SIPs during the first market correction — the exact wrong time to stop. Mistake 6: Obsessively checking daily NAV movements — leads to anxiety-driven redemptions within 6 months.',
+      },
+      {
+        heading: 'After First Purchase — What to Track Monthly',
+        content: 'Check your fund statement once a month (not daily). Watch three things: whether your SIPs are being deducted successfully (occasional bank issues cause SIP failure), whether the fund manager has changed (announced via AMC email — if so, evaluate if style changed), and whether the category average has significantly outperformed your fund over 3+ years (not 6 months). That is the trigger to re-evaluate, not daily price moves.',
+      },
+    ],
+    keyTakeaways: [
+      'Complete eKYC once — it is valid across all mutual funds for life',
+      'Buy through AMC websites or Direct-only aggregators — never through bank apps (Regular plans cost ₹18L+ over 20 years)',
+      'For SIPs, the date does not matter statistically — pick any day and start',
+      'Start with 1-2 Flexi Cap or Nifty 50 Index funds — not sectoral or thematic',
+      'Check statements monthly, not daily — volatility anxiety causes panic redemptions',
+    ],
+    faqs: [
+      { q: 'Can I buy mutual funds without a Demat account?', a: 'Yes. Mutual funds do not require a Demat account. You only need a Demat account for ETFs (Exchange Traded Funds) which trade on exchanges. Regular mutual fund units are held in statement form with the AMC directly.' },
+      { q: 'What is the minimum amount to start a SIP?', a: 'Most AMCs allow SIPs from ₹500/month. Some funds have ₹100 minimums. For lump sum, the typical minimum is ₹5,000 (₹1,000 for some funds). There is no upper limit.' },
+      { q: 'How long does the first purchase take to show up?', a: 'Lump sum purchases before 3 PM IST on a business day get same-day NAV. After 3 PM, next-day NAV applies. Units appear in your account within 2 business days. SIP purchases follow the same rule based on the SIP date.' },
+      { q: 'Can I cancel a SIP anytime?', a: 'Yes. You can stop, pause, or modify SIPs at any time through the AMC website, aggregator app, or by raising a stop instruction. There is no penalty or fee for stopping. Units already purchased remain with you.' },
+    ],
+    relatedLinks: [
+      { label: 'Direct vs Regular Funds', href: '/learn/direct-vs-regular-mutual-funds' },
+      { label: 'Best Mutual Funds 2026', href: '/learn/best-mutual-funds-to-invest' },
+      { label: 'SIP Calculator', href: '/calculators/sip' },
+      { label: 'Search All Funds', href: '/funds/search' },
+    ],
+  },
+
+  'mutual-fund-vs-stock-market': {
+    slug: 'mutual-fund-vs-stock-market',
+    title: 'Mutual Fund vs Stock Market — Which Is Better for Indian Investors?',
+    description: 'Returns, risk, time commitment, tax treatment. When direct stocks beat funds and when they do not.',
+    category: 'Basics', readTime: '9 min read',
+    publishedDate: '2026-04-16', updatedDate: '2026-04-16',
+    heroIcon: 'compare', heroColor: '#a855f7',
+    introduction: 'The "mutual fund vs stock market" question assumes they are alternatives. They are not — a mutual fund IS the stock market, just packaged with professional management, diversification, and regulatory oversight. The real question is: should you pick stocks directly yourself, or pay a fund manager 0.5-1% a year to do it for you? For 95% of retail investors in India, the answer is unambiguous — but there is a disciplined minority for whom direct stocks beat funds. This guide separates the two groups with data, not opinion.',
+    sections: [
+      {
+        heading: 'The Core Comparison',
+        content: 'Before nuance, here is the hard comparison across every dimension that matters.',
+        table: {
+          headers: ['Dimension', 'Direct Stocks', 'Mutual Funds'],
+          rows: [
+            { 'Dimension': 'Time Required', 'Direct Stocks': '5-15 hours/week research', 'Mutual Funds': '30 minutes/quarter to review' },
+            { 'Dimension': 'Skills Required', 'Direct Stocks': 'Fundamental analysis, accounting literacy, patience', 'Mutual Funds': 'Basic category understanding' },
+            { 'Dimension': 'Diversification', 'Direct Stocks': 'Need 20-30 stocks across sectors (₹5L+ minimum for meaningful diversification)', 'Mutual Funds': 'Instant diversification in ₹500 SIP' },
+            { 'Dimension': 'Costs', 'Direct Stocks': 'Brokerage + STT + GST (~0.1-0.3% per trade)', 'Mutual Funds': 'Expense ratio 0.3-1.5% annually' },
+            { 'Dimension': 'Tax Treatment', 'Direct Stocks': 'LTCG 12.5% above ₹1.25L (after 1 year)', 'Mutual Funds': 'Same for equity funds' },
+            { 'Dimension': 'Typical Retail Return (5Y)', 'Direct Stocks': '8-10% CAGR (most underperform index)', 'Mutual Funds': '12-16% CAGR for decent actively-managed funds' },
+            { 'Dimension': 'Psychological Risk', 'Direct Stocks': 'High — panic selling during crashes is common', 'Mutual Funds': 'Moderate — abstraction reduces emotional reactions' },
+          ],
+        },
+      },
+      {
+        heading: 'When Direct Stocks Actually Win',
+        content: 'Three specific investor profiles genuinely outperform mutual funds with direct stocks. First: investors with 15+ hours weekly for deep research and 10+ years of market experience. Second: investors in the 5% bracket who can identify 20-50% compounders early (Infosys in 1997, Bajaj Finance in 2010, HDFC Bank in 1995) — this is skill-based, not luck. Third: investors treating direct stocks as supplementary (max 20% of portfolio) while keeping the core in index funds. If you do not fit these profiles, direct stocks will statistically underperform index funds over 10+ years.',
+      },
+      {
+        heading: 'Why 95% of Retail Stock Investors Underperform',
+        content: 'SEBI data and broker analytics confirm the same pattern year after year. First: retail investors chase recent winners at peaks and sell during corrections. Second: portfolio concentration — 70% of retail investors hold 5 or fewer stocks, amplifying single-stock risk. Third: lack of sell discipline — investors hold losing positions for years hoping to "break even" while selling winners too early. Fourth: overtrading — excessive buy/sell generates transaction costs and taxes that compound against returns. A Nifty 50 index fund simply holds 50 stocks weighted by market cap — no emotions, no timing, no overtrading.',
+      },
+      {
+        heading: 'The Hybrid Strategy Smart Investors Use',
+        content: 'Core-and-satellite is the optimal approach. Core (70-85% of portfolio): Flexi Cap fund + Nifty 50 index fund + small debt allocation. This provides market-level returns with no research burden. Satellite (15-30%): 5-10 direct stocks you understand deeply in industries you work in or study. This is where alpha comes from if you have skill. Do not invert this — core should never be direct stocks for retail investors. If the satellite outperforms consistently over 5 years, increase its weight. If not, stay in funds.',
+      },
+    ],
+    keyTakeaways: [
+      'Mutual funds ARE the stock market — they are packaged with management, diversification, and regulation',
+      'For 95% of retail investors, mutual funds statistically outperform direct stock portfolios over 10+ years',
+      'Direct stocks beat funds only for disciplined investors with 15+ hours/week for research',
+      'Concentration (5 or fewer stocks), panic selling, and overtrading kill retail direct-stock returns',
+      'Core (70-85% funds) + Satellite (15-30% stocks) is the proven hybrid strategy',
+    ],
+    faqs: [
+      { q: 'Can I start with direct stocks and move to mutual funds later?', a: 'Better to do the opposite. Start with mutual funds to build a core portfolio, then add direct stocks with 10-20% of your wealth once you have learned fundamental analysis. Starting with stocks without skill typically costs new investors 2-4 years of time plus losses before they switch.' },
+      { q: 'Are mutual fund returns taxed differently than stocks?', a: 'No. For equity mutual funds (65%+ equity allocation) and direct stocks, taxation is identical: LTCG at 12.5% above ₹1.25L exemption (held 1+ years), STCG at 20% (under 1 year). Debt mutual funds are taxed at slab rate regardless of holding period.' },
+      { q: 'Which gives higher returns historically?', a: 'Top-quartile active mutual funds delivered 15-18% CAGR over 10 years. Retail direct-stock portfolios averaged 8-10%. The difference is not stock performance — it is investor behavior. The same stocks, held through a fund with forced discipline, compound better than when retail investors trade them.' },
+    ],
+    relatedLinks: [
+      { label: 'Best Flexi Cap Funds', href: '/learn/best-flexi-cap-funds-india' },
+      { label: 'Best Index Funds India', href: '/learn/best-index-funds-india' },
+      { label: 'How to Invest (Beginners)', href: '/learn/how-to-invest-in-mutual-funds-beginners' },
+    ],
+  },
+
+  'how-much-to-invest-for-1-crore': {
+    slug: 'how-much-to-invest-for-1-crore',
+    title: 'How Much to Invest to Reach ₹1 Crore — Monthly SIP & Timeline Guide',
+    description: 'Exact monthly SIP needed for ₹1 Cr in 10, 15, 20, 25 years at different return rates. Step-up SIP tables. Why starting 5 years late costs ₹35 lakh.',
+    category: 'Investment Strategy', readTime: '8 min read',
+    publishedDate: '2026-04-16', updatedDate: '2026-04-16',
+    heroIcon: 'flag', heroColor: '#f59e0b',
+    introduction: '₹1 crore is the milestone most middle-class Indians anchor their long-term planning on — it is the number that feels like "actual wealth" while still being achievable on a salary. The question is not whether you can reach it. The question is what monthly SIP is needed, over what duration, and at what assumed return rate. This guide gives you exact numbers for every realistic combination, plus the single most important insight: time matters 3x more than SIP amount. Starting a ₹15,000 SIP at age 30 builds a larger corpus than a ₹30,000 SIP started at age 40.',
+    sections: [
+      {
+        heading: 'Monthly SIP Required for ₹1 Crore — Full Table',
+        content: 'Assumes monthly compounding, no step-up. These numbers are the hard floor — actual reality usually requires slightly higher amounts because equity returns are lumpy, not smooth.',
+        table: {
+          headers: ['Duration', '10% CAGR', '12% CAGR', '14% CAGR'],
+          rows: [
+            { 'Duration': '10 years', '10% CAGR': '₹48,800/month', '12% CAGR': '₹43,500/month', '14% CAGR': '₹38,700/month' },
+            { 'Duration': '15 years', '10% CAGR': '₹24,100/month', '12% CAGR': '₹20,000/month', '14% CAGR': '₹16,700/month' },
+            { 'Duration': '20 years', '10% CAGR': '₹13,200/month', '12% CAGR': '₹10,000/month', '14% CAGR': '₹7,600/month' },
+            { 'Duration': '25 years', '10% CAGR': '₹7,600/month', '12% CAGR': '₹5,300/month', '14% CAGR': '₹3,800/month' },
+            { 'Duration': '30 years', '10% CAGR': '₹4,500/month', '12% CAGR': '₹2,900/month', '14% CAGR': '₹1,900/month' },
+          ],
+        },
+      },
+      {
+        heading: 'The Cost of Starting 5 Years Late',
+        content: 'This is the single most expensive mistake retail investors make. Take two investors both targeting ₹1 crore at 12% CAGR. Investor A starts a ₹10,000 SIP at age 30 and continues until age 50 (20 years). Corpus at 50: ₹99.9 lakh — essentially ₹1 crore. Investor B delays 5 years, starts at 35, has to invest for only 15 years to reach the same age 50. Required SIP: ₹20,000/month — double. If Investor B continues with only ₹10,000/month, the corpus at age 50 is ₹50 lakh — exactly half. The 5-year delay costs ₹50 lakh. This is not a linear relationship; it is exponential. Every year of delay compounds the required monthly contribution.',
+      },
+      {
+        heading: 'Step-Up SIP — The Realistic Path',
+        content: 'Flat SIPs are easier to model but unrealistic. Your salary grows, so should your SIP. A 10% annual step-up transforms the math. A ₹10,000 SIP stepped up 10% yearly for 20 years at 12% CAGR builds ₹1.82 crore — almost double the flat ₹10,000 SIP outcome of ₹99.9 lakh. The total amount invested increases from ₹24L to ₹68.7L, but the corpus nearly doubles because higher contributions in later years still get meaningful compounding time.',
+        table: {
+          headers: ['Starting SIP', 'Step-Up Rate', 'Duration', 'Final Corpus (12% CAGR)'],
+          rows: [
+            { 'Starting SIP': '₹5,000', 'Step-Up Rate': '10%/year', 'Duration': '20 years', 'Final Corpus (12% CAGR)': '₹91 lakh' },
+            { 'Starting SIP': '₹5,000', 'Step-Up Rate': '15%/year', 'Duration': '20 years', 'Final Corpus (12% CAGR)': '₹1.24 crore' },
+            { 'Starting SIP': '₹10,000', 'Step-Up Rate': '10%/year', 'Duration': '20 years', 'Final Corpus (12% CAGR)': '₹1.82 crore' },
+            { 'Starting SIP': '₹10,000', 'Step-Up Rate': '10%/year', 'Duration': '25 years', 'Final Corpus (12% CAGR)': '₹3.51 crore' },
+            { 'Starting SIP': '₹15,000', 'Step-Up Rate': '10%/year', 'Duration': '20 years', 'Final Corpus (12% CAGR)': '₹2.73 crore' },
+          ],
+        },
+      },
+      {
+        heading: 'Picking a Realistic Return Rate',
+        content: 'Do not assume 15% CAGR for planning — you will be disappointed. Indian equity returns have averaged 12-13% over 15+ year windows. Use 12% for planning. Use 10% for conservative planning (ensures you have margin of safety). Use 14% only if you are planning a floor scenario, not a base case. If your plan requires 15%+ CAGR to work, redesign the plan — you are relying on optimistic luck, not strategy.',
+      },
+      {
+        heading: 'Asset Allocation as You Approach ₹1 Crore',
+        content: 'In the first 15 years of the 20-year plan, keep 80-90% in equity (flexi cap or mid cap). As you cross ₹50 lakh corpus, start shifting gradually to 70% equity + 30% debt. In the final 3 years before target, move to 50-50. This sequence-of-returns protection prevents a 30% market crash in year 19 from wiping out a corpus built over two decades. Use STP (Systematic Transfer Plan) to shift gradually — never one large switch.',
+      },
+    ],
+    keyTakeaways: [
+      '₹10,000/month SIP at 12% CAGR reaches ₹1 crore in 20 years — this is the baseline',
+      'Starting 5 years late doubles the required monthly SIP or halves the final corpus',
+      'A 10% annual step-up SIP nearly doubles the 20-year corpus versus flat SIP',
+      'Plan with 12% CAGR, not 15% — realistic assumptions prevent goal failure',
+      'Shift from 90% equity to 50% equity gradually in the final 3 years to protect the corpus',
+    ],
+    faqs: [
+      { q: 'Is ₹1 crore enough for retirement in India?', a: 'Depends on your annual expenses. A ₹1 crore corpus safely generates ₹40,000-50,000/month via SWP at 9% annual return — enough if your expenses are ₹30-40K/month. If expenses are ₹75K+/month, you need ₹2-2.5 crore minimum. Account for inflation eroding purchasing power over time.' },
+      { q: 'Should I split the SIP across multiple funds or invest in one fund?', a: 'One good Flexi Cap fund is sufficient for corpus below ₹50 lakh. Above ₹50 lakh, split across 2-3 funds (one Flexi Cap + one Large Cap Index + one Mid Cap) for diversification. More than 4 funds creates overlap and dilutes returns — you end up owning the same stocks three times.' },
+      { q: 'What if markets crash in the final year before I reach ₹1 crore?', a: 'A 20% crash on a ₹1 crore corpus in year 19 drops it to ₹80 lakh, potentially taking 2-3 years to recover. This is why gradual shift to debt/hybrid in the last 3 years matters. Starting this shift at year 17 prevents disaster scenarios while sacrificing only 1-2% annualized return.' },
+    ],
+    relatedLinks: [
+      { label: 'SIP Calculator', href: '/calculators/sip' },
+      { label: 'Step-Up SIP Benefits', href: '/learn/step-up-sip-calculator-benefits' },
+      { label: 'Best Flexi Cap Funds', href: '/learn/best-flexi-cap-funds-india' },
+      { label: 'Why Start Investing Early', href: '/learn/why-start-investing-early' },
+    ],
+  },
 };
 
 // ─── Generate metadata for each article ──────────────────────

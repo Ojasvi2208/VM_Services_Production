@@ -66,6 +66,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     'best-hybrid-mutual-funds-india',
     'how-to-read-mutual-fund-factsheet',
     'nifty-50-vs-nifty-next-50-vs-nifty-500',
+    // Batch 3 — top-ranked Indian search queries (April 2026)
+    'how-to-buy-mutual-funds-online',
+    'mutual-fund-vs-stock-market',
+    'how-much-to-invest-for-1-crore',
   ];
   const learnPages: MetadataRoute.Sitemap = LEARN_SLUGS.map(slug => ({
     url: `${BASE_URL}/learn/${slug}`,

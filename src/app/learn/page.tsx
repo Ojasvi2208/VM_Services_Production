@@ -248,6 +248,34 @@ const ARTICLES: ArticleItem[] = [
     readTime: '8 min read',
     color: '#06b6d4',
   },
+  // ── Batch 3: Top-ranked search queries (April 2026) ──
+  {
+    slug: 'how-to-buy-mutual-funds-online',
+    title: 'How to Buy Mutual Funds Online in India — Step-by-Step (2026)',
+    description: 'Complete walkthrough: KYC, choosing AMC direct vs platforms, first purchase, SIP setup, and avoiding common first-time mistakes.',
+    category: 'Getting Started',
+    icon: 'shopping_cart_checkout',
+    readTime: '10 min read',
+    color: '#44f593',
+  },
+  {
+    slug: 'mutual-fund-vs-stock-market',
+    title: 'Mutual Fund vs Stock Market — Which Is Better for Indians?',
+    description: 'Head-to-head comparison: returns, risk, time commitment, tax treatment. When direct stocks beat funds and when they don\'t.',
+    category: 'Basics',
+    icon: 'compare',
+    readTime: '9 min read',
+    color: '#a855f7',
+  },
+  {
+    slug: 'how-much-to-invest-for-1-crore',
+    title: 'How Much to Invest to Reach ₹1 Crore — Timelines & Monthly SIP',
+    description: 'SIP amount needed for ₹1 Cr in 10/15/20/25 years at different return rates. Step-up SIP tables. Why starting 5 years late costs ₹35L.',
+    category: 'Investment Strategy',
+    icon: 'flag',
+    readTime: '8 min read',
+    color: '#f59e0b',
+  },
 ];
 
 // ─── Category mapping (groups similar categories under one filter label) ──
