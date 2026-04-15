@@ -60,7 +60,7 @@ Null the respective window if short; don't fail the scheme entirely.
 **Effort:** 15min + re-run.
 **Confidence:** 9/10.
 
-### D — Endpoint date mismatch fund vs bench (HIGH)
+### D — Endpoint date mismatch fund vs bench (HIGH) ✅ LANDED (commit 23db0bd)
 **File:** `scripts/scheme_pipeline/compute/risk_ratios.py:endpts` CTE
 **Bug:** Correlated subqueries pick fund_start/end from nav_history,
 bench_start/end from benchmark_data independently. On Yahoo gap days,
