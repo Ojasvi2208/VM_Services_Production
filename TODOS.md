@@ -37,7 +37,7 @@ Pick one convention and apply consistently to beta cov/var AND alpha CAGR.
 **Effort:** 1h + re-run pipeline.
 **Confidence:** 9/10 (adversarial subagent).
 
-### B — Stale `tr_nav` on Growth-sibling remap (CRITICAL)
+### B — Stale `tr_nav` on Growth-sibling remap (CRITICAL) ✅ LANDED (commit 4ad2169)
 **File:** `scripts/scheme_pipeline/compute/total_return.py` Phase 2
 **Bug:** `IS DISTINCT FROM` guard skips rewrites. If master_fund_id grouping
 changes (e.g. a scheme gets reclassified), IDCW's `tr_nav` keeps old
@@ -71,7 +71,7 @@ boundary; look up fund + bench NAVs at those exact dates.
 **Effort:** 45min + re-run.
 **Confidence:** 9/10.
 
-### E — Duplicate (scheme_code, nav_date) rows inflate stats (HIGH)
+### E — Duplicate (scheme_code, nav_date) rows inflate stats (HIGH) ✅ CLOSED — nav_history PK prevents dups structurally
 **File:** `scripts/scheme_pipeline/compute/risk_ratios.py:fund_rets`
 **Bug:** No unique constraint on `(scheme_code, nav_date)`. If duplicates
 exist, LAG(dup/dup)=0 inflates n_obs and deflates σ → Sharpe/Sortino/IR
@@ -96,7 +96,7 @@ own scope that exits before Phase 1.
 **Effort:** 5min.
 **Confidence:** 9/10.
 
-### G — Beta percentile inverts quality signal (HIGH)
+### G — Beta percentile inverts quality signal (HIGH) ✅ LANDED (commit 4ad2169 — dropped from METRICS)
 **File:** `scripts/scheme_pipeline/compute/percentile.py:METRICS`
 **Bug:** `beta_1y` added to rank. Higher beta = higher rank. But for
 defensive/debt/hybrid funds, high beta is BAD (more market risk).
@@ -138,7 +138,7 @@ names.
 **Effort:** 15min.
 **Confidence:** 6/10.
 
-### K — Multiple Growth siblings per master_fund_id non-deterministic (MEDIUM)
+### K — Multiple Growth siblings per master_fund_id non-deterministic (MEDIUM) ✅ LANDED (commit 4ad2169)
 **File:** `scripts/scheme_pipeline/compute/total_return.py:_PHASE2_SQL`
 **Bug:** If a master_fund_id has >1 Growth sibling (data quality issue:
 Bonus + Growth, or merged families), UPDATE last-write-wins is nondeterministic.
