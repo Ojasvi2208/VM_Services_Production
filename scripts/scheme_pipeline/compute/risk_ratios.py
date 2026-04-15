@@ -221,9 +221,11 @@ ON CONFLICT (scheme_code) DO UPDATE SET
 """
 
 
-# Per-window minimum observations. Gates each window independently so a
-# 3-month-old fund doesn't get a spurious 5y alpha. See TODOS.md item C.
-MIN_OBS = {"1y": 200, "3y": 600, "5y": 1000}
+# Per-window minimum observations, ~60% of trading-day max.
+# Gates each window independently so a 3-month-old fund doesn't get a
+# spurious 5y alpha. Relaxed 2026-04-15 after smoke showed 600/1000
+# thresholds blocked established funds with normal NAV gaps.
+MIN_OBS = {"1y": 150, "3y": 450, "5y": 750}
 
 
 def _gate(w: dict[str, Any], key: str) -> Any:
