@@ -118,7 +118,7 @@ endpts AS (
           WHERE benchmark_name = %(bench)s AND date >= %(start)s
           ORDER BY date ASC LIMIT 1) AS bench_start,
         GREATEST(
-            EXTRACT(EPOCH FROM (%(end)s::date - %(start)s::date)) / 86400.0 / 365.25,
+            (%(end)s::date - %(start)s::date)::numeric / 365.25,
             0.01
         ) AS years
 ),
