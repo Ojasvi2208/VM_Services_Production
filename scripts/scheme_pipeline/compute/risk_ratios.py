@@ -226,7 +226,10 @@ ON CONFLICT (scheme_code) DO UPDATE SET
 # nav_history (median n_obs in 3y window well below 450). Dropped to
 # absolute minimums that still prevent 3-month-old funds getting 5y
 # metrics but let established-sparse-NAV funds qualify.
-MIN_OBS = {"1y": 60, "3y": 200, "5y": 400}
+# 5y threshold kept low because nav_history backfill appears capped around
+# 3 years for most schemes (investigation pending). Once historical NAV
+# backfill lands, raise 5y back to ~400 for quality.
+MIN_OBS = {"1y": 60, "3y": 200, "5y": 100}
 
 
 def _gate(w: dict[str, Any], key: str) -> Any:
