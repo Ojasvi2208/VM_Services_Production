@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
+import { cachedJson } from '@/lib/api-cache-headers';
 
 export async function GET(request: NextRequest) {
   try {
@@ -41,14 +42,15 @@ export async function GET(request: NextRequest) {
         [`%${query}%`, `%${query}%`, `${query}%`]
       );
 
-      return NextResponse.json({
+      // 5min edge cache — users retype same prefixes in droves.
+      return cachedJson({
         success: true,
         suggestions: result.rows.map(row => ({
           schemeCode: row.schemeCode,
           schemeName: row.schemeName,
           amcCode: row.amcCode
         }))
-      });
+      }, 300, 600);
 
     } finally {
       client.release();

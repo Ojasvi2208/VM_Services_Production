@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
 import type { FuelCachePayload } from '@/app/api/cron/cache-fuel/route';
+import { cachedJson } from '@/lib/api-cache-headers';
 
 // ── Tax constants ─────────────────────────────────────────────────────────────
 const CENTRAL_EXCISE_PETROL = 19.90;
@@ -301,7 +302,8 @@ export async function GET(request: NextRequest) {
           dieselVatPercent: vat?.dVat ?? null,
         };
       });
-      return NextResponse.json({ success: true, states: allData, lastUpdated: cache.fetchedAt, source: cacheSource });
+      // Fuel prices refresh once daily via cron; 6h edge cache is safe.
+      return cachedJson({ success: true, states: allData, lastUpdated: cache.fetchedAt, source: cacheSource }, 21600, 3600);
     }
 
     // ── Resolve city and state ─────────────────────────────────────────────

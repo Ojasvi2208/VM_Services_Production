@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
+import { cachedJson } from '@/lib/api-cache-headers';
 
 // Corporate Actions: Dividends, Earnings for top Indian stocks
 // Primary: Yahoo Finance via Cloudflare Worker relay (handles cookie/crumb auth)
@@ -181,7 +182,7 @@ export async function GET(request: NextRequest) {
           const today = new Date().toISOString().split('T')[0];
           actions = actions.filter((a: any) => { const d = a.exDate || a.announcementDate; return d >= today; });
         }
-        return NextResponse.json({ ...cached, actions, total: actions.length, source: 'db-cache' });
+        return cachedJson({ ...cached, actions, total: actions.length, source: 'db-cache' }, 86400, 3600);
       }
     } catch {}
 
@@ -191,11 +192,11 @@ export async function GET(request: NextRequest) {
       if (type !== 'all') actions = actions.filter(a => a.actionType === type);
       if (symbol) actions = actions.filter(a => a.symbol.toLowerCase() === symbol.toLowerCase());
 
-      return NextResponse.json({
+      return cachedJson({
         success: true, actions, total: actions.length,
         types: ['dividend', 'bonus', 'split', 'rights', 'results', 'agm', 'buyback'],
         source: 'cache', timestamp: new Date(actionsCache.timestamp).toISOString(),
-      });
+      }, 86400, 3600);
     }
 
     // Fetch via CF Worker relay
@@ -220,11 +221,11 @@ export async function GET(request: NextRequest) {
       return new Date(dateA).getTime() - new Date(dateB).getTime();
     });
 
-    return NextResponse.json({
+    return cachedJson({
       success: true, actions: filtered, total: filtered.length,
       types: ['dividend', 'bonus', 'split', 'rights', 'results', 'agm', 'buyback'],
       source, timestamp: new Date().toISOString(),
-    });
+    }, 86400, 3600);
   } catch (error) {
     console.error('Corporate actions API error:', error);
     return NextResponse.json({ success: false, error: 'Failed to fetch corporate actions', actions: [] }, { status: 500 });

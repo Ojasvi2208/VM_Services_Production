@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
+import { cachedJson, CACHE_TTL } from '@/lib/api-cache-headers';
 
 interface MutualFundData {
   fundName: string;
@@ -257,14 +258,14 @@ export async function GET() {
           };
         });
         
-        return NextResponse.json({
+        return cachedJson({
           success: true,
           source: result.rows[0]?.quality_score ? 'MaterializedView' : 'Database',
           funds: dbFunds,
           lastUpdated: new Date().toISOString(),
           note: 'Quality-ranked funds (60% return + 40% Sharpe ratio)',
           totalFunds: dbFunds.length
-        });
+        }, CACHE_TTL.FUND_LIST, 3600);
       }
     } finally {
       client.release();
