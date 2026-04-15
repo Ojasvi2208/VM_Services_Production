@@ -80,37 +80,50 @@ WHERE m.benchmark_name = ANY(%s);
 # + two dates. Log returns on nav_history and benchmark_data, aligned by date.
 # Returns one row with every metric for the requested window.
 _WINDOW_METRICS_SQL = """
+-- Fix D (2026-04-15): fund_start / bench_start / fund_end / bench_end now
+-- sourced from the same first/last date in (fund ∩ bench) per window.
+-- Previously each was picked independently, letting a fund with a late
+-- launch pick its own earliest NAV while bench picked window-open date,
+-- producing mismatched durations and ~18bps alpha nonsense on index ETFs.
 WITH windows(win, start_d, end_d) AS (
     VALUES
       ('1y', %(start_1y)s::date, %(end)s::date),
       ('3y', %(start_3y)s::date, %(end)s::date),
       ('5y', %(start_5y)s::date, %(end)s::date)
 ),
-fund_rets AS (
-    SELECT w.win, nh.nav_date,
-           LN(nh.nav_value / LAG(nh.nav_value)
-                OVER (PARTITION BY w.win ORDER BY nh.nav_date)) AS ret
+fund_dates AS (
+    SELECT w.win, nh.nav_date AS d, nh.nav_value AS p
     FROM windows w
     JOIN nav_history nh
       ON nh.scheme_code = %(scheme)s
      AND nh.nav_date BETWEEN w.start_d AND w.end_d
      AND nh.nav_value > 0
 ),
-bench_rets AS (
-    SELECT w.win, bd.date,
-           LN(bd.value / LAG(bd.value)
-                OVER (PARTITION BY w.win ORDER BY bd.date)) AS ret
+bench_dates AS (
+    SELECT w.win, bd.date AS d, bd.value AS p
     FROM windows w
     JOIN benchmark_data bd
       ON bd.benchmark_name = %(bench)s
      AND bd.date BETWEEN w.start_d AND w.end_d
      AND bd.value > 0
 ),
+-- Dates where BOTH fund and bench have values. Canonical series.
+aligned AS (
+    SELECT f.win, f.d, f.p AS fund_val, b.p AS bench_val
+    FROM fund_dates f
+    JOIN bench_dates b ON b.win = f.win AND b.d = f.d
+),
+-- Daily log returns computed on the canonical series.
+returns AS (
+    SELECT
+        win, d,
+        LN(fund_val  / LAG(fund_val)  OVER (PARTITION BY win ORDER BY d)) AS fr,
+        LN(bench_val / LAG(bench_val) OVER (PARTITION BY win ORDER BY d)) AS br
+    FROM aligned
+),
 joined AS (
-    SELECT f.win, f.ret AS fr, b.ret AS br
-    FROM fund_rets f
-    JOIN bench_rets b ON b.win = f.win AND b.date = f.nav_date
-    WHERE f.ret IS NOT NULL AND b.ret IS NOT NULL
+    SELECT win, fr, br FROM returns
+    WHERE fr IS NOT NULL AND br IS NOT NULL
 ),
 agg AS (
     SELECT
@@ -127,22 +140,26 @@ agg AS (
     FROM joined
     GROUP BY win
 ),
+-- First + last row per window of aligned, with matching fund + bench values.
+extrema AS (
+    SELECT win, d, fund_val, bench_val,
+        ROW_NUMBER() OVER (PARTITION BY win ORDER BY d ASC)  AS rn_first,
+        ROW_NUMBER() OVER (PARTITION BY win ORDER BY d DESC) AS rn_last
+    FROM aligned
+),
 endpts AS (
-    SELECT w.win,
-        (SELECT nav_value FROM nav_history
-          WHERE scheme_code = %(scheme)s AND nav_date <= w.end_d
-          ORDER BY nav_date DESC LIMIT 1) AS fund_end,
-        (SELECT nav_value FROM nav_history
-          WHERE scheme_code = %(scheme)s AND nav_date >= w.start_d
-          ORDER BY nav_date ASC LIMIT 1) AS fund_start,
-        (SELECT value FROM benchmark_data
-          WHERE benchmark_name = %(bench)s AND date <= w.end_d
-          ORDER BY date DESC LIMIT 1) AS bench_end,
-        (SELECT value FROM benchmark_data
-          WHERE benchmark_name = %(bench)s AND date >= w.start_d
-          ORDER BY date ASC LIMIT 1) AS bench_start,
-        GREATEST((w.end_d - w.start_d)::numeric / 365.25, 0.01) AS years
-    FROM windows w
+    SELECT
+        fp.win,
+        fp.d          AS first_d,
+        lp.d          AS last_d,
+        fp.fund_val   AS fund_start,
+        lp.fund_val   AS fund_end,
+        fp.bench_val  AS bench_start,
+        lp.bench_val  AS bench_end,
+        GREATEST((lp.d - fp.d)::numeric / 365.25, 0.01) AS years
+    FROM extrema fp
+    JOIN extrema lp USING (win)
+    WHERE fp.rn_first = 1 AND lp.rn_last = 1
 ),
 cagrs AS (
     SELECT win,
