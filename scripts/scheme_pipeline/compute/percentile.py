@@ -32,7 +32,9 @@ METRICS: dict[str, str] = {
     "sharpe_1y":  "sharpe_ratio_1y",
     "alpha_3y":   "alpha_3y",
     "sortino_3y": "sortino_3y",
-    "beta_1y":    "beta_1y",
+    # Fix G (TODOS.md): beta_1y removed. Raw beta rank is semantically
+    # inverted for defensive funds (high beta ranked good = wrong).
+    # Revisit with ABS(beta - 1) or category-aware ranking.
 }
 
 _RANK_SQL = """

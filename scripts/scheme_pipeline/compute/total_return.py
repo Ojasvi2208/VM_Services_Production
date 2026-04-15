@@ -59,15 +59,35 @@ WITH sibling AS (
      AND   g.option_type    ILIKE 'Growth%'
     WHERE  (i.option_type ILIKE '%IDCW%' OR i.option_type ILIKE '%Dividend%')
       AND  i.master_fund_id IS NOT NULL
+),
+-- Fix K: de-dup sibling picks so one IDCW scheme maps to exactly one Growth.
+-- ORDER BY growth_code makes the pick deterministic across re-runs.
+sibling_distinct AS (
+    SELECT DISTINCT ON (idcw_code)
+           idcw_code, growth_code
+    FROM   sibling
+    ORDER  BY idcw_code, growth_code
 )
 UPDATE nav_history nh
 SET    tr_nav = g_nh.nav_value
-FROM   sibling s
+FROM   sibling_distinct s
 JOIN   nav_history g_nh
   ON   g_nh.scheme_code = s.growth_code
 WHERE  nh.scheme_code = s.idcw_code
   AND  nh.nav_date    = g_nh.nav_date
   AND  (nh.tr_nav IS DISTINCT FROM g_nh.nav_value);
+"""
+
+# Fix B: pre-nullify IDCW tr_nav before Phase 2 so a stale Growth-sibling
+# value from a prior run's mapping (e.g. before master_fund_id remap) can't
+# linger if the current sibling map produces a different join. Runs BEFORE
+# _PHASE2_SQL; cheap because it only touches IDCW schemes.
+_PHASE2_RESET_SQL = """
+UPDATE nav_history nh
+SET    tr_nav = NULL
+FROM   funds f
+WHERE  nh.scheme_code = f.scheme_code
+  AND  (f.option_type ILIKE '%IDCW%' OR f.option_type ILIKE '%Dividend%');
 """
 
 # Coverage audit — how many IDCW schemes got linked, how many orphaned.
@@ -112,6 +132,9 @@ def run() -> int:
         log.info("total_return: phase 1 (growth pass-through)…")
         p1 = _run_update(_PHASE1_SQL)
         log.info("total_return: phase 1 updated %d nav rows", p1)
+        log.info("total_return: phase 2 pre-reset (IDCW tr_nav → NULL)…")
+        reset_rows = _run_update(_PHASE2_RESET_SQL)
+        log.info("total_return: phase 2 reset %d IDCW nav rows", reset_rows)
         log.info("total_return: phase 2 (idcw ← growth sibling)…")
         p2 = _run_update(_PHASE2_SQL)
         log.info("total_return: phase 2 updated %d nav rows", p2)
