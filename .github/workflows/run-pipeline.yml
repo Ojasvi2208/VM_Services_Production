@@ -17,6 +17,11 @@ on:
         type: string
         required: false
         default: ''
+      risk_ratios_limit:
+        description: 'risk_ratios: limit N candidates (0=all)'
+        type: string
+        required: false
+        default: '0'
 
 jobs:
   run:
@@ -42,6 +47,7 @@ jobs:
           PIPELINE_LOG_LEVEL: INFO
           ONLY: ${{ github.event.inputs.only }}
           SKIP: ${{ github.event.inputs.skip }}
+          PIPELINE_RISK_RATIOS_LIMIT: ${{ github.event.inputs.risk_ratios_limit }}
         working-directory: scripts
         run: |
           set -e
@@ -72,4 +78,18 @@ jobs:
             FROM benchmark_data
             GROUP BY benchmark_name
             ORDER BY benchmark_name;
+          " || true
+          psql "$PGCONN" -c "
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = 'fund_returns'
+              AND column_name IN (
+                'alpha_1y','alpha_3y','alpha_5y',
+                'beta_1y','beta_3y','beta_5y',
+                'sortino_1y','sortino_3y','sortino_5y',
+                'std_dev_1y','downside_deviation_1y',
+                'information_ratio_3y','tracking_error_3y','r_squared_3y',
+                'rolling_3y_mean','rolling_5y_mean','updated_at'
+              )
+            ORDER BY column_name;
           " || true
