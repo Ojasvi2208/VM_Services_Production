@@ -4,13 +4,29 @@ Tracked work items. Updated as items are completed or re-prioritized.
 
 ---
 
-## P0 — Math correctness (DATA-005 risk_ratios)
+## ✅ Landed 2026-04-15 (same day as flagged)
 
-Flagged 2026-04-15 by adversarial `/review`. Currently shipping numerically
-skewed alpha/beta/Sortino/IR for 2615 equity schemes. Proxy caveat in UI
-partially covers this, but biases are systematic, not noise.
+- **A** — Log-vs-arithmetic mixing → commit `466d036` (Sortino + rolling_mean use `(EXP(log_mean*252)-1)*100`)
+- **C** — Per-window sample-size gates (1y≥200, 3y≥600, 5y≥1000) → commit `466d036`
+- **F** — Idle audit tx in `total_return.py` → commit `466d036` (own-scope `_audit()`)
+- **H** — Per-scheme try/except in risk_ratios loop → commit `466d036`
+- **L** — Single `now_ts` per run → commit `466d036`
 
-### A — Log-return vs arithmetic-return convention mismatch (CRITICAL)
+## Still deferred
+
+- B (stale tr_nav on remap) — needs staging table approach
+- D (endpoint date mismatch) — 45min refactor of endpts CTE
+- E (dup nav rows) — verify dup presence first; fix is trivial (`DISTINCT ON`) if needed
+- G (beta percentile inverted) — either drop from METRICS or rank by `|β-1|`
+- I / J / K / M / N / O remain as written below
+
+---
+
+## P0 — Math correctness (DATA-005 risk_ratios) — partially landed
+
+Flagged 2026-04-15 by adversarial `/review`. A/C/F/H/L landed same-day.
+
+### A — Log-return vs arithmetic-return convention mismatch (CRITICAL) ✅ LANDED (commit 466d036)
 **File:** `scripts/scheme_pipeline/compute/risk_ratios.py` (Sortino + Alpha)
 **Bug:** Numerator uses `mean_fr * 252 * 100` (log-return annualized) minus
 `RISK_FREE_PCT` (simple arithmetic %). Log-mean-annualized ≠ arithmetic-annualized.
@@ -32,7 +48,7 @@ mappings are explicit and re-derivable.
 **Effort:** 30min + re-run pipeline.
 **Confidence:** 10/10.
 
-### C — Sample-size gate too lax (CRITICAL)
+### C — Sample-size gate too lax (CRITICAL) ✅ LANDED (commit 466d036)
 **File:** `scripts/scheme_pipeline/compute/risk_ratios.py:_compute_one`
 **Bug:** `n_obs >= 60` accepts a 3-month-old fund as having valid
 `alpha_5y` / `sortino_5y`. Values produced but meaningless.
@@ -70,7 +86,7 @@ scheme_code, nav_date, nav_value DESC` in fund_rets/bench_rets, OR
 
 ## P1 — Reliability / durability
 
-### F — Idle audit transaction held across Phase 1 UPDATE (HIGH)
+### F — Idle audit transaction held across Phase 1 UPDATE (HIGH) ✅ LANDED (commit 466d036)
 **File:** `scripts/scheme_pipeline/compute/total_return.py:run`
 **Bug:** `with get_conn(commit=False)` audit block is entered BEFORE Phase 1,
 so audit conn sits idle while Phase 1 UPDATE (millions of rows) runs.
@@ -91,7 +107,7 @@ low-beta stable funds.
 **Effort:** 10min.
 **Confidence:** 7/10.
 
-### H — No per-scheme try/except in risk_ratios loop (HIGH)
+### H — No per-scheme try/except in risk_ratios loop (HIGH) ✅ LANDED (commit 466d036)
 **File:** `scripts/scheme_pipeline/compute/risk_ratios.py:run`
 **Bug:** One psycopg2 connection reset mid-loop crashes entire run.
 Unflushed buffer lost, IngestionLogger exits with error.
@@ -132,7 +148,7 @@ candidate sibling for future investigation.
 **Effort:** 15min.
 **Confidence:** 7/10.
 
-### L — Per-row `datetime.utcnow()` timestamps (LOW)
+### L — Per-row `datetime.utcnow()` timestamps (LOW) ✅ LANDED (commit 466d036)
 **File:** `scripts/scheme_pipeline/compute/risk_ratios.py:_compute_one`
 **Bug:** Timestamp captured per scheme → different `updated_at` per row
 within one run. Downstream "all rows from latest pipeline run" queries
