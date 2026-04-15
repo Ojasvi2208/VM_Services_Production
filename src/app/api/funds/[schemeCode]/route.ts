@@ -87,6 +87,24 @@ export async function GET(
         rolling_return_3y_median as "rollingReturn3yMedian",
         sortino_ratio_1y as "sortinoRatio1y",
         max_drawdown as "maxDrawdown",
+        -- Migration 023 risk suite (DATA-005, populated 2026-04-15).
+        -- Proxy warning: alpha/r²/TE/IR use NIFTY50 price-close, not TRI.
+        alpha_1y              as "alpha1y",
+        alpha_3y              as "alpha3y",
+        alpha_5y              as "alpha5y",
+        beta_1y               as "beta1y",
+        beta_3y               as "beta3y",
+        beta_5y               as "beta5y",
+        sortino_1y            as "sortino1y",
+        sortino_3y            as "sortino3y",
+        sortino_5y            as "sortino5y",
+        std_dev_1y            as "stdDev1y",
+        downside_deviation_1y as "downsideDeviation1y",
+        information_ratio_3y  as "informationRatio3y",
+        tracking_error_3y     as "trackingError3y",
+        r_squared_3y          as "rSquared3y",
+        rolling_3y_mean       as "rolling3yMean",
+        rolling_5y_mean       as "rolling5yMean",
         updated_at as "updatedAt"
       FROM fund_returns
       WHERE scheme_code = $1`,
