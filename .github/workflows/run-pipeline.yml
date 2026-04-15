@@ -47,7 +47,7 @@ jobs:
           PIPELINE_LOG_LEVEL: INFO
           ONLY: ${{ github.event.inputs.only }}
           SKIP: ${{ github.event.inputs.skip }}
-          PIPELINE_RISK_RATIOS_LIMIT: ${{ github.event.inputs.risk_ratios_limit }}
+          PIPELINE_RISK_RATIOS_LIMIT: ${{ github.event.inputs.risk_ratios_limit || '0' }}
         working-directory: scripts
         run: |
           set -e
@@ -95,12 +95,11 @@ jobs:
           " || true
           psql "$PGCONN" -c "
             SELECT f.scheme_code,
-                   LEFT(fn.scheme_name, 45) AS name,
+                   LEFT(f.scheme_name, 45) AS name,
                    fr.alpha_1y, fr.beta_1y, fr.r_squared_3y,
                    fr.sortino_3y, fr.std_dev_1y, fr.tracking_error_3y
             FROM fund_returns fr
-            JOIN funds f  ON f.scheme_code = fr.scheme_code
-            JOIN funds fn ON fn.scheme_code = fr.scheme_code
+            JOIN funds f ON f.scheme_code = fr.scheme_code
             WHERE fr.alpha_1y IS NOT NULL
             ORDER BY fr.updated_at DESC
             LIMIT 10;

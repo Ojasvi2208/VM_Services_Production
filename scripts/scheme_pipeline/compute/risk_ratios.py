@@ -32,7 +32,12 @@ SOURCE = "compute"
 JOB = "risk_ratios"
 
 # India 10yr govt bond yield proxy. Override via env when T-bill adapter lands.
-RISK_FREE_PCT = float(os.environ.get("PIPELINE_RISK_FREE_PCT", "6.5"))
+def _parse_rf(raw: str | None) -> float:
+    try:
+        return float((raw or "6.5").strip().rstrip("%"))
+    except (TypeError, ValueError):
+        return 6.5
+RISK_FREE_PCT = _parse_rf(os.environ.get("PIPELINE_RISK_FREE_PCT"))
 
 # Only benchmarks with data in benchmark_data (post Path A).
 SUPPORTED_BENCHMARKS = ("NIFTY50", "NIFTYBANK")
@@ -40,8 +45,8 @@ SUPPORTED_BENCHMARKS = ("NIFTY50", "NIFTYBANK")
 # Roughly 252 trading days / year.
 TRADING_DAYS = 252
 
-# Smoke / throttle. 0 = no limit (full run).
-LIMIT = int(os.environ.get("PIPELINE_RISK_RATIOS_LIMIT", "0"))
+# Smoke / throttle. 0 = no limit (full run). Tolerate blank env input.
+LIMIT = int((os.environ.get("PIPELINE_RISK_RATIOS_LIMIT", "0") or "0").strip() or "0")
 
 # Columns this job writes. Pre-flight checks these exist in fund_returns.
 REQUIRED_COLS = (
