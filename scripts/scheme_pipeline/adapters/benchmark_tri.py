@@ -39,10 +39,10 @@ def distinct_benchmarks() -> list[str]:
 def fetch_rows() -> list[tuple]:
     """Daily benchmark ingestion.
 
-    Current reality: benchmark_data is populated by the existing
-    /api/cron/market-update route (NIFTY50, NIFTYBANK daily price close
-    via Cloudflare Yahoo relay). This adapter is a NOOP until we swap
-    in the NSE TRI CSV source (DATA-004 extension — pending).
+    Current reality: benchmark_data is populated by (a) the existing
+    /api/cron/market-update route and (b) the yahoo_nifty_history adapter
+    (Path A backfill, price-close proxy, NOT TRI). This adapter is a NOOP
+    until we swap in the NSE TRI CSV source (DATA-004 extension — pending).
 
     Returning empty list + marking partial is the right signal: pipeline
     reports 'no new rows' without masking the fact that real TRI data is

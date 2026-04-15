@@ -1,7 +1,8 @@
 """daily_etl — orchestrates the full nightly pipeline.
 
 Order matters:
-  1. adapters (raw data in)       — amfi_nav, amfi_dividends, benchmark_tri
+  1. adapters (raw data in)       — amfi_nav, amfi_dividends, benchmark_tri,
+                                     yahoo_nifty_history (price-proxy backfill)
   2. compute/total_return         — fills tr_nav (depends on dividends)
   3. compute/rolling_returns      — consumes tr_nav
   4. compute/risk_ratios          — consumes rolling_returns + benchmark
@@ -23,7 +24,7 @@ import logging
 import sys
 from typing import Callable
 
-from ..adapters import amfi_dividends, amfi_nav, benchmark_tri
+from ..adapters import amfi_dividends, amfi_nav, benchmark_tri, yahoo_nifty_history
 from ..compute import percentile, risk_ratios, rolling_returns, total_return
 from ..core.db import close_pool
 
@@ -34,6 +35,7 @@ STEPS: list[tuple[str, Callable[[], int]]] = [
     ("amfi_nav", amfi_nav.run),
     ("amfi_dividends", amfi_dividends.run),
     ("benchmark_tri", benchmark_tri.run),
+    ("nifty_history", yahoo_nifty_history.run),
     ("total_return", total_return.run),
     ("rolling_returns", rolling_returns.run),
     ("risk_ratios", risk_ratios.run),
