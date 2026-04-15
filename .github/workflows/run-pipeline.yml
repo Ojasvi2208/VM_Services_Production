@@ -94,13 +94,28 @@ jobs:
             ORDER BY column_name;
           " || true
           psql "$PGCONN" -c "
+            SELECT
+              COUNT(*)                      AS total_rows,
+              COUNT(alpha_1y)               AS has_alpha_1y,
+              COUNT(alpha_3y)               AS has_alpha_3y,
+              COUNT(alpha_5y)               AS has_alpha_5y,
+              COUNT(beta_3y)                AS has_beta_3y,
+              COUNT(r_squared_3y)           AS has_r2_3y,
+              COUNT(sortino_3y)             AS has_sortino_3y,
+              COUNT(tracking_error_3y)      AS has_te_3y,
+              COUNT(information_ratio_3y)   AS has_ir_3y
+            FROM fund_returns
+            WHERE alpha_1y IS NOT NULL OR alpha_3y IS NOT NULL;
+          " || true
+          psql "$PGCONN" -c "
+            -- Established funds sample: need data in all 3 windows
             SELECT f.scheme_code,
-                   LEFT(f.scheme_name, 45) AS name,
-                   fr.alpha_1y, fr.beta_1y, fr.r_squared_3y,
-                   fr.sortino_3y, fr.std_dev_1y, fr.tracking_error_3y
+                   LEFT(f.scheme_name, 42) AS name,
+                   fr.alpha_1y, fr.alpha_3y, fr.beta_3y, fr.r_squared_3y, fr.sortino_3y
             FROM fund_returns fr
             JOIN funds f ON f.scheme_code = fr.scheme_code
-            WHERE fr.alpha_1y IS NOT NULL
-            ORDER BY fr.updated_at DESC
+            WHERE fr.alpha_3y IS NOT NULL
+              AND fr.r_squared_3y IS NOT NULL
+            ORDER BY fr.r_squared_3y DESC
             LIMIT 10;
           " || true
