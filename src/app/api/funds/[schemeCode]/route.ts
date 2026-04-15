@@ -39,7 +39,10 @@ export async function GET(
         min_investment as "minInvestment",
         min_sip as "minSip",
         is_active as "isActive",
-        master_fund_id as "masterFundId"
+        master_fund_id as "masterFundId",
+        -- Path F (mig 029): category-aware TRI benchmark for risk-ratio UI.
+        (SELECT benchmark_name FROM scheme_benchmark_map sbm
+         WHERE sbm.scheme_code = funds.scheme_code) as "benchmarkName"
       FROM funds
       WHERE scheme_code = $1`,
       [schemeCode]
