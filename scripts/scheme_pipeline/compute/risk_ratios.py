@@ -39,8 +39,14 @@ def _parse_rf(raw: str | None) -> float:
         return 6.5
 RISK_FREE_PCT = _parse_rf(os.environ.get("PIPELINE_RISK_FREE_PCT"))
 
-# Only benchmarks with data in benchmark_data (post Path A).
-SUPPORTED_BENCHMARKS = ("NIFTY50", "NIFTYBANK")
+# Benchmarks with data in benchmark_data.
+# Path F (2026-04-15) adds TRI variants; legacy NIFTY50/NIFTYBANK retained
+# as fallback for schemes not yet remapped to TRI (mig 029).
+SUPPORTED_BENCHMARKS = (
+    "NIFTY50_TRI", "NIFTYBANK_TRI",
+    "NIFTYMIDCAP150_TRI", "NIFTYSMALLCAP250_TRI",
+    "NIFTY50", "NIFTYBANK",  # legacy, kept for graceful transition
+)
 
 # Roughly 252 trading days / year.
 TRADING_DAYS = 252

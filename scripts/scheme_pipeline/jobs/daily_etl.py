@@ -24,7 +24,7 @@ import logging
 import sys
 from typing import Callable
 
-from ..adapters import amfi_dividends, amfi_nav, benchmark_tri, yahoo_nifty_history
+from ..adapters import amfi_dividends, amfi_nav, benchmark_tri, nse_index_history, yahoo_nifty_history
 from ..compute import percentile, risk_ratios, rolling_returns, total_return
 from ..core.db import close_pool
 
@@ -36,6 +36,7 @@ STEPS: list[tuple[str, Callable[[], int]]] = [
     ("amfi_dividends", amfi_dividends.run),
     ("benchmark_tri", benchmark_tri.run),
     ("nifty_history", yahoo_nifty_history.run),
+    ("nse_tri",       nse_index_history.run),
     ("total_return", total_return.run),
     ("rolling_returns", rolling_returns.run),
     ("risk_ratios", risk_ratios.run),
