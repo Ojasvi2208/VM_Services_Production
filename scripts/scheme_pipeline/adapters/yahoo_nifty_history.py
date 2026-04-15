@@ -138,7 +138,10 @@ def _ingest_one(symbol: str, benchmark_name: str) -> tuple[int, dict]:
             "note": "yahoo returned empty series",
         }
     rows = [(benchmark_name, d, v) for d, v in points]
-    written = execute_batch(_UPSERT_SQL, rows)
+    # page_size larger than expected payload (1235 for 5y) so cur.rowcount
+    # reflects total rather than only the last page (latent bug in
+    # core/db.execute_batch — to be fixed separately).
+    written = execute_batch(_UPSERT_SQL, rows, page_size=10_000)
     return written, {
         "symbol": symbol,
         "range": rng,

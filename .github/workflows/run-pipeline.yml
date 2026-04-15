@@ -64,3 +64,12 @@ jobs:
             WHERE started_at > NOW() - INTERVAL '1 hour'
             ORDER BY started_at;
           " || true
+          psql "$PGCONN" -c "
+            SELECT benchmark_name,
+                   COUNT(*) AS rows,
+                   MIN(date) AS first_date,
+                   MAX(date) AS last_date
+            FROM benchmark_data
+            GROUP BY benchmark_name
+            ORDER BY benchmark_name;
+          " || true
