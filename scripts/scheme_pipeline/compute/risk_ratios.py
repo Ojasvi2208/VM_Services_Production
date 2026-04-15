@@ -121,6 +121,16 @@ endpts AS (
             EXTRACT(EPOCH FROM (%(end)s::date - %(start)s::date)) / 86400.0 / 365.25,
             0.01
         ) AS years
+),
+cagrs AS (
+    SELECT
+        CASE WHEN fund_start > 0 AND fund_end > 0 AND years > 0
+             THEN (POWER(fund_end / fund_start, 1.0 / years) - 1) * 100
+        END AS fund_cagr,
+        CASE WHEN bench_start > 0 AND bench_end > 0 AND years > 0
+             THEN (POWER(bench_end / bench_start, 1.0 / years) - 1) * 100
+        END AS bench_cagr
+    FROM endpts
 )
 SELECT
     CASE WHEN a.var_b > 0 THEN ROUND((a.cov_fb / a.var_b)::numeric, 4) END AS beta,
@@ -140,18 +150,16 @@ SELECT
             / (a.dd_daily * SQRT(%(td)s) * 100)
          )::numeric, 4)
     END AS sortino,
-    CASE WHEN a.n_obs > 0
-           AND e.fund_start > 0 AND e.bench_start > 0
-           AND a.var_b > 0
-         THEN ROUND((
-            ( (POWER(e.fund_end  / e.fund_start,  1.0 / e.years) - 1) * 100
-              - (%(rf)s + (a.cov_fb / a.var_b) *
-                  ((POWER(e.bench_end / e.bench_start, 1.0 / e.years) - 1) * 100 - %(rf)s))
-            )::numeric, 4)
+    CASE WHEN a.n_obs > 0 AND a.var_b > 0
+              AND c.fund_cagr IS NOT NULL AND c.bench_cagr IS NOT NULL
+         THEN ROUND(
+             (c.fund_cagr - (%(rf)s + (a.cov_fb / a.var_b) * (c.bench_cagr - %(rf)s)))::numeric,
+             4
+         )
     END AS alpha,
     ROUND((a.mean_fr * %(td)s * 100)::numeric, 4) AS rolling_mean,
     a.n_obs
-FROM agg a CROSS JOIN endpts e;
+FROM agg a CROSS JOIN cagrs c;
 """
 
 # UPSERT the 16 columns from migration 023.
