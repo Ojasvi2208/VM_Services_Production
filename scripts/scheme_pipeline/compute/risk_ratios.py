@@ -69,29 +69,41 @@ WHERE m.benchmark_name = ANY(%s);
 # + two dates. Log returns on nav_history and benchmark_data, aligned by date.
 # Returns one row with every metric for the requested window.
 _WINDOW_METRICS_SQL = """
-WITH fund_rets AS (
-    SELECT nav_date,
-           LN(nav_value / LAG(nav_value) OVER (ORDER BY nav_date)) AS ret
-    FROM nav_history
-    WHERE scheme_code = %(scheme)s
-      AND nav_date BETWEEN %(start)s AND %(end)s
-      AND nav_value > 0
+WITH windows(win, start_d, end_d) AS (
+    VALUES
+      ('1y', %(start_1y)s::date, %(end)s::date),
+      ('3y', %(start_3y)s::date, %(end)s::date),
+      ('5y', %(start_5y)s::date, %(end)s::date)
+),
+fund_rets AS (
+    SELECT w.win, nh.nav_date,
+           LN(nh.nav_value / LAG(nh.nav_value)
+                OVER (PARTITION BY w.win ORDER BY nh.nav_date)) AS ret
+    FROM windows w
+    JOIN nav_history nh
+      ON nh.scheme_code = %(scheme)s
+     AND nh.nav_date BETWEEN w.start_d AND w.end_d
+     AND nh.nav_value > 0
 ),
 bench_rets AS (
-    SELECT date,
-           LN(value / LAG(value) OVER (ORDER BY date)) AS ret
-    FROM benchmark_data
-    WHERE benchmark_name = %(bench)s
-      AND date BETWEEN %(start)s AND %(end)s
-      AND value > 0
+    SELECT w.win, bd.date,
+           LN(bd.value / LAG(bd.value)
+                OVER (PARTITION BY w.win ORDER BY bd.date)) AS ret
+    FROM windows w
+    JOIN benchmark_data bd
+      ON bd.benchmark_name = %(bench)s
+     AND bd.date BETWEEN w.start_d AND w.end_d
+     AND bd.value > 0
 ),
 joined AS (
-    SELECT f.ret AS fr, b.ret AS br
-    FROM fund_rets f JOIN bench_rets b ON f.nav_date = b.date
+    SELECT f.win, f.ret AS fr, b.ret AS br
+    FROM fund_rets f
+    JOIN bench_rets b ON b.win = f.win AND b.date = f.nav_date
     WHERE f.ret IS NOT NULL AND b.ret IS NOT NULL
 ),
 agg AS (
     SELECT
+        win,
         COVAR_POP(fr, br)                                   AS cov_fb,
         VAR_POP(br)                                         AS var_b,
         CORR(fr, br)                                        AS corr_fb,
@@ -102,28 +114,27 @@ agg AS (
         SQRT(AVG(CASE WHEN fr < 0 THEN fr * fr ELSE 0 END)) AS dd_daily,
         COUNT(*)                                            AS n_obs
     FROM joined
+    GROUP BY win
 ),
 endpts AS (
-    SELECT
+    SELECT w.win,
         (SELECT nav_value FROM nav_history
-          WHERE scheme_code = %(scheme)s AND nav_date <= %(end)s
+          WHERE scheme_code = %(scheme)s AND nav_date <= w.end_d
           ORDER BY nav_date DESC LIMIT 1) AS fund_end,
         (SELECT nav_value FROM nav_history
-          WHERE scheme_code = %(scheme)s AND nav_date >= %(start)s
+          WHERE scheme_code = %(scheme)s AND nav_date >= w.start_d
           ORDER BY nav_date ASC LIMIT 1) AS fund_start,
         (SELECT value FROM benchmark_data
-          WHERE benchmark_name = %(bench)s AND date <= %(end)s
+          WHERE benchmark_name = %(bench)s AND date <= w.end_d
           ORDER BY date DESC LIMIT 1) AS bench_end,
         (SELECT value FROM benchmark_data
-          WHERE benchmark_name = %(bench)s AND date >= %(start)s
+          WHERE benchmark_name = %(bench)s AND date >= w.start_d
           ORDER BY date ASC LIMIT 1) AS bench_start,
-        GREATEST(
-            (%(end)s::date - %(start)s::date)::numeric / 365.25,
-            0.01
-        ) AS years
+        GREATEST((w.end_d - w.start_d)::numeric / 365.25, 0.01) AS years
+    FROM windows w
 ),
 cagrs AS (
-    SELECT
+    SELECT win,
         CASE WHEN fund_start > 0 AND fund_end > 0 AND years > 0
              THEN (POWER(fund_end / fund_start, 1.0 / years) - 1) * 100
         END AS fund_cagr,
@@ -133,6 +144,7 @@ cagrs AS (
     FROM endpts
 )
 SELECT
+    a.win,
     CASE WHEN a.var_b > 0 THEN ROUND((a.cov_fb / a.var_b)::numeric, 4) END AS beta,
     CASE WHEN a.corr_fb IS NOT NULL THEN ROUND((a.corr_fb * a.corr_fb)::numeric, 4) END AS r_sq,
     CASE WHEN a.sd_excess IS NOT NULL
@@ -159,7 +171,7 @@ SELECT
     END AS alpha,
     ROUND((a.mean_fr * %(td)s * 100)::numeric, 4) AS rolling_mean,
     a.n_obs
-FROM agg a CROSS JOIN cagrs c;
+FROM agg a JOIN cagrs c USING (win);
 """
 
 # UPSERT the 16 columns from migration 023.
@@ -195,28 +207,28 @@ ON CONFLICT (scheme_code) DO UPDATE SET
 """
 
 
-def _window_metrics(scheme: str, bench: str, start, end) -> dict[str, Any]:
-    """Run the monolithic SQL for one scheme × one window. Empty dict on no data."""
-    rows = fetch_all(
-        _WINDOW_METRICS_SQL,
-        {"scheme": scheme, "bench": bench, "start": start, "end": end,
-         "td": TRADING_DAYS, "rf": RISK_FREE_PCT},
-    )
-    if not rows:
-        return {}
-    return rows[0]
-
-
 def _compute_one(scheme: str, bench: str, as_of) -> tuple | None:
-    """Return the UPSERT tuple for one scheme, or None if insufficient data."""
+    """One SQL round-trip returning 3 rows (one per window). None = skip."""
     from datetime import timedelta
 
-    w1 = _window_metrics(scheme, bench, as_of - timedelta(days=365),     as_of)
-    w3 = _window_metrics(scheme, bench, as_of - timedelta(days=365 * 3), as_of)
-    w5 = _window_metrics(scheme, bench, as_of - timedelta(days=365 * 5), as_of)
+    rows = fetch_all(
+        _WINDOW_METRICS_SQL,
+        {
+            "scheme": scheme,
+            "bench":  bench,
+            "start_1y": as_of - timedelta(days=365),
+            "start_3y": as_of - timedelta(days=365 * 3),
+            "start_5y": as_of - timedelta(days=365 * 5),
+            "end":    as_of,
+            "td":     TRADING_DAYS,
+            "rf":     RISK_FREE_PCT,
+        },
+    )
+    by_win: dict[str, dict[str, Any]] = {r["win"]: r for r in rows}
+    w1, w3, w5 = by_win.get("1y", {}), by_win.get("3y", {}), by_win.get("5y", {})
 
-    # Skip schemes with <60 obs in 1y (junk data).
-    if not w1 or (w1.get("n_obs") or 0) < 60:
+    # Skip junk (too few observations in 1y window).
+    if (w1.get("n_obs") or 0) < 60:
         return None
 
     return (
@@ -259,11 +271,13 @@ def run() -> int:
         log.info("risk_ratios: %d candidates (benchmarks=%s, rf=%.2f)",
                  len(candidates), SUPPORTED_BENCHMARKS, RISK_FREE_PCT)
 
-        payload: list[tuple] = []
+        buffer: list[tuple] = []
+        written = 0
         skipped_no_data = 0
         skipped_no_asof = 0
+        FLUSH_EVERY = 500  # stream UPSERT so SIGKILL loses <= this many schemes
 
-        for r in candidates:
+        for i, r in enumerate(candidates, start=1):
             scheme, bench, as_of = r["scheme_code"], r["benchmark_name"], r["as_of"]
             if as_of is None:
                 skipped_no_asof += 1
@@ -272,11 +286,16 @@ def run() -> int:
             if row is None:
                 skipped_no_data += 1
                 continue
-            payload.append(row)
+            buffer.append(row)
+            if len(buffer) >= FLUSH_EVERY:
+                written += execute_batch(_UPSERT_SQL, buffer, page_size=10_000)
+                log.info("risk_ratios: flushed %d/%d (total written=%d)",
+                         i, len(candidates), written)
+                buffer = []
 
-        # Oversized page_size so multi-page rowcount bug doesn't under-report.
-        # (see ~/.claude/projects/…/memory/pipeline_execute_batch_paging_bug.md)
-        written = execute_batch(_UPSERT_SQL, payload, page_size=10_000) if payload else 0
+        if buffer:
+            written += execute_batch(_UPSERT_SQL, buffer, page_size=10_000)
+            log.info("risk_ratios: final flush (total written=%d)", written)
 
         logger.set_row_count(written)
         logger.meta({
