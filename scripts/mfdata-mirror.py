@@ -433,8 +433,12 @@ def mode_health(client: RateLimitClient) -> None:
 
 
 def mode_scheme(conn, client: RateLimitClient, scheme_code: str, dry_run: bool) -> dict:
-    """Enrich a single scheme_code. Called standalone or from bulk loops."""
-    stats = {"updated": 0, "calls": 0, "fundamentals": 0, "ratios": 0}
+    """Enrich a single scheme_code. Called standalone or from bulk loops.
+
+    Error isolation: entire per-scheme operation wrapped in try/except with rollback on failure,
+    so one malformed scheme doesn't poison the connection for the rest of the batch.
+    """
+    stats = {"updated": 0, "calls": 0, "fundamentals": 0, "ratios": 0, "error": None}
 
     # /schemes/{code} returns nested data + ratios + returns in one call
     payload = client.get(f"/api/v1/schemes/{scheme_code}")
@@ -449,43 +453,54 @@ def mode_scheme(conn, client: RateLimitClient, scheme_code: str, dry_run: bool) 
         stats["updated"] = 1
         return stats
 
-    # 1. Upsert family
-    if data.get("family_id"):
-        fam_payload = {
-            "family_id":            data["family_id"],
-            "family_name":          data.get("family_name"),
-            "amc_slug":             data.get("amc_slug"),
-            "amc_name":             data.get("amc_name"),
-            "category":             data.get("category"),
-            "sub_category":         None,
-            "benchmark_name":       data.get("benchmark"),
-            "has_holdings":         False,
-            "has_ratios":           bool(data.get("ratios")),
-            "has_risk_detail":      False,
-            "latest_holdings_month": None,
-        }
-        upsert_fund_family(conn, fam_payload)
+    try:
+        # 1. Upsert family
+        if data.get("family_id"):
+            fam_payload = {
+                "family_id":            data["family_id"],
+                "family_name":          data.get("family_name"),
+                "amc_slug":             data.get("amc_slug"),
+                "amc_name":             data.get("amc_name"),
+                "category":             data.get("category"),
+                "sub_category":         None,
+                "benchmark_name":       data.get("benchmark"),
+                "has_holdings":         False,
+                "has_ratios":           bool(data.get("ratios")),
+                "has_risk_detail":      False,
+                "latest_holdings_month": None,
+            }
+            upsert_fund_family(conn, fam_payload)
 
-    # 2. Enrich funds row
-    rc = upsert_scheme_enrichment(conn, data)
-    stats["updated"] = rc
+        # 2. Enrich funds row
+        rc = upsert_scheme_enrichment(conn, data)
+        stats["updated"] = rc
 
-    # 3. Ratios + returns
-    ratios = data.get("ratios") or {}
-    returns = data.get("returns") or {}
-    if ratios or returns:
-        stats["ratios"] = upsert_scheme_ratios(conn, scheme_code, ratios, returns)
+        # 3. Ratios + returns
+        ratios = data.get("ratios") or {}
+        returns = data.get("returns") or {}
+        if ratios or returns:
+            stats["ratios"] = upsert_scheme_ratios(conn, scheme_code, ratios, returns)
 
-    # 4. Fundamentals
-    if ratios:
-        stats["fundamentals"] = upsert_fundamentals(conn, scheme_code, ratios)
+        # 4. Fundamentals
+        if ratios:
+            stats["fundamentals"] = upsert_fundamentals(conn, scheme_code, ratios)
 
-    # 5. Category averages
-    category = data.get("category")
-    if category and ratios:
-        upsert_category_averages(conn, category, ratios)
+        # 5. Category averages
+        category = data.get("category")
+        if category and ratios:
+            upsert_category_averages(conn, category, ratios)
 
-    conn.commit()
+        conn.commit()
+    except Exception as e:
+        # Single scheme failure must not kill the batch.
+        # Roll back this scheme's uncommitted work + clear aborted-transaction state.
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        stats["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+        print(f"    [err {scheme_code}] {stats['error']}", flush=True)
+
     return stats
 
 
@@ -519,6 +534,7 @@ def mode_initial_full(conn, client: RateLimitClient, sample: int, dry_run: bool,
     total_updated = 0
     total_rat = 0
     total_fund = 0
+    total_errors = 0
 
     try:
         for i, sc in enumerate(remaining, 1):
@@ -529,14 +545,29 @@ def mode_initial_full(conn, client: RateLimitClient, sample: int, dry_run: bool,
             total_updated += stats["updated"]
             total_rat += stats["ratios"]
             total_fund += stats["fundamentals"]
+            if stats.get("error"):
+                total_errors += 1
 
             if stats["updated"]:
                 cp["completed_schemes"].append(sc)
             if i % 25 == 0:
                 save_checkpoint(mode, cp)
                 print(f"[progress] {i}/{len(remaining)} | updated={total_updated} "
-                      f"ratios={total_rat} fundamentals={total_fund} "
+                      f"ratios={total_rat} fundamentals={total_fund} errors={total_errors} "
                       f"daily_remaining={client.remaining_daily()}", flush=True)
+            # Incremental sync_log update every 100 schemes for live visibility
+            if i % 100 == 0:
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """UPDATE mfdata_sync_log SET api_calls_made=%s, rows_written=%s,
+                               schemes_updated=%s WHERE id=%s""",
+                            (client.total_calls, total_updated + total_rat + total_fund,
+                             total_updated, sync_id),
+                        )
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
 
         save_checkpoint(mode, cp)
         finish_sync_log(
