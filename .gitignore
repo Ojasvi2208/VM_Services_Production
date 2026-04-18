@@ -88,3 +88,10 @@ test-*.sh
 public/Funds_Schema.json
 public/VM_Logo1.png
 public/analysis.jpg
+
+# DB backups and bulk data files (local only, never commit)
+backups/
+data/
+*.parquet
+*.sql.gz
+graphify-out/

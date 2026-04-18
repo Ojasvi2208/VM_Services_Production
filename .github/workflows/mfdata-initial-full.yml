@@ -1,0 +1,141 @@
+name: mfdata Initial Full Mirror
+
+# One-time bulk scrape of mfdata.in → our Postgres.
+# Runs in 5.5-hour chunks (within GitHub's 6h job limit).
+# Auto-resumes from checkpoint (stored in Postgres mfdata_sync_log + /tmp file artifact).
+# Manual trigger only — do NOT schedule this.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Scraper mode'
+        type: choice
+        required: true
+        default: 'initial-full'
+        options:
+          - initial-full
+          - daily-metadata
+          - scheme
+          - health
+      sample:
+        description: 'Sample size (0 = all)'
+        type: string
+        required: false
+        default: '0'
+      reset_checkpoint:
+        description: 'Clear checkpoint and restart?'
+        type: boolean
+        required: false
+        default: false
+      scheme_code:
+        description: 'Scheme code (only for --mode scheme)'
+        type: string
+        required: false
+        default: ''
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330  # 5.5h — 30min safety margin below GitHub's 6h limit
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install psycopg2-binary==2.9.10 requests==2.32.3
+
+      - name: Restore checkpoint from artifact (if exists)
+        uses: actions/download-artifact@v4
+        continue-on-error: true  # first run has no artifact yet
+        with:
+          name: mfdata-checkpoint
+          path: /tmp/
+
+      - name: List checkpoint files
+        run: ls -la /tmp/mfdata_checkpoint_*.json 2>/dev/null || echo "No checkpoint files yet"
+
+      - name: Run mfdata-mirror
+        env:
+          DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+          MFDATA_BASE: https://mfdata.in
+          MFDATA_CHECKPOINT_DIR: /tmp
+          PYTHONUNBUFFERED: "1"
+          # Inputs passed as env vars to avoid shell injection
+          MODE: ${{ inputs.mode }}
+          SAMPLE: ${{ inputs.sample }}
+          RESET_CHECKPOINT: ${{ inputs.reset_checkpoint }}
+          SCHEME_CODE: ${{ inputs.scheme_code }}
+        run: |
+          # Validate inputs to prevent injection
+          case "$MODE" in
+            initial-full|daily-metadata|scheme|health) ;;
+            *) echo "Invalid mode: $MODE"; exit 1 ;;
+          esac
+
+          # Validate scheme_code is numeric if mode=scheme
+          if [ "$MODE" = "scheme" ]; then
+            case "$SCHEME_CODE" in
+              ''|*[!0-9]*) echo "scheme_code must be numeric, got: $SCHEME_CODE"; exit 1 ;;
+            esac
+          fi
+
+          # Validate sample is numeric
+          case "$SAMPLE" in
+            ''|*[!0-9]*) echo "sample must be numeric, got: $SAMPLE"; exit 1 ;;
+          esac
+
+          # Build args safely — no shell interpolation of user values
+          if [ "$MODE" = "scheme" ]; then
+            exec python scripts/mfdata-mirror.py --mode scheme --code "$SCHEME_CODE"
+          elif [ "$MODE" = "health" ]; then
+            exec python scripts/mfdata-mirror.py --mode health
+          else
+            EXTRA_ARGS=()
+            if [ "$SAMPLE" != "0" ] && [ -n "$SAMPLE" ]; then
+              EXTRA_ARGS+=(--sample "$SAMPLE")
+            fi
+            if [ "$RESET_CHECKPOINT" = "true" ]; then
+              EXTRA_ARGS+=(--reset-checkpoint)
+            fi
+            exec python scripts/mfdata-mirror.py --mode "$MODE" "${EXTRA_ARGS[@]}"
+          fi
+
+      - name: Upload checkpoint for next run
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mfdata-checkpoint
+          path: /tmp/mfdata_checkpoint_*.json
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Report sync log status
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          python - <<'PYEOF'
+          import os, psycopg2
+          conn = psycopg2.connect(os.environ['DATABASE_URL'])
+          cur = conn.cursor()
+          cur.execute("""
+              SELECT id, mode, started_at, finished_at, status,
+                     api_calls_made, rows_written, schemes_updated
+              FROM mfdata_sync_log
+              ORDER BY id DESC
+              LIMIT 5
+          """)
+          print("=== Last 5 sync log entries ===")
+          for r in cur.fetchall():
+              print(f"  id={r[0]} mode={r[1]} status={r[4]} api_calls={r[5]} "
+                    f"rows={r[6]} schemes={r[7]} start={r[2]} end={r[3]}")
+          conn.close()
+          PYEOF
