@@ -312,7 +312,7 @@ async function searchUnified(
       usedTrigram = true;
       return NextResponse.json({
         success: true,
-        funds: trigramResult.rows.map(formatRow),
+        funds: trigramResult.rows.map(r => formatRow(r, plan)),
         total: trigramResult.rows.length,
         page: 1, pageSize, totalPages: 1,
         query: query, engine: 'unified', hint: 'trigram_fuzzy',
@@ -344,7 +344,7 @@ async function searchUnified(
     if (levenshteinResult.rows.length > 0) {
       return NextResponse.json({
         success: true,
-        funds: levenshteinResult.rows.map(formatRow),
+        funds: levenshteinResult.rows.map(r => formatRow(r, plan)),
         total: levenshteinResult.rows.length,
         page: 1, pageSize, totalPages: 1,
         query: query, engine: 'unified', hint: 'levenshtein_fuzzy',
@@ -418,7 +418,7 @@ async function searchUnified(
 
   return cachedJson({
     success: true,
-    funds: result.rows.map(formatRow),
+    funds: result.rows.map(r => formatRow(r, plan)),
     total,
     page,
     pageSize,
@@ -430,19 +430,58 @@ async function searchUnified(
 }
 
 // ── Format a matview row for the API response ──
-function formatRow(row: any) {
+/**
+ * Format a row from mv_unified_search for API response.
+ *
+ * Plan-aware variant selection (Option B fix, 2026-04-19):
+ *   When `plan` is supplied (Direct | Regular), and the fund's `variants`
+ *   JSON array has a matching variant (planType=plan, optionType=Growth),
+ *   this function swaps in that variant's schemeCode, nav, cagr3y, cagr5y.
+ *   Result: Discover screen's Direct/Regular toggle changes actual data,
+ *   not just a label — each plan variant has distinct scheme_code + NAV +
+ *   returns pulled from the MV.variants JSON.
+ *
+ *   Falls back to canonical (Direct Growth by default) if no match or if
+ *   plan is not specified.
+ */
+function formatRow(row: any, plan = '') {
   const variants = row.variants || [];
+  const planFilter = (plan || '').toLowerCase();
+
+  // Pick variant matching requested plan. Prefer Growth option.
+  let chosen: any = null;
+  if (planFilter === 'regular' || planFilter === 'direct') {
+    chosen = variants.find(
+      (v: any) =>
+        (v.planType || '').toLowerCase() === planFilter &&
+        (v.optionType || '').toLowerCase() === 'growth'
+    );
+    // Fallback: any variant matching plan type (IDCW etc).
+    if (!chosen) {
+      chosen = variants.find(
+        (v: any) => (v.planType || '').toLowerCase() === planFilter
+      );
+    }
+  }
+
   const fallbackCode = variants.length > 0 ? variants[0].schemeCode : null;
-  const schemeCode = row.schemeCode || fallbackCode || '';
+  const schemeCode = chosen?.schemeCode || row.schemeCode || fallbackCode || '';
   const schemeName = row.schemeName || row.strategyName || '';
+
+  // Plan-specific numerical fields, fall back to canonical MV values.
+  const nav = chosen?.nav ?? row.latestNav;
+  const cagr3y = chosen?.cagr3y ?? row.cagr3y;
+  const cagr5y = chosen?.cagr5y ?? row.cagr5y;
+
   return {
     ...row,
     schemeCode,
     schemeName,
-    latestNav: row.latestNav ? parseFloat(row.latestNav) : null,
+    planType: chosen?.planType || null,
+    latestNav: nav != null ? parseFloat(nav) : null,
     return1y: row.return1y ? parseFloat(row.return1y) : null,
-    cagr3y: row.cagr3y ? parseFloat(row.cagr3y) : null,
-    cagr5y: row.cagr5y ? parseFloat(row.cagr5y) : null,
+    cagr3y: cagr3y != null ? parseFloat(cagr3y) : null,
+    cagr5y: cagr5y != null ? parseFloat(cagr5y) : null,
     cagr3yMin: row.cagr3yMin ? parseFloat(row.cagr3yMin) : null,
     cagr3yMax: row.cagr3yMax ? parseFloat(row.cagr3yMax) : null,
     cagr5yMin: row.cagr5yMin ? parseFloat(row.cagr5yMin) : null,
@@ -517,6 +556,7 @@ async function searchLegacy(
       f.scheme_code AS "schemeCode", f.scheme_name AS "schemeName",
       f.latest_nav AS nav, f.latest_nav_date AS date,
       f.amc_code AS "amcCode", f.scheme_type AS "schemeType",
+      (SELECT mf.fund_house FROM master_funds mf WHERE mf.id = f.master_fund_id) AS "fundHouse",
       r.return_1y AS "return1y", r.cagr_3y AS "cagr3y", r.cagr_5y AS "cagr5y"
     FROM funds f
     LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
@@ -533,7 +573,7 @@ async function searchLegacy(
       schemeName: fund.schemeName,
       latestNav: fund.nav ? parseFloat(fund.nav) : null,
       latestNavDate: fund.date,
-      amcCode: fund.amcCode,
+      amcCode: fund.fundHouse || fund.amcCode,
       schemeType: fund.schemeType,
       return1y: fund.return1y ? parseFloat(fund.return1y) : null,
       cagr3y: fund.cagr3y ? parseFloat(fund.cagr3y) : null,
@@ -608,6 +648,7 @@ export async function POST(request: NextRequest) {
         f.scheme_code AS "schemeCode", f.scheme_name AS "schemeName",
         f.latest_nav AS nav, f.latest_nav_date AS date,
         f.amc_code AS "amcCode", f.scheme_type AS "schemeType",
+        (SELECT mf.fund_house FROM master_funds mf WHERE mf.id = f.master_fund_id) AS "fundHouse",
         r.return_1y AS "return1y", r.cagr_3y AS "cagr3y", r.cagr_5y AS "cagr5y"
       FROM funds f
       LEFT JOIN fund_returns r ON f.scheme_code = r.scheme_code
@@ -624,7 +665,7 @@ export async function POST(request: NextRequest) {
         schemeName: fund.schemeName,
         latestNav: fund.nav ? parseFloat(fund.nav) : null,
         latestNavDate: fund.date,
-        amcCode: fund.amcCode,
+        amcCode: fund.fundHouse || fund.amcCode,
         schemeType: fund.schemeType,
         return1y: fund.return1y ? parseFloat(fund.return1y) : null,
         cagr3y: fund.cagr3y ? parseFloat(fund.cagr3y) : null,
