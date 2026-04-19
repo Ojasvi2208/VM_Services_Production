@@ -33,9 +33,9 @@ const VALUES = [
 ];
 
 const STATS = [
-  { value: '200+', label: 'Families Served' },
+  { value: 'Sole Proprietorship', label: 'Owner: Ojasvi Malik' },
+  { value: 'ARN-317605', label: 'AMFI Registered MFD' },
   { value: '₹99/yr', label: 'Pro Plan' },
-  { value: 'ARN-317605', label: 'AMFI Registered' },
   { value: 'Pan India', label: 'Nationwide Coverage' },
 ];
 
