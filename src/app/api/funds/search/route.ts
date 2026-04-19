@@ -449,17 +449,26 @@ function formatRow(row: any, plan = '') {
   const planFilter = (plan || '').toLowerCase();
 
   // Pick variant matching requested plan. Prefer Growth option.
+  // For plan='Regular', also accept 'Unknown' planType variants — these are
+  // legacy/older schemes where the MV refresh couldn't parse plan type from
+  // the scheme name. Empirically ~51% of families in our data have Unknown
+  // variants that are in practice Regular plans.
   let chosen: any = null;
   if (planFilter === 'regular' || planFilter === 'direct') {
+    const allowed = planFilter === 'regular'
+      ? new Set(['regular', 'unknown'])
+      : new Set(['direct']);
+
+    // Prefer Growth option first
     chosen = variants.find(
       (v: any) =>
-        (v.planType || '').toLowerCase() === planFilter &&
+        allowed.has((v.planType || '').toLowerCase()) &&
         (v.optionType || '').toLowerCase() === 'growth'
     );
-    // Fallback: any variant matching plan type (IDCW etc).
+    // Fallback: any variant matching plan type (e.g. IDCW if no Growth).
     if (!chosen) {
       chosen = variants.find(
-        (v: any) => (v.planType || '').toLowerCase() === planFilter
+        (v: any) => allowed.has((v.planType || '').toLowerCase())
       );
     }
   }
