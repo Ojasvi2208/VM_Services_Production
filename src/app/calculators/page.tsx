@@ -3,6 +3,7 @@ import Link from 'next/link';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
 import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
+import { EditorialProse } from '@/components/EditorialProse';
 
 export const metadata: Metadata = {
   title: 'Financial Planner — SIP, SWP & STP Calculators',
@@ -100,6 +101,81 @@ export default function CalculatorsPage() {
         </div>
 
         <ComplianceDisclaimer variant="calculator" className="mt-4" />
+
+        <EditorialProse heading="SIP vs SWP vs STP — when to use each">
+          <p>
+            Three different calculators. Three very different decisions. Picking the right
+            one depends entirely on which stage of the investor lifecycle you are in.
+          </p>
+          <h3>SIP — Systematic Investment Plan (accumulation)</h3>
+          <p>
+            A SIP automates a fixed monthly (or weekly/quarterly) contribution into a chosen
+            mutual fund scheme. The primary benefit is <strong>rupee cost averaging</strong>:
+            when the market is down, your fixed amount buys more units; when the market is
+            up, it buys fewer. Over a full cycle your average cost per unit is lower than
+            the arithmetic average of the NAVs. For anyone in accumulation mode — age 25 to
+            55, earning salary, building a corpus — the SIP is the default vehicle. Use our{' '}
+            <Link href="/calculators/sip" className="text-[#44f593] underline">
+              SIP calculator
+            </Link>{' '}
+            to project the corpus, the total invested amount, and the implied CAGR across
+            ten different monthly contribution levels.
+          </p>
+          <h3>SWP — Systematic Withdrawal Plan (retirement income)</h3>
+          <p>
+            A SWP is the mirror image of a SIP. Instead of investing a fixed amount each
+            month, you <strong>withdraw</strong> a fixed amount from your accumulated corpus.
+            Retirees use SWPs to create a monthly income stream while keeping the remaining
+            corpus invested in growth assets. The math matters: withdraw too much too early
+            and you deplete the corpus before you die; withdraw too little and you die with
+            unused capital. A rule-of-thumb safe withdrawal rate is 4% annualised (0.33% per
+            month) of your starting corpus for a 30-year horizon, but real calculations
+            need to factor in the specific fund&apos;s expected return, volatility, and
+            your life expectancy. The{' '}
+            <Link href="/calculators/swp" className="text-[#44f593] underline">
+              SWP calculator
+            </Link>{' '}
+            models this for you.
+          </p>
+          <h3>STP — Systematic Transfer Plan (lump-sum deployment or goal transition)</h3>
+          <p>
+            An STP moves a fixed amount each month from one mutual fund scheme (typically a
+            debt or liquid fund) into another (typically an equity fund). Two common use
+            cases:
+          </p>
+          <ul>
+            <li>
+              <strong>Deploying a lump sum.</strong> You have ₹20 lakh sitting in a savings
+              account and want to invest in equity. Going all-in on day one exposes you to
+              market-timing risk. An STP over 12–18 months spreads the entry across multiple
+              NAV points.
+            </li>
+            <li>
+              <strong>Goal transition (pre-retirement de-risk).</strong> You are 2–5 years
+              from needing the money and your goal is 95% equity. An STP from equity into a
+              conservative-hybrid or debt-hybrid sleeve gradually de-risks the corpus
+              without a single large taxable redemption. This is what our Pro tier&apos;s
+              goal-transition feature automates.
+            </li>
+          </ul>
+          <p>
+            Use our{' '}
+            <Link href="/calculators/stp" className="text-[#44f593] underline">
+              STP calculator
+            </Link>{' '}
+            to compare a lump-sum deployment against a 6-month, 12-month, and 18-month STP
+            across different market scenarios.
+          </p>
+          <h3>A note on projection assumptions</h3>
+          <p>
+            All three calculators on this site cap equity return assumptions at 13%
+            annualised, per AMFI advertising guidelines. Historical Indian large-cap
+            equities have delivered roughly 12% CAGR over 20-year windows; mid-caps ~14%;
+            small-caps ~15% with much higher drawdowns. The calculator output is a
+            projection, not a promise. Past performance is never a guarantee of future
+            returns.
+          </p>
+        </EditorialProse>
       </main>
 
       <SiteFooter />

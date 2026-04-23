@@ -95,3 +95,5 @@ data/
 *.parquet
 *.sql.gz
 graphify-out/
+.snapshots/
+.claude/

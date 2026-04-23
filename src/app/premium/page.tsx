@@ -2,6 +2,7 @@ import Link from 'next/link';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
 import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
+import { EditorialProse } from '@/components/EditorialProse';
 
 // ─── Features ────────────────────────────────────────────────
 const FREE_FEATURES = [
@@ -133,6 +134,75 @@ export default function PremiumPage() {
         </div>
 
         <ComplianceDisclaimer variant="premium" className="mt-8" />
+
+        <EditorialProse heading="What Pro is, and what it is not">
+          <p>
+            Pro is ₹50 per year. That price exists for a reason: it is deliberately low
+            enough to be obviously not a substitute for real financial advice, and high
+            enough to filter casual users who would not engage with the deeper tooling.
+            The number will probably rise over time as the product matures, but for
+            everyone who joins in FY 2025-26 the lock-in is at ₹50 per year for as long
+            as you renew.
+          </p>
+          <p>
+            <strong>What Pro unlocks today:</strong>
+          </p>
+          <ul>
+            <li>
+              <strong>LTCG harvest planner.</strong> Every March, the planner tells you
+              exactly which units to redeem from which folio to realise ₹1.25 lakh of
+              tax-free LTCG under current FY 2025-26 rules. It reads your CAS, computes
+              per-tranche cost basis, and generates the redemption amount down to the
+              unit.
+            </li>
+            <li>
+              <strong>Goal transition suggestions.</strong> When a goal reaches ≥90%
+              completion, we auto-compute a Systematic Transfer Plan from your equity
+              exposure into a debt-hybrid sleeve. You see the transition plan inside the
+              goal page with exact amounts and timing; approving it is one tap.
+            </li>
+            <li>
+              <strong>CFO Suite (private beta).</strong> Tax-regime optimiser, multi-goal
+              rebalancing across the full portfolio, and debt-ladder planning. Currently
+              available only to the first 200 Pro subscribers while we validate the Monte
+              Carlo engine under stress scenarios.
+            </li>
+          </ul>
+          <p>
+            <strong>What Pro is not:</strong>
+          </p>
+          <ul>
+            <li>
+              Personalised investment advice. We are a Mutual Fund Distributor
+              (ARN-317605), not a SEBI-registered Investment Adviser. Nothing in Pro
+              tells you which fund to buy. The tooling computes scenarios against your
+              existing holdings; the decision is always yours.
+            </li>
+            <li>
+              Execution. Pro does not place orders. When you act on a suggestion, you
+              execute through the fund house&apos;s platform or through your existing
+              broker. We do not hold your units, your PAN, or your bank credentials.
+            </li>
+            <li>
+              A newsletter bundle. Every piece of content on{' '}
+              <Link href="/blog" className="text-[#44f593] underline">
+                our blog
+              </Link>{' '}
+              and{' '}
+              <Link href="/learn" className="text-[#44f593] underline">
+                learn section
+              </Link>{' '}
+              is free for everyone. Pro is tooling, not gated content.
+            </li>
+          </ul>
+          <p>
+            <strong>Who Pro is for:</strong> serious retail investors with at least ₹5–10
+            lakh of mutual fund holdings who want the tax and rebalancing arithmetic
+            automated. Below that corpus size the ₹50/year is a rounding error on the
+            tooling&apos;s output; above it, the LTCG-harvest planner alone pays for
+            itself thousands of times over every year.
+          </p>
+        </EditorialProse>
       </main>
 
       <SiteFooter />

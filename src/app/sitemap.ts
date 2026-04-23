@@ -1,4 +1,5 @@
 import { MetadataRoute } from 'next';
+import { getAllSlugs as getBlogSlugs } from './blog/[slug]/blog-posts';
 
 const BASE_URL = 'https://www.vmfinancialservices.com';
 
@@ -16,6 +17,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // ── Static pages ───────────────────────────────────────────
   const staticPages: MetadataRoute.Sitemap = [
+    { url: `${BASE_URL}/`,                  lastModified: now, changeFrequency: 'daily',   priority: 1.0 },
+    { url: `${BASE_URL}/author/ojasvi-malik`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${BASE_URL}/markets`,           lastModified: now, changeFrequency: 'hourly',  priority: 1.0 },
     { url: `${BASE_URL}/funds/search`,      lastModified: now, changeFrequency: 'daily',   priority: 0.9 },
     { url: `${BASE_URL}/news`,              lastModified: now, changeFrequency: 'hourly',  priority: 0.8 },
@@ -86,13 +89,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
+  // ── Blog pages ─────────────────────────────────────────────
+  const blogPages: MetadataRoute.Sitemap = getBlogSlugs().map((slug) => ({
+    url: `${BASE_URL}/blog/${slug}`,
+    lastModified: now,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }));
+
   // ── Top fund detail pages (fetch top 500 from DB) ──────────
+  // 2026-04 — exclude matured FMPs + stale NAV funds. Matured closed-ended
+  // schemes in the sitemap = indexed thin pages = AdSense killer (they render
+  // "NAV has not updated in 2+ years" which reads as dead content).
   let fundPages: MetadataRoute.Sitemap = [];
   try {
     const pool = (await import('@/lib/postgres-db')).default;
     const result = await pool.query(
       `SELECT scheme_code FROM funds
-       WHERE is_active = true AND plan_type = 'Direct'
+       WHERE is_active = true
+         AND plan_type = 'Direct'
+         AND scheme_name !~* '(FMP|Fixed Maturity|\\y[0-9]{3,4}D\\y)'
+         AND latest_nav_date >= CURRENT_DATE - INTERVAL '6 months'
        ORDER BY latest_nav_date DESC NULLS LAST
        LIMIT 500`
     );
@@ -106,5 +123,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // DB unavailable during build — skip dynamic fund pages
   }
 
-  return [...staticPages, ...learnPages, ...indexPages, ...fundPages];
+  return [...staticPages, ...learnPages, ...blogPages, ...indexPages, ...fundPages];
 }

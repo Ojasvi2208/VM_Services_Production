@@ -4,6 +4,7 @@ import { useState } from 'react';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
 import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
+import { EditorialProse } from '@/components/EditorialProse';
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', subject: 'general', message: '' });
@@ -194,6 +195,66 @@ export default function ContactPage() {
           </div>
         </div>
         <ComplianceDisclaimer variant="general" className="mt-8" />
+
+        <EditorialProse heading="Grievance redressal (SEBI-mandated escalation path)">
+          <p>
+            If you are unhappy with anything related to a mutual fund you hold through us,
+            Indian securities regulation prescribes a specific four-step escalation path.
+            Follow it in order — each level has a stipulated response window, and higher
+            levels will ask whether you gave the lower level a fair chance first.
+          </p>
+          <h3>Step 1 — Distributor (us)</h3>
+          <p>
+            Email <strong>grievance@vijaymalik.com</strong> or call +91-94173-34348 with
+            your full name, PAN, folio number, AMC, and a description of the issue. We
+            acknowledge within 24 hours and aim to resolve within 14 working days.
+            Typical issues we can resolve at this level: NAV queries, folio consolidation,
+            change-of-bank-mandate follow-up, and help with your CAS statement.
+          </p>
+          <h3>Step 2 — Asset Management Company (AMC)</h3>
+          <p>
+            If we cannot resolve the issue (for example, it concerns the AMC&apos;s own
+            operations or NAV processing), escalate to the AMC&apos;s Investor Relations
+            Officer. Every AMC&apos;s IRO contact is listed on the scheme information
+            document (SID). Response window: 30 days.
+          </p>
+          <h3>Step 3 — AMFI (Association of Mutual Funds in India)</h3>
+          <p>
+            If the AMC does not resolve within 30 days, file with AMFI&apos;s Grievance
+            Redressal Cell at <strong>investorhelpline@amfiindia.com</strong>. AMFI acts
+            as the first industry-level escalation. Response window: 30 days.
+          </p>
+          <h3>Step 4 — SEBI SCORES</h3>
+          <p>
+            If AMFI does not resolve or you are still unsatisfied, file on SEBI&apos;s
+            online complaint portal SCORES at{' '}
+            <a
+              href="https://scores.sebi.gov.in"
+              className="text-[#44f593] underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              scores.sebi.gov.in
+            </a>
+            . SCORES is the regulator&apos;s official grievance-handling system, is
+            time-bound, and the resolution is binding on the industry participant.
+            Response window: 30 days from SEBI&apos;s review.
+          </p>
+          <h3>Step 5 — Online Dispute Resolution (ODR) — added in 2024</h3>
+          <p>
+            SEBI launched the Securities Market Approach for Resolution through ODR (SMART
+            ODR) portal in August 2023. If SCORES escalation does not resolve the matter,
+            you can initiate online dispute resolution via this portal. Decisions under
+            SMART ODR are legally enforceable.
+          </p>
+          <p>
+            <strong>What to include at every step:</strong> your PAN, folio number, the
+            exact transaction date/amount, copies of any prior correspondence, and a
+            clearly stated desired outcome. Most grievances fail to be resolved quickly
+            not because the industry is hostile but because the initial complaint lacks
+            enough detail to action.
+          </p>
+        </EditorialProse>
       </main>
 
       <SiteFooter />

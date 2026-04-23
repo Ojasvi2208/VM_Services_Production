@@ -5,6 +5,7 @@ import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
 import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
 import PartnerRedirectModal from '@/components/PartnerRedirectModal';
+import { EditorialProse } from '@/components/EditorialProse';
 
 type Partner = {
   id: string;
@@ -151,6 +152,55 @@ export default function PartnersPage() {
         </div>
 
         <ComplianceDisclaimer variant="general" className="mt-8" />
+
+        <EditorialProse heading="How we select execution partners">
+          <p>
+            We list partners here only if they meet four criteria: SEBI or RBI regulatory
+            registration, a track record of at least five years of continuous operation
+            in Indian markets, a public grievance-redressal mechanism, and zero involvement
+            in the editorial or analytical content on this site. We do not accept paid
+            placements. If a partner wants to be featured more prominently than another,
+            the answer is that we do not sell that.
+          </p>
+          <p>
+            <strong>What we earn.</strong> When you open an account or place a transaction
+            through a partner link, some partners pay us a one-time referral fee or an
+            ongoing trail commission. These amounts are typically a fraction of a percent
+            of assets placed through them, and are fully disclosed on our{' '}
+            <a href="/disclosures" className="text-[#44f593] underline">
+              Disclosures
+            </a>{' '}
+            page. We mention it here because the transparency matters: you should assume
+            that any partner link on the internet has some economic relationship behind
+            it, and ours is no exception. What is unusual about our arrangement is that
+            the commission does not influence which partner appears higher in the list or
+            whether we recommend them at all. The order is alphabetical.
+          </p>
+          <p>
+            <strong>Editorial independence.</strong> The research on fund pages, blog
+            posts, and calculators is not funded by partners. Fund rankings, alpha
+            calculations, and category recommendations are done using the same numerical
+            methodology regardless of whether a partner&apos;s platform is the cheapest
+            way to buy the recommended fund. If we flag a fund house as underperforming,
+            it applies whether or not a partner lists its funds. This is the only way
+            financial research can be trustworthy over a long time horizon.
+          </p>
+          <p>
+            <strong>What partners are for.</strong> Execution. If you decide based on our
+            research that you want to invest in a specific Direct-plan scheme, a partner
+            is a reasonable path to place the order — many of them offer free
+            Direct-plan investing with no commission. For Regular plans, you can transact
+            through us directly; we are registered to handle that under ARN-317605.
+          </p>
+          <p>
+            Before using any partner, verify their SEBI or RBI registration on the
+            regulator&apos;s public register. Do not take our word for it — do not take
+            anyone&apos;s word for it online without cross-checking. The partner links
+            here will take you to the partner&apos;s platform where you complete KYC,
+            verify identity, and execute transactions under their regulated framework,
+            not ours.
+          </p>
+        </EditorialProse>
       </main>
 
       <SiteFooter />

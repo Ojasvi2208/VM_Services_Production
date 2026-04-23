@@ -2,10 +2,13 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
+import { blogPosts as postsMap } from './[slug]/blog-posts';
 
 export const metadata: Metadata = {
   title: 'Blog — Mutual Fund Insights & Financial Education',
-  description: 'Expert articles on mutual funds, SIPs, tax-saving investments, and financial planning for Indian investors. By Vijay Malik Financial Services.',
+  description:
+    'AMFI-compliant blog on mutual funds, SIPs, LTCG tax, portfolio strategy, and financial planning for Indian investors. Updated for FY 2025-26.',
+  alternates: { canonical: 'https://www.vmfinancialservices.com/blog' },
 };
 
 type BlogPost = {
@@ -20,81 +23,22 @@ type BlogPost = {
   featured?: boolean;
 };
 
-const blogPosts: BlogPost[] = [
-  {
-    id: '1',
-    title: 'Understanding SIP: Your Path to Disciplined Investing',
-    slug: 'understanding-sip-disciplined-investing',
-    excerpt: 'Learn how Systematic Investment Plans can help you build wealth steadily regardless of market volatility, and why rupee cost averaging works in your favor.',
-    category: 'Investing Basics',
-    author: 'Vijay Malik',
-    date: 'August 15, 2023',
-    readTime: '5 min read',
-    featured: true,
-  },
-  {
-    id: '2',
-    title: "Debt Funds vs Fixed Deposits: What's Right for You?",
-    slug: 'debt-funds-vs-fixed-deposits',
-    excerpt: 'Compare the tax efficiency, returns potential, and liquidity of debt mutual funds against traditional bank fixed deposits to optimize your investment strategy.',
-    category: 'Tax Planning',
-    author: 'Financial Team',
-    date: 'July 28, 2023',
-    readTime: '4 min read',
-  },
-  {
-    id: '3',
-    title: 'Goal-Based Investing: Align Your Finances With Life Objectives',
-    slug: 'goal-based-investing-align-finances',
-    excerpt: 'How to structure your investments around specific life goals like education, retirement, or home buying, and why this approach leads to better financial outcomes.',
-    category: 'Financial Planning',
-    author: 'Vijay Malik',
-    date: 'July 12, 2023',
-    readTime: '6 min read',
-  },
-  {
-    id: '4',
-    title: "Understanding SEBI's New Mutual Fund Categories",
-    slug: 'understanding-sebi-mutual-fund-categories',
-    excerpt: 'A comprehensive guide to the mutual fund categorization by SEBI and how it impacts your investment choices and portfolio diversification strategy.',
-    category: 'Market Updates',
-    author: 'Research Team',
-    date: 'June 25, 2023',
-    readTime: '7 min read',
-  },
-  {
-    id: '5',
-    title: 'The Power of Compounding in Wealth Creation',
-    slug: 'power-of-compounding-wealth-creation',
-    excerpt: 'Discover how starting early with even modest investments can lead to significant wealth over time through the mathematical magic of compounding.',
-    category: 'Investing Basics',
-    author: 'Financial Team',
-    date: 'June 10, 2023',
-    readTime: '4 min read',
-  },
-  {
-    id: '6',
-    title: 'Navigating Market Volatility: Staying Invested During Uncertainty',
-    slug: 'navigating-market-volatility',
-    excerpt: 'Strategies to maintain investment discipline during market downturns and why emotional reactions can harm your long-term financial goals.',
-    category: 'Market Updates',
-    author: 'Vijay Malik',
-    date: 'May 28, 2023',
-    readTime: '5 min read',
-  },
-  {
-    id: '7',
-    title: 'ETFs vs Index Funds: Understanding the Differences',
-    slug: 'etfs-vs-index-funds-differences',
-    excerpt: 'A comparative analysis of ETFs and Index Mutual Funds, their cost structures, tax implications, and suitability for different investor profiles.',
-    category: 'Investment Products',
-    author: 'Research Team',
-    date: 'May 15, 2023',
-    readTime: '6 min read',
-  },
-];
+// Built from the single source-of-truth blog-posts.ts. Newest post first.
+const blogPosts: BlogPost[] = Object.values(postsMap)
+  .map((p) => ({
+    id: p.id,
+    title: p.title,
+    slug: p.slug,
+    excerpt: p.excerpt || `${p.title}.`,
+    category: p.category,
+    author: p.author,
+    date: p.date,
+    readTime: p.readTime,
+  }))
+  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  .map((p, i) => ({ ...p, featured: i === 0 }));
 
-const CATEGORIES = ['All Posts', 'Investing Basics', 'Financial Planning', 'Tax Planning', 'Market Updates', 'Investment Products'];
+const CATEGORIES = ['All Posts', 'Investing Basics', 'Tax Planning', 'Portfolio Strategy', 'Retirement Planning'];
 
 const CAT_ICONS: Record<string, string> = {
   'Investing Basics': 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253',

@@ -3,6 +3,7 @@
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
 import EnhancedFundsTable from '@/components/EnhancedFundsTable';
+import { EditorialProse } from '@/components/EditorialProse';
 
 const STATS = [
   { value: '5,000+', label: 'Mutual Funds' },
@@ -74,6 +75,58 @@ const AnalysisPage = () => {
             </div>
           </div>
         </section>
+
+        <EditorialProse heading="How we analyse mutual funds">
+          <p>
+            Most fund research you read online stops at a star rating, a one-line return
+            number, and a category label. That is enough to sell a product, not enough to
+            choose one. Our analysis pages pull four independent data streams on every
+            scheme we cover and surface the metrics that actually move long-term outcomes:
+            <strong> rolling returns</strong> across every overlapping 3-year and 5-year
+            window in the fund&apos;s NAV history, <strong>alpha and beta</strong>{' '}
+            against the benchmark the factsheet actually uses (not a convenient one we
+            picked), <strong>downside capture</strong> measured during every market
+            correction greater than 10%, and <strong>portfolio overlap</strong> with any
+            fund you are comparing against.
+          </p>
+          <p>
+            <strong>Returns.</strong> Trailing returns are end-date-sensitive by
+            construction. A fund that beat the benchmark by 2% over 5 years might be
+            behind by 0.5% over 5.25 years. Rolling returns compute the same CAGR across
+            every possible window in the fund&apos;s history and report the median, 10th
+            percentile (bad years), and 90th percentile (good years). The median 5-year
+            rolling return is the single best proxy for what you should actually expect.
+          </p>
+          <p>
+            <strong>Risk.</strong> Standard deviation, beta, and Sharpe are the basics.
+            Downside capture and maximum drawdown are what actually matter if you are
+            within 5 years of needing the money. A fund with 85% downside capture against
+            the Nifty 50 TRI will lose 25% when the index loses 30%. That number, not
+            the headline volatility figure, is what determines whether you panic-sell.
+          </p>
+          <p>
+            <strong>Tax.</strong> Every fund page annotates its classification for tax
+            purposes — equity (20% STCG / 12.5% LTCG above ₹1.25 lakh/year), debt
+            post-April-2023 (slab rate, no LTCG concession), or equity-hybrid (taxed as
+            equity despite 20–35% debt exposure). If you rebalance or harvest, you need
+            to know the tax classification before the redemption, not after.
+          </p>
+          <p>
+            <strong>Holdings.</strong> Our PDF factsheet parser ingests monthly holdings
+            disclosures from eight major AMCs (HDFC, ICICI, Kotak, Edelweiss, SBI,
+            Aditya Birla, Nippon, Invesco). You get the top 10 stocks, sector breakdown,
+            and portfolio turnover on every covered scheme. Overlap analysis between two
+            funds is one click away on the{' '}
+            <a href="/compare">compare tool</a>.
+          </p>
+          <p>
+            All numbers on this site are computed, not re-published from a third-party
+            feed. When two sources disagree (the AMC factsheet shows one number, AMFI
+            shows another), we flag it rather than silently pick one. This matters when
+            you are trying to decide whether a fund has quietly changed its investment
+            mandate.
+          </p>
+        </EditorialProse>
 
         {/* Funds Table Section */}
         <section className="pb-16 px-6 md:px-8 max-w-[1440px] mx-auto">
