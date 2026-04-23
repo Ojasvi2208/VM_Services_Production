@@ -1,0 +1,56 @@
+name: Monthly Factsheet Refresh
+
+on:
+  workflow_dispatch:
+    inputs:
+      amc:
+        description: 'Specific AMC key to refresh (default: all 8). Options: kotak, hdfc, icici, edelweiss, sbi, aditya_birla, nippon, invesco'
+        type: string
+        required: false
+        default: ''
+      pdf_dir:
+        description: 'Path to PDF directory (relative to repo root)'
+        type: string
+        required: false
+        default: 'PDF_Portfolios'
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pdfplumber psycopg2-binary requests
+
+      - name: Run PDF AMC Engine
+        env:
+          DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+          AMC_INPUT: ${{ github.event.inputs.amc }}
+          PDF_DIR_INPUT: ${{ github.event.inputs.pdf_dir }}
+        run: |
+          AMC_FLAG=""
+          if [ -n "$AMC_INPUT" ]; then
+            AMC_FLAG="--amc $AMC_INPUT"
+          fi
+          PDF_DIR="${PDF_DIR_INPUT:-PDF_Portfolios}"
+          python3 scripts/pdf-amc-engine.py "$PDF_DIR" $AMC_FLAG
+
+      - name: Summary
+        if: always()
+        env:
+          AMC_INPUT: ${{ github.event.inputs.amc }}
+          PDF_DIR_INPUT: ${{ github.event.inputs.pdf_dir }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          echo "### Factsheet Refresh Complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "- AMC filter: ${AMC_INPUT:-all}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- PDF directory: ${PDF_DIR_INPUT:-PDF_Portfolios}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Triggered by: $ACTOR" >> "$GITHUB_STEP_SUMMARY"
