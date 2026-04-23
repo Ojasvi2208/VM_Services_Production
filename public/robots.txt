@@ -8,5 +8,6 @@ Disallow: /portfolio
 Disallow: /goals
 Disallow: /profile
 Disallow: /goal-planning
+Disallow: /premium
 
 Sitemap: https://www.vmfinancialservices.com/sitemap.xml

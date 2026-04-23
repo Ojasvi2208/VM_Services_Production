@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
           gainType: impact.gainType,
           totalTax: impact.totalTax,
           effectiveRate: impact.effectiveRate,
-          recommendation: impact.gainAmount <= 0 ? impact.recommendation : 'Upgrade to CFO Suite for full tax breakdown and slab analysis.',
+          recommendation: impact.gainAmount <= 0 ? impact.recommendation : 'Full tax breakdown and slab analysis available in CFO Suite.',
         },
         ltcgBuffer: {
           financialYear: fy,

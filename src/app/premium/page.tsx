@@ -1,8 +1,20 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import NavBar from '@/components/home/NavBar';
 import SiteFooter from '@/components/home/SiteFooter';
 import ComplianceDisclaimer from '@/components/ComplianceDisclaimer';
 import { EditorialProse } from '@/components/EditorialProse';
+
+// Paywall hidden (2026-04-23). Page remains reachable via direct URL for
+// existing inbound links but is removed from sitemap and tagged noindex so
+// AdSense reviewers and search crawlers do not encounter it while we are in
+// pre-launch / AdSense-review phase.
+export const metadata: Metadata = {
+  title: 'Pro — Coming Soon',
+  description:
+    'VMFS Pro is in private preview. Advanced tax and portfolio tooling for serious retail investors, launching soon.',
+  robots: { index: false, follow: false },
+};
 
 // ─── Features ────────────────────────────────────────────────
 const FREE_FEATURES = [
