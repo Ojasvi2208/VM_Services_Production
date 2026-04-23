@@ -23,8 +23,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
     }
 
-    if (amount !== 50) {
-      return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
+    const validAmounts = [199, 999];
+    if (!validAmounts.includes(amount)) {
+      return NextResponse.json({ error: 'Invalid amount. Choose ₹199/month or ₹999/year.' }, { status: 400 });
     }
 
     // Already premium?

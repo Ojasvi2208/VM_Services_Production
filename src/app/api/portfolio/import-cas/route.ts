@@ -1063,20 +1063,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (!parsedData || parsedData.folios.length === 0) {
-      // Diagnostic: show actual text around first ISIN so we can see the exact PDF extraction format
       const txt = textContent || '';
       const flat = txt.replace(/[\u00A0\u2000-\u200B]/g, ' ').replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\s+/g, ' ');
       const isinCount = (flat.match(/INF[A-Z0-9]{9}/g) || []).length;
-      const firstIsin = (flat.match(/INF[A-Z0-9]{9}/) || [''])[0];
-      const isinIdx = firstIsin ? flat.indexOf(firstIsin) : -1;
-      const snippet = isinIdx >= 0
-        ? flat.substring(isinIdx, Math.min(flat.length, isinIdx + 200)).replace(/[^\x20-\x7E]/g, '')
-        : 'no-isin';
       const dateCount = (flat.match(/\d{2}-[A-Za-z]{3}-\d{4}/g) || []).length;
       const camsCount = (flat.match(/CAMS(?=[^A-Za-z]|$)/g) || []).length;
-      const diag = `[len=${txt.length},ISINs=${isinCount},dates=${dateCount},cams=${camsCount}] after_isin1="${snippet}"`;
+      console.log(`[CAS] Zero folios diagnostic: len=${txt.length} ISINs=${isinCount} dates=${dateCount} cams=${camsCount}`);
       return NextResponse.json({
-        error: `No holdings found. ${diag}`,
+        error: 'No holdings found. The PDF may be in an unsupported format.',
       }, { status: 400 });
     }
 
@@ -1108,7 +1102,7 @@ export async function POST(request: NextRequest) {
       console.log(`[CAS] Filtered out ${nonMfCount} non-MF folios from ${parsedData.folios.length} total`);
     }
     if (mfFolios.length === 0 && parsedData.folios.length > 0) {
-      console.log(`[CAS] All ${parsedData.folios.length} folios filtered as non-MF. Names: ${parsedData.folios.map(f => f.schemeName).join(' | ')}`);
+      console.log(`[CAS] All ${parsedData.folios.length} folios filtered as non-MF`);
       return NextResponse.json({ error: `No mutual fund holdings found. ${parsedData.folios.length} folio(s) were detected but classified as non-MF.` }, { status: 400 });
     }
 
@@ -1241,10 +1235,9 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('[CAS-POST] Error:', error instanceof Error ? `${error.message}\n${error.stack}` : error);
+    console.error('[CAS-POST] Error:', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json({
-      error: `Failed to parse CAS statement: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      details: error instanceof Error ? error.stack?.substring(0, 300) : 'Unknown error'
+      error: 'Failed to parse CAS statement. Please ensure the PDF is a valid CAMS/KFintech CAS.',
     }, { status: 500 });
   }
 }
@@ -1406,11 +1399,9 @@ export async function PUT(request: NextRequest) {
     }
 
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown';
-    console.error('[CAS-PUT] Error:', errMsg);
+    console.error('[CAS-PUT] Error:', error instanceof Error ? error.message : 'Unknown');
     return NextResponse.json({
-      error: 'Failed to save holdings',
-      details: errMsg
+      error: 'Failed to save holdings. Please retry.',
     }, { status: 500 });
   }
 }

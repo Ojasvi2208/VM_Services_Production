@@ -24,6 +24,7 @@ export async function GET(
         scheme_code as "schemeCode",
         scheme_name as "schemeName",
         amc_code as "amcCode",
+        (SELECT mf.fund_house FROM master_funds mf WHERE mf.id = funds.master_fund_id) as "fundHouse",
         plan_type as "planType",
         option_type as "optionType",
         category,
@@ -324,7 +325,7 @@ export async function GET(
       data: {
         fund: {
           ...parsedFund,
-          fundHouse: parsedFund?.amcCode || null,
+          fundHouse: parsedFund?.fundHouse || parsedFund?.amcCode || null,
           category: parsedFund?.category || null,
         },
         returns: parsedReturns,

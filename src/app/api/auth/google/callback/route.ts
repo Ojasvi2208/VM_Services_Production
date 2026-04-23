@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
   const error = searchParams.get('error');
+  const state = searchParams.get('state');
 
   if (error) {
     return NextResponse.redirect(new URL('/auth/signin?error=google_denied', request.url));
@@ -27,6 +28,12 @@ export async function GET(request: NextRequest) {
 
   if (!code) {
     return NextResponse.redirect(new URL('/auth/signin?error=no_code', request.url));
+  }
+
+  // CSRF protection: verify state matches cookie
+  const storedState = request.cookies.get('google_oauth_state')?.value;
+  if (!state || !storedState || state !== storedState) {
+    return NextResponse.redirect(new URL('/auth/signin?error=csrf_failed', request.url));
   }
 
   try {
@@ -111,6 +118,8 @@ export async function GET(request: NextRequest) {
         maxAge: 30 * 24 * 60 * 60,
         path: '/'
       });
+      // Clear OAuth state cookie
+      response.cookies.delete('google_oauth_state');
 
       return response;
 

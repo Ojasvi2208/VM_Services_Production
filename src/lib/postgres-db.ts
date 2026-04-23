@@ -21,8 +21,8 @@ function getPool(): Pool {
   if (!globalThis.__pgPool) {
     globalThis.__pgPool = new Pool({
       connectionString: process.env.DATABASE_URL || 'postgresql://localhost/vijaymalik_funds',
-      max: 20,                    // Tuned for 13+ cron routes + user traffic (Railway allows 100 total)
-      idleTimeoutMillis: 10000,   // Release idle connections faster in serverless (was 20s)
+      max: 3,                     // Serverless: each Vercel instance gets own pool. 3 × N instances stays under Railway 100-conn limit.
+      idleTimeoutMillis: 10000,   // Release idle connections faster in serverless
       connectionTimeoutMillis: 5000,
       allowExitOnIdle: true,      // Let the process exit cleanly in serverless
     });
@@ -196,31 +196,25 @@ export async function saveNavRecords(records: NAVRecord[]): Promise<{ saved: num
  * Get latest NAV for a scheme
  */
 export async function getLatestNav(schemeCode: string): Promise<NAVRecord | null> {
-  const client = await pool.connect();
-  
-  try {
-    const result = await client.query(`
-      SELECT scheme_code as "schemeCode", scheme_name as "schemeName", 
-             latest_nav as nav, latest_nav_date as date,
-             amc_code as "amcCode", scheme_type as "schemeType"
-      FROM funds
-      WHERE scheme_code = $1
-    `, [schemeCode]);
-    
-    if (result.rows.length === 0) return null;
-    
-    const row = result.rows[0];
-    return {
-      schemeCode: row.schemeCode,
-      schemeName: row.schemeName,
-      nav: parseFloat(row.nav),
-      date: row.date,
-      amcCode: row.amcCode,
-      schemeType: row.schemeType,
-    };
-  } finally {
-    client.release();
-  }
+  const result = await pool.query(`
+    SELECT scheme_code as "schemeCode", scheme_name as "schemeName",
+           latest_nav as nav, latest_nav_date as date,
+           amc_code as "amcCode", scheme_type as "schemeType"
+    FROM funds
+    WHERE scheme_code = $1
+  `, [schemeCode]);
+
+  if (result.rows.length === 0) return null;
+
+  const row = result.rows[0];
+  return {
+    schemeCode: row.schemeCode,
+    schemeName: row.schemeName,
+    nav: parseFloat(row.nav),
+    date: row.date,
+    amcCode: row.amcCode,
+    schemeType: row.schemeType,
+  };
 }
 
 /**
@@ -231,28 +225,27 @@ export async function getNavHistory(
   startDate?: string,
   endDate?: string
 ): Promise<NAVRecord[]> {
-  const client = await pool.connect();
+  let query = `
+    SELECT nh.nav_date::text AS date, nh.nav_value AS nav,
+           f.scheme_name, f.amc_code, f.scheme_type
+    FROM nav_history nh
+    JOIN funds f ON f.scheme_code = nh.scheme_code
+    WHERE nh.scheme_code = $1`;
+  const params: any[] = [schemeCode];
+
+  if (startDate) {
+    params.push(startDate);
+    query += ` AND nh.nav_date >= $${params.length}::date`;
+  }
+  if (endDate) {
+    params.push(endDate);
+    query += ` AND nh.nav_date <= $${params.length}::date`;
+  }
+
+  query += ` ORDER BY nh.nav_date DESC LIMIT 2000`;
+
   try {
-    let query = `
-      SELECT nh.nav_date::text AS date, nh.nav_value AS nav,
-             f.scheme_name, f.amc_code, f.scheme_type
-      FROM nav_history nh
-      JOIN funds f ON f.scheme_code = nh.scheme_code
-      WHERE nh.scheme_code = $1`;
-    const params: any[] = [schemeCode];
-
-    if (startDate) {
-      params.push(startDate);
-      query += ` AND nh.nav_date >= $${params.length}::date`;
-    }
-    if (endDate) {
-      params.push(endDate);
-      query += ` AND nh.nav_date <= $${params.length}::date`;
-    }
-
-    query += ` ORDER BY nh.nav_date DESC LIMIT 2000`;
-
-    const result = await client.query(query, params);
+    const result = await pool.query(query, params);
     return result.rows.map((row: any) => ({
       schemeCode,
       schemeName: row.scheme_name || '',
@@ -264,8 +257,6 @@ export async function getNavHistory(
   } catch (error) {
     console.error('Error fetching NAV history:', error);
     return [];
-  } finally {
-    client.release();
   }
 }
 
@@ -273,30 +264,24 @@ export async function getNavHistory(
  * Search funds by name or code
  */
 export async function searchFunds(query: string, limit: number = 50): Promise<NAVRecord[]> {
-  const client = await pool.connect();
-  
-  try {
-    const result = await client.query(`
-      SELECT scheme_code as "schemeCode", scheme_name as "schemeName",
-             latest_nav as nav, latest_nav_date as date,
-             amc_code as "amcCode", scheme_type as "schemeType"
-      FROM funds
-      WHERE scheme_name ILIKE $1 OR scheme_code LIKE $2
-      ORDER BY scheme_name
-      LIMIT $3
-    `, [`%${query}%`, `%${query}%`, limit]);
-    
-    return result.rows.map(row => ({
-      schemeCode: row.schemeCode,
-      schemeName: row.schemeName,
-      nav: parseFloat(row.nav),
-      date: row.date,
-      amcCode: row.amcCode,
-      schemeType: row.schemeType,
-    }));
-  } finally {
-    client.release();
-  }
+  const result = await pool.query(`
+    SELECT scheme_code as "schemeCode", scheme_name as "schemeName",
+           latest_nav as nav, latest_nav_date as date,
+           amc_code as "amcCode", scheme_type as "schemeType"
+    FROM funds
+    WHERE scheme_name ILIKE $1 OR scheme_code LIKE $2
+    ORDER BY scheme_name
+    LIMIT $3
+  `, [`%${query}%`, `%${query}%`, limit]);
+
+  return result.rows.map(row => ({
+    schemeCode: row.schemeCode,
+    schemeName: row.schemeName,
+    nav: parseFloat(row.nav),
+    date: row.date,
+    amcCode: row.amcCode,
+    schemeType: row.schemeType,
+  }));
 }
 
 /**
@@ -307,28 +292,17 @@ export async function getDatabaseStats(): Promise<{
   totalRecords: number;
   latestDate: string | null;
 }> {
-  const client = await pool.connect();
-  
-  try {
-    const fundsResult = await client.query('SELECT COUNT(*) FROM funds');
-    const returnsResult = await client.query('SELECT COUNT(*) FROM fund_returns');
-    const dateResult = await client.query('SELECT MAX(latest_nav_date) as latest_date FROM funds');
-    
-    return {
-      totalFunds: parseInt(fundsResult.rows[0].count),
-      totalRecords: parseInt(returnsResult.rows[0].count),
-      latestDate: dateResult.rows[0].latest_date,
-    };
-  } finally {
-    client.release();
-  }
-}
+  const [fundsResult, returnsResult, dateResult] = await Promise.all([
+    pool.query('SELECT COUNT(*) FROM funds'),
+    pool.query('SELECT COUNT(*) FROM fund_returns'),
+    pool.query('SELECT MAX(latest_nav_date) as latest_date FROM funds'),
+  ]);
 
-/**
- * Close database connection pool
- */
-export async function closeDatabase(): Promise<void> {
-  await pool.end();
+  return {
+    totalFunds: parseInt(fundsResult.rows[0].count),
+    totalRecords: parseInt(returnsResult.rows[0].count),
+    latestDate: dateResult.rows[0].latest_date,
+  };
 }
 
 export default pool;

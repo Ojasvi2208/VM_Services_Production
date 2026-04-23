@@ -46,10 +46,14 @@ export async function POST(request: NextRequest) {
 
     const claim = claimResult.rows[0];
 
-    // Activate premium on user (365 days)
+    // Determine duration from plan amount: ₹199 = 30 days, ₹999 = 365 days
+    const amount = parseFloat(claim.amount);
+    const intervalDays = amount >= 999 ? 365 : 30;
+
+    // Activate premium on user
     const userResult = await client.query(
       `UPDATE users
-       SET is_premium = true, premium_expires_at = NOW() + INTERVAL '365 days', updated_at = NOW()
+       SET is_premium = true, premium_expires_at = NOW() + INTERVAL '${intervalDays} days', updated_at = NOW()
        WHERE id = $1
        RETURNING id, email, full_name, is_premium, premium_expires_at`,
       [claim.user_id]

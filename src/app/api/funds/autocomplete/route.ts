@@ -1,67 +1,100 @@
 /**
- * Fund Autocomplete API
- * Returns quick suggestions as user types
- * Optimized for speed - returns max 10 results
+ * Fund Autocomplete API — Strategy Family Level
+ * Queries mv_unified_search for grouped results (no duplicates).
+ * Returns max 8 suggestions with canonical variant as hero.
+ * Falls back to funds table if MV doesn't exist.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/postgres-db';
 import { cachedJson } from '@/lib/api-cache-headers';
 
+let mvExists: boolean | null = null;
+
+async function hasMV(): Promise<boolean> {
+  if (mvExists !== null) return mvExists;
+  try {
+    const r = await pool.query(
+      `SELECT 1 FROM pg_matviews WHERE matviewname = 'mv_unified_search' LIMIT 1`
+    );
+    mvExists = r.rows.length > 0;
+  } catch {
+    mvExists = false;
+  }
+  return mvExists;
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const query = searchParams.get('q') || '';
+    const query = (request.nextUrl.searchParams.get('q') || '').trim();
 
-    // Require at least 2 characters
     if (query.length < 2) {
-      return NextResponse.json({
-        success: true,
-        suggestions: []
-      });
+      return NextResponse.json({ success: true, suggestions: [] });
     }
 
-    const client = await pool.connect();
+    const useMV = await hasMV();
+    const pattern = `%${query}%`;
 
-    try {
-      // Fast query - just get scheme names and codes
-      const result = await client.query(
-        `SELECT 
-          scheme_code as "schemeCode",
-          scheme_name as "schemeName",
-          amc_code as "amcCode"
-        FROM funds
-        WHERE scheme_name ILIKE $1 OR scheme_code LIKE $2
-        ORDER BY 
-          CASE 
-            WHEN scheme_name ILIKE $3 THEN 0  -- Exact start match first
-            ELSE 1 
-          END,
-          scheme_name
-        LIMIT 10`,
-        [`%${query}%`, `%${query}%`, `${query}%`]
+    if (useMV) {
+      const result = await pool.query(
+        `SELECT
+          canonical_scheme_code AS "schemeCode",
+          strategy_name         AS "strategyName",
+          fund_house            AS "fundHouse",
+          sub_category          AS "subCategory",
+          canonical_nav         AS "latestNav",
+          variant_count         AS "variantCount"
+        FROM mv_unified_search
+        WHERE search_text ILIKE $1
+           OR strategy_name ILIKE $1
+           OR canonical_scheme_name ILIKE $1
+        ORDER BY
+          CASE WHEN strategy_name ILIKE $2 THEN 0 ELSE 1 END,
+          strategy_name
+        LIMIT 8`,
+        [pattern, `${query}%`]
       );
 
-      // 5min edge cache — users retype same prefixes in droves.
       return cachedJson({
         success: true,
-        suggestions: result.rows.map(row => ({
-          schemeCode: row.schemeCode,
-          schemeName: row.schemeName,
-          amcCode: row.amcCode
+        suggestions: result.rows.map(r => ({
+          schemeCode: r.schemeCode,
+          schemeName: r.strategyName,
+          amcCode: r.fundHouse,
+          subCategory: r.subCategory,
+          nav: r.latestNav ? parseFloat(r.latestNav) : null,
+          variants: r.variantCount,
         }))
       }, 300, 600);
-
-    } finally {
-      client.release();
     }
 
-  } catch (error: any) {
-    console.error('Autocomplete error:', error);
-    return NextResponse.json({
-      success: false,
-      suggestions: [],
-      error: error.message
-    }, { status: 500 });
+    // Fallback: raw funds table (grouped by name prefix to reduce duplicates)
+    const result = await pool.query(
+      `SELECT DISTINCT ON (LEFT(scheme_name, 40))
+        scheme_code AS "schemeCode",
+        scheme_name AS "schemeName",
+        amc_code    AS "amcCode",
+        (SELECT mf.fund_house FROM master_funds mf WHERE mf.id = funds.master_fund_id) AS "fundHouse"
+      FROM funds
+      WHERE scheme_name ILIKE $1 OR scheme_code LIKE $2
+      ORDER BY LEFT(scheme_name, 40),
+        CASE WHEN scheme_name ILIKE $3 THEN 0 ELSE 1 END,
+        scheme_name
+      LIMIT 8`,
+      [pattern, pattern, `${query}%`]
+    );
+
+    return cachedJson({
+      success: true,
+      suggestions: result.rows.map(r => ({
+        schemeCode: r.schemeCode,
+        schemeName: r.schemeName,
+        amcCode: r.fundHouse || r.amcCode,
+      }))
+    }, 300, 600);
+
+  } catch (error) {
+    console.error('[Autocomplete] Error:', error instanceof Error ? error.message : 'Unknown');
+    return NextResponse.json({ success: false, suggestions: [] }, { status: 500 });
   }
 }
